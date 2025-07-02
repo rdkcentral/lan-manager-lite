@@ -893,10 +893,8 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                                 memcpy(DscpTree->ClientList[j].Mac,
                                        CliList->DSCP_Element[DscpTree->Dscp].Client[i].mac,
                                        sizeof(CliList->DSCP_Element[DscpTree->Dscp].Client[i].mac));
-                                DscpTree->ClientList[j].RxBytes =
-                                          CliList->DSCP_Element[DscpTree->Dscp].Client[i].rxBytes;
-                                DscpTree->ClientList[j].TxBytes =
-                                          CliList->DSCP_Element[DscpTree->Dscp].Client[i].txBytes;
+                                DscpTree->ClientList[j].RxBytes = 0;
+                                DscpTree->ClientList[j].TxBytes = 0;
                                 DscpTree->ClientList[j].RxBytesTot =
                                           CliList->DSCP_Element[DscpTree->Dscp].Client[i].rxBytes;
                                 DscpTree->ClientList[j].TxBytesTot =
