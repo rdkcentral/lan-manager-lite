@@ -226,6 +226,29 @@ extern char dev_Mode[20] ;
 
 int g_Client_Poll_interval;
 
+/* Presence Notification - Payload */
+typedef struct {
+    PLmObjectHost pHost;
+    char interface[32];
+    ClientConnectState status;
+    char *ipv4;
+} LMPresenceNotifyAddressInfo;
+
+typedef struct RetryNotifyHostList {
+    struct RetryNotifyHostList *next;
+    LMPresenceNotifyAddressInfo *ctx;
+    int retry_count;
+} RetryNotifyHostList;
+
+static RetryNotifyHostList *pNotifyListHead = NULL;
+static pthread_mutex_t LmRetryNotifyHostListMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t LmNotifyCond = PTHREAD_COND_INITIALIZER;
+static pthread_t NotifyIPMonitorThread;
+static bool worker_thread_running = false;
+
+
+#define IP_RETRY_INTERVAL              10
+#define IP_MAX_RETRIES             6
 /***********************************************************************
  IMPORTANT NOTE:
 
@@ -259,6 +282,7 @@ int g_Client_Poll_interval;
  }
 
 ***********************************************************************/
+pthread_mutex_t LmRetryHostListMutex;
 #define LM_HOST_OBJECT_NAME_HEADER  "Device.Hosts.Host."
 #define LM_HOST_RETRY_LIMIT         30
 
@@ -317,7 +341,6 @@ extern pthread_mutex_t PresenceDetectionMutex;
 #if !defined (RESOURCE_OPTIMIZATION)
 pthread_mutex_t XLmHostObjectMutex;
 #endif
-pthread_mutex_t LmRetryHostListMutex;
 
 static void Wifi_ServerSyncHost(char *phyAddr, char *AssociatedDevice, char *ssid, int RSSI, int Status);
 static void Host_FreeIPAddress(PLmObjectHost pHost, int version);
@@ -336,7 +359,8 @@ static char *_CloneString (const char *src);
 extern ANSC_HANDLE bus_handle;
 static void DelAndShuffleAssoDevIndx (PLmObjectHost pHost);
 
-static void Send_PresenceNotification (char *interface, char *mac, ClientConnectState status, char *hostname)
+static void Send_PresenceNotification (char *interface, char *mac, ClientConnectState status, char *hostname,
+		                       char *ipv4)
 {
     char str[500];
     parameterValStruct_t notif_val[1];
@@ -364,11 +388,12 @@ static void Send_PresenceNotification (char *interface, char *mac, ClientConnect
                 break;
         }
 
-        snprintf (str, sizeof(str), "PresenceNotification,%s,%s,%s,%s",
+        snprintf (str, sizeof(str), "PresenceNotification,%s,%s,%s,%s,%s",
                                     interface != NULL ? (strlen(interface) > 0 ? interface : "NULL") : "NULL",
                                     mac,
                                     status_str,
-                                    hostname != NULL ? (strlen(hostname) > 0 ? hostname : "NULL") : "NULL");
+                                    hostname != NULL ? (strlen(hostname) > 0 ? hostname : "NULL") : "NULL",
+                                    ipv4 != NULL ? (strlen(ipv4) > 0 ? ipv4 : "NULL") : "NULL");
 
         CcspTraceWarning(("\n%s\n",str));
         notif_val[0].parameterName = param_name;
@@ -3171,6 +3196,7 @@ void LM_main (void)
 #endif
     pthread_mutex_init(&HostNameMutex,0);
     pthread_mutex_init(&LmRetryHostListMutex, 0);
+    pthread_mutex_init(&LmRetryNotifyHostListMutex, 0);
     lm_wrapper_init();
     lmHosts.hostArray = AnscAllocateMemory(LM_HOST_ARRAY_STEP * sizeof(PLmObjectHost));
     lmHosts.sizeHost = LM_HOST_ARRAY_STEP;
@@ -4280,13 +4306,82 @@ BOOL Hosts_CheckAndUpdatePresenceDeviceMac(char *Mac, BOOL val)
     return TRUE;
 }
 
-int Hosts_PresenceHandling(PLmObjectHost pHost,HostPresenceDetection presencestatus)
+static void *UpdateAndSendHostIPAddress_Thread(void *arg)
+{
+    UNREFERENCED_PARAMETER(arg);
+    PLmObjectHostIPAddress pIpAddrList;
+    CcspTraceWarning((" %s started\n", __FUNCTION__));
+    while (1) {
+        pthread_mutex_lock(&LmRetryNotifyHostListMutex);
+        while (!pNotifyListHead) {
+            CcspTraceWarning((" %s line:%d\n", __FUNCTION__, __LINE__));
+            pthread_cond_wait(&LmNotifyCond, &LmRetryNotifyHostListMutex);
+        }
+
+        RetryNotifyHostList *prev = NULL;
+        RetryNotifyHostList *curr = pNotifyListHead;
+
+        while (curr != NULL) {
+
+            bool completed = false;
+            LMPresenceNotifyAddressInfo *ctx = curr->ctx;
+            PLmObjectHost pHost = ctx->pHost;
+
+            // Check IPv4
+            ctx->ipv4 = pHost->pStringParaValue[LM_HOST_IPAddressId] ? 
+                pHost->pStringParaValue[LM_HOST_IPAddressId] : NULL;
+            if (ctx->ipv4 ) {
+                completed = true;
+            } else if (++curr->retry_count > IP_MAX_RETRIES) { //Increment the retry_ocunt per host 
+                CcspTraceWarning(("Retry limit exceeded for host, removing.\n"));
+                completed = true;
+            }
+
+            if ((completed) || (ctx->status == CLIENT_STATE_OFFLINE)){
+                //If IP addresses are obtained or retry_count exceeded 
+                Send_PresenceNotification(
+                        ctx->interface,
+                        pHost->pStringParaValue[LM_HOST_PhysAddressId],
+                        ctx->status,
+                        pHost->pStringParaValue[LM_HOST_HostNameId],
+                        ctx->ipv4
+                        );
+                CcspTraceWarning(("Notification sent from %s, line:%d\n", __FUNCTION__, __LINE__));
+
+                //Deletion logic
+                if (prev) {
+                    prev->next = curr->next;
+                } else {
+                    //If it is head node
+                    pNotifyListHead = curr->next;
+                }
+
+                //Delete the node as the notification is sent for the node
+                RetryNotifyHostList *toDelete = curr;
+                curr = curr->next;
+
+                free(toDelete->ctx); //memory allocated for LMPresenceNotifyAddressInfo  is freed
+                free(toDelete);
+            } else {
+                prev = curr;
+                curr = curr->next; //Move to next host
+            }
+        }
+        pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
+        sleep(IP_RETRY_INTERVAL);  // Short delay before next scan cycle
+    }
+    return NULL;
+}
+
+int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencestatus)
 {
     char buf[8];
-	char interface[32] = {0};
+    int res;
     BOOL notify_to_webpa = FALSE;
     ClientConnectState status;
     errno_t rc = -1;
+
+    char interface[32] = {0};
 
     if (!pHost)
         return -1;
@@ -4325,7 +4420,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost,HostPresenceDetection presencesta
         if (strcmp(buf, "true") == 0)
             notify_to_webpa = TRUE;
     } else {
-         CcspTraceError(("Error in syscfg_get for notify_presence_webpa"));
+        CcspTraceError(("Error in syscfg_get for notify_presence_webpa"));
     }
 
     if (notify_to_webpa)
@@ -4344,22 +4439,52 @@ int Hosts_PresenceHandling(PLmObjectHost pHost,HostPresenceDetection presencesta
                 ERR_CHK(rc);
             }
 #endif
-            else if ((strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId],"Ethernet")))
-            {
-                rc = strcpy_s(interface, sizeof(interface),"Ethernet");
-                ERR_CHK(rc);
+            else if (strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "Ethernet")) {
+                rc = strcpy_s(interface, sizeof(interface), "Ethernet");
+            } else {
+                rc = strcpy_s(interface, sizeof(interface), "Other");
             }
-            else
-            {
-                rc = strcpy_s(interface, sizeof(interface),"Other");
-                ERR_CHK(rc);
+            ERR_CHK(rc);
+        }
+
+        // Allocate context and populate
+        LMPresenceNotifyAddressInfo *ctx = calloc(1, sizeof(LMPresenceNotifyAddressInfo));
+        if (!ctx)
+            return -1;
+
+        ctx->pHost = pHost;
+        strncpy(ctx->interface, interface, sizeof(ctx->interface) - 1);
+        ctx->interface[sizeof(ctx->interface) - 1] = '\0'; // ensure null-termination
+        ctx->status = status;
+
+        // Push to retry linked list
+        RetryNotifyHostList *node = calloc(1, sizeof(RetryNotifyHostList));
+        if (!node) {
+            free(ctx);
+            return -1;
+        }
+        node->ctx = ctx;
+
+        pthread_mutex_lock(&LmRetryHostListMutex);
+        node->next = pNotifyListHead;
+        pNotifyListHead = node;
+        //Notify IPaddress Listener thread
+        pthread_cond_signal(&LmNotifyCond);
+        pthread_mutex_unlock(&LmRetryHostListMutex);
+
+        //Start worker thread once
+        if (!worker_thread_running) {
+            CcspTraceWarning(("%s UpdateAndSendHostIPAddress_Thread creation line:%d\n", __FUNCTION__, __LINE__));
+            worker_thread_running = true;
+            // Start thread to handle IP retry + notification
+            res = pthread_create(&NotifyIPMonitorThread, NULL, UpdateAndSendHostIPAddress_Thread, NULL);
+            if (res != 0) {
+                free(node);
+                free(ctx);
+                return -1;
             }
         }
-        Send_PresenceNotification(
-                interface,
-                pHost->pStringParaValue[LM_HOST_PhysAddressId],
-                status,
-                pHost->pStringParaValue[LM_HOST_HostNameId]);
+        free(node);
     }
     return 0;
 }
@@ -4367,21 +4492,21 @@ int Hosts_PresenceHandling(PLmObjectHost pHost,HostPresenceDetection presencesta
 
 void Update_RFC_Presencedetection(BOOL enablePresenceFeature)
 {
-        EventQData EventMsg;
-        mqd_t mq;
-        char buffer[MAX_SIZE];
-        errno_t rc = -1;
-        mq = mq_open(EVENT_QUEUE_NAME, O_WRONLY);
-        CHECK((mqd_t)-1 != mq);
-        memset(buffer, 0, MAX_SIZE);
-        EventMsg.MsgType = MSG_TYPE_RFC;
+    EventQData EventMsg;
+    mqd_t mq;
+    char buffer[MAX_SIZE];
+    errno_t rc = -1;
+    mq = mq_open(EVENT_QUEUE_NAME, O_WRONLY);
+    CHECK((mqd_t)-1 != mq);
+    memset(buffer, 0, MAX_SIZE);
+    EventMsg.MsgType = MSG_TYPE_RFC;
 
-        rc = strcpy_s(EventMsg.Msg, sizeof(EventMsg.Msg), ((enablePresenceFeature == TRUE) ? "true" : "false"));
-        ERR_CHK(rc);
+    rc = strcpy_s(EventMsg.Msg, sizeof(EventMsg.Msg), ((enablePresenceFeature == TRUE) ? "true" : "false"));
+    ERR_CHK(rc);
 
-        memcpy(buffer,&EventMsg,sizeof(EventMsg));
-        CHECK(0 <= mq_send(mq, buffer, MAX_SIZE, 0));
-        CHECK((mqd_t)-1 != mq_close(mq));
+    memcpy(buffer,&EventMsg,sizeof(EventMsg));
+    CHECK(0 <= mq_send(mq, buffer, MAX_SIZE, 0));
+    CHECK((mqd_t)-1 != mq_close(mq));
 }
 
 
