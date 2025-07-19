@@ -1,0 +1,20 @@
+
+CcspLMLite:
+- move arch/intel_usg/boards/arm_shared/source/lm_wrapper_priv.c to
+       source/lm_wrapper_priv_arm.c
+- move arch/pc/boards/rdkb/source/lm_wrapper_priv.c to
+       source/lm_wrapper_priv_pc.c
+- move arch/intel_usg/boards/arm_shared/cmpnt_build_custom_pre.mk to
+       ./cmpnt_build_custom_pre.mk.orig
+- remove arch directory
+- move Makefile to Makefile.orig
+- remove empty LICENSE file
+- add autogen.sh
+- add configure.ac
+- add Makefile.am
+- touch AUTHORS
+- touch ChangeLog
+- touch NEWS
+- add source/Makefile.am
+- move source/build to source/build.orig
+

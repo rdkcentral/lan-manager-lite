@@ -1,0 +1,207 @@
+{
+  "namespace": "com.comcast.kestrel.odp.event",
+  "name": "NetworkDevicesStatus",
+  "type": "record",
+  "doc": "Contains the status and basic details for each connected device in the CPE host table (Ethernet/Moca/WiFi). Each report contains device status and L2 counters",
+  "fields": [
+    {
+      "name": "header",
+      "type": {
+        "namespace": "com.comcast.kestrel",
+        "name": "CoreHeader",
+        "type": "record",
+        "doc": "Common information related to the event which MUST be included in any kestrel event. It allows some common processing at the system level, and some consistency for processing events.",
+        "fields": [
+          {
+            "name": "timestamp",
+            "type": [
+              "null",
+              {
+                "logicalType": "timestamp-millis",
+                "type": "long"
+              }
+            ],
+            "doc": "The UTC time stamp in milliseconds since Unix epoch (January 1, 1970 midnight) when the event is generated.",
+            "default": null
+          },
+          {
+            "name": "uuid",
+            "type": [
+              "null",
+              {
+                "name": "UUID",
+                "namespace": "com.comcast.kestrel.datatype",
+                "size": 16,
+                "type": "fixed"
+              }
+            ],
+            "doc": "Unique identifier for the event used for event de-duplication and tracing.",
+            "default": null
+          },
+          {
+            "name": "source",
+            "type": [
+              "null",
+              "string"
+            ],
+            "doc": "Source of this report - generally the application or process generating the event",
+            "default": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "cpe_id",
+      "type": {
+        "namespace": "com.comcast.kestrel.odp",
+        "name": "CPEIdentifier",
+        "type": "record",
+        "doc": "Unique identifying fields for a CPE device. All fields are optional, but at least one field should be populated with a non null value",
+        "fields": [
+          {
+            "name": "mac_address",
+            "type": [
+              "null",
+              {
+                "name": "MacAddress",
+                "namespace": "com.comcast.kestrel.datatype",
+                "size": 6,
+                "type": "fixed"
+              }
+            ],
+            "doc": "Canonical (Identifying) MAC address for the gateway. (Eg, may be CM Mac for cable modems)",
+            "default": null
+          },
+          {
+            "name": "cpe_type",
+            "type": [
+              "null",
+              "string"
+            ],
+            "doc": "Contains the cpe type e.g. Extender or Gateway",
+            "default": null
+          },
+          {
+            "name": "cpe_parent",
+            "type": [
+              "null",
+              "com.comcast.kestrel.odp.CPEIdentifier"
+            ],
+            "doc": "If this device is a child device (it is managed by another CPE device), this field identifies the parent device. Canonical identifier for the CPE. (Eg, may be CM Mac for cable modems)",
+            "default": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "host_table_version",
+      "type": [
+        "null",
+        "long"
+      ],
+      "doc": "Version Number after the latest change (add/delete/hostname update) was done to the Device.Hosts. table",
+      "default": null
+    },
+    {
+      "name": "data",
+      "type": {
+        "items": {
+          "namespace": "com.comcast.kestrel.odp",
+          "name": "NetworkDeviceStatus",
+          "type": "record",
+          "doc": "Contains gateway network and L3 data for a network related to a specific connected device at a point in time",
+          "fields": [
+            {
+              "name": "device_id",
+              "type": {
+                "namespace": "com.comcast.kestrel.odp",
+                "name": "ConnectedDeviceIdentifier",
+                "type": "record",
+                "doc": "Identifies a connected device",
+                "fields": [
+                  {
+                    "name": "mac_address",
+                    "type": [
+                      "null",
+                      "com.comcast.kestrel.datatype.MacAddress"
+                    ],
+                    "doc": "MAC address of the conected device the report is related to",
+                    "default": null
+                  },
+                  {
+                    "name": "device_type",
+                    "type": [
+                      "null",
+                      "string"
+                    ],
+                    "doc": "Device Type connected to the Gateway [TR-181: Device.Hosts.Host.{i}.X_RDKCENTRAL_COM-DeviceType]",
+                    "default": null
+                  }
+                ]
+              }
+            },
+            {
+              "name": "timestamp",
+              "type": [
+                "null",
+                {
+                  "logicalType": "timestamp-millis",
+                  "type": "long"
+                }
+              ],
+              "doc": "The UTC time stamp in milliseconds since Unix epoch (January 1, 1970 midnight) when the record data is generated.",
+              "default": null
+            },
+            {
+              "name": "interface_name",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Indicates the name of the interface the device is connected. TR-181 object Device.Hosts.Host.{i}.Layer1Interface",
+              "default": null
+            },
+            {
+              "name": "status",
+              "type": [
+                "null",
+                {
+                  "doc": "Status of the connected device",
+                  "name": "NetworkDeviceStatus",
+                  "namespace": "com.comcast.kestrel.odp.datatype",
+                  "symbols": [
+                    "ONLINE",
+                    "OFFLINE"
+                  ],
+                  "type": "enum"
+                }
+              ],
+              "doc": "Indicates the current status of the 'connected' device. [TR-181: Commonly found in Device.WiFi.AccessPoint.{i}.AssociatedDevice.{i}.Active, OR Device.(InterfaceType).Interface.{i}.AssociatedDevice.{i}.Active]",
+              "default": null
+           },
+          {
+              "name": "hostname",
+              "type": [
+                "null",
+                "string"
+             ],
+               "default":null
+            },
+            {
+              "name": "ip_addresses",
+               "type": [
+                 "null",
+                 {
+                   "type":"array",
+                   "items":"string"
+               }
+               ],
+               "default":null
+            }
+          ]
+        },
+        "type": "array"
+      }
+    }
+  ]
+}
