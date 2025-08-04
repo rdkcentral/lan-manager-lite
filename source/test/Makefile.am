@@ -82,7 +82,7 @@ CcspLMLite_gtest_bin_SOURCES += $(top_srcdir)/source/lm/cosa_xhosts_dml.c \
                         $(top_srcdir)/source/lm/cosa_managementserver_dml.c
 endif
 
-CcspLMLite_gtest_bin_LDFLAGS = -lgtest -lgmock -lgcov -lpthread -lrt -luuid
+CcspLMLite_gtest_bin_LDFLAGS = -lgtest -lgmock -lgcov -lpthread -lrt -lavro -luuid
 
 # Enabling RESOURCE_OPTIMIZATION for docker environment as it is defined in lm-lite recipe file in jenkins
 if FEATURE_RESOURCE_OPTIMIZATION
