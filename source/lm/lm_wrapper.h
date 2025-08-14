@@ -78,10 +78,6 @@ typedef struct _moca_cpe_list
 } moca_cpe_list;
 #endif
 
-#ifdef CORE_NET_LIB
-#include <libnet.h>
-#endif
-
 /*****************
  *
  */
@@ -166,9 +162,6 @@ void Xlm_wrapper_get_info(PLmObjectHost pHost);
 void lm_wrapper_get_dhcpv4_reserved();
 #if 0
 BOOL SearchWiFiClients(char *phyAddr, char *ssid);
-#endif
-#ifdef CORE_NET_LIB
-void format_neighbour_entry(const struct neighbour_info *neighbours, int nei_index , char* neighbour_table_entry, size_t nei_size);
 #endif
 int mac_string_to_array(char *pStr, unsigned char array[6]);
 int ip_string_to_arrary(char* pStr, unsigned char array[4]);

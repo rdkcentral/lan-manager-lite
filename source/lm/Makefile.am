@@ -61,7 +61,3 @@ libCcspLM_la_SOURCES += cosa_wantraffic_api.c \
                         wtc_rbus_handler_apis.c \
                         wtc_rbus_apis.c
 endif
-
-if CORE_NET_LIB_FEATURE_SUPPORT
-    libCcspLM_la_LDFLAGS += -lnet
-endif

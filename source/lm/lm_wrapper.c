@@ -113,58 +113,9 @@ typedef struct mac_band_record {
 static mac_band_record *Mac_to_band_mapping[HASHSIZE] = { NULL };
 #endif
 
-#ifdef CORE_NET_LIB
-
-static libnet_status file_append(const char *file_name ,const char *buf, size_t count)
-{
-    FILE *fp = NULL;
-    if (!file_name || !buf || count == 0) {
-        CcspTraceError(("%s Invalid input to file_append %s\n", __FUNCTION__, file_name));
-        return CNL_STATUS_FAILURE;
-    }
-
-    fp = fopen(file_name, "a");
-    if (NULL == fp) {
-        perror("fopen failed");
-        CcspTraceError(("%s Failed to open file %s\n", __FUNCTION__, file_name));
-        return CNL_STATUS_FAILURE;
-    }
-    if (count != fwrite(buf, sizeof(char), count, fp)) {
-        CcspTraceError(("%s Failed to write to file %s\n", __FUNCTION__, file_name));
-        fclose(fp);
-        return CNL_STATUS_FAILURE;
-    }
-    fclose(fp);
-    return CNL_STATUS_SUCCESS;
-}
-
-// Define the enum for IP type
-typedef enum {
-    NEI_INVALID = 0,   // Invalid address or error
-    NEI_IPV6 = 1,      // Valid IPv6 address
-    NEI_IPV4 = 2       // Valid IPv4 address
-} NEI_IPType;
-
-static NEI_IPType check_nei_ip_type(const char *address) {
-    struct in6_addr ipv6;
-    struct in_addr ipv4;
-
-    if (inet_pton(AF_INET6, address, &ipv6) == 1) {
-        // Address is a valid IPv6 address
-        return NEI_IPV6;
-    } else if (inet_pton(AF_INET, address, &ipv4) == 1) {
-        // Address is a valid IPv4 address
-        return NEI_IPV4;
-    } else {
-        // Invalid input or error
-        return NEI_INVALID;
-    }
-}
-#endif
-
 static int AreIPv4AddressesInSameSubnet(char* ipaddress, char* ipaddres2, char* subnetmask)
 {
-    struct in_addr addr, addr2, mask;
+    struct in_addr addr, addr2, mask;    
     int ret = 0;
 
     if (inet_pton(AF_INET, ipaddress, &addr) == 0) {
@@ -298,47 +249,10 @@ void remove_Mac_to_band_mapping(char *macstring)
                                         break;
 				}
                                 if(!next) break;
-
+                
 			}
 		}
 	}
-}
-#endif
-
-#ifdef CORE_NET_LIB
-void format_neighbour_entry(const struct neighbour_info *neighbours, int nei_index, char* neighbour_table_entry, size_t nei_size){
-    // neighbour_info *neighbours passed by reference for better efficiency
-    const char *state_str = "";
-    switch (neighbours->neigh_arr[nei_index].state) {
-        case NEIGH_STATE_INCOMPLETE:
-            state_str = "INCOMPLETE";
-            break;
-        case NEIGH_STATE_REACHABLE:
-            state_str = "REACHABLE";
-            break;
-        case NEIGH_STATE_STALE:
-            state_str = "STALE";
-            break;
-        case NEIGH_STATE_DELAY:
-            state_str = "DELAY";
-            break;
-        case NEIGH_STATE_PROBE:
-            state_str = "PROBE";
-            break;
-        case NEIGH_STATE_FAILED:
-            state_str = "FAILED";
-            break;
-        default:
-            state_str = "UNKNOWN";
-            break;
-    }
-
-    snprintf(neighbour_table_entry, nei_size, "%s dev %s lladdr %s %s\n",
-        neighbours->neigh_arr[nei_index].local,
-        neighbours->neigh_arr[nei_index].ifname,
-        neighbours->neigh_arr[nei_index].mac,
-        state_str);
-    return;
 }
 #endif
 
@@ -1231,117 +1145,14 @@ int lm_wrapper_get_arp_entries (char netName[LM_NETWORK_NAME_SIZE], int *pCount,
     	v_secure_system("ip -4 nei show | grep %s | grep -v 192.168.10  | grep -i -v %s > "ARP_CACHE_FILE, netName,pAtomBRMac);
         v_secure_system("ip -6 nei show | grep %s | grep -i -v %s >> "ARP_CACHE_FILE, netName, pAtomBRMac);
     } else {
-#ifdef CORE_NET_LIB
-        char *mac_filter = NULL;
-        char *if_filter = NULL;
-        int af_filter = 0;
-
-        if (netName == NULL || netName[0] == '\0') {
-            CcspTraceError(("%s: Input interface name is NULL or empty\n", __FUNCTION__));
-            pthread_mutex_unlock(&GetARPEntryMutex);
-            return -1;
-        }
-
-        if_filter = strdup(netName);
-        if (!if_filter) {
-            CcspTraceError(("%s: Failed to copy interface name string\n", __FUNCTION__));
-            pthread_mutex_unlock(&GetARPEntryMutex);
-            return -1;
-        }
-
-        struct neighbour_info *neighbours =  init_neighbour_info();
-        if (!neighbours) {
-            CcspTraceError(("%s: Failed to initialize neighbor information structure\n", __FUNCTION__));
-            free(if_filter);
-            pthread_mutex_unlock(&GetARPEntryMutex);
-            return -1;
-        }
-        libnet_status st = neighbour_get_list(neighbours, mac_filter, if_filter, af_filter);
-        free(if_filter);
-        if (st == CNL_STATUS_SUCCESS) {
-            CcspTraceDebug(("%s: Successfully retrieved neighbor list based on interface:%s, and Neighbour count: %d\n", __FUNCTION__, netName, neighbours->neigh_count));
-            if (neighbours->neigh_count <= 0 || neighbours->neigh_arr == NULL) {
-                CcspTraceError(("%s: Neighbour list is empty\n", __FUNCTION__));
-                neighbour_free_neigh(neighbours);
-                pthread_mutex_unlock(&GetARPEntryMutex);
-                return -1;
-            }
-            for (int i = 0; i < neighbours->neigh_count; ++i) {
-                CcspTraceDebug(("Neighbor %d: local=%s, mac=%s, ifname=%s,state=%d\n",
-                    i,
-                    neighbours->neigh_arr[i].local ? neighbours->neigh_arr[i].local : "NULL",
-                    neighbours->neigh_arr[i].mac ? neighbours->neigh_arr[i].mac : "NULL",
-                    neighbours->neigh_arr[i].ifname ? neighbours->neigh_arr[i].ifname : "NULL",
-                    neighbours->neigh_arr[i].state));
-
-                char arp_entry[128] = {0};
-                // Handle IPv4 address
-                if (neighbours->neigh_arr[i].local == NULL || strlen(neighbours->neigh_arr[i].local) == 0 || strcmp(neighbours->neigh_arr[i].local, "none") == 0) {
-                    CcspTraceError(("%s %d: Invalid local value for neighbor %d\n", __FUNCTION__, __LINE__, i));
-                    continue;
-                }
-                if (strstr(neighbours->neigh_arr[i].local, "192.168.10") == NULL) {
-                    if (check_nei_ip_type(neighbours->neigh_arr[i].local) == NEI_IPV4) {
-                        format_neighbour_entry(neighbours, i, arp_entry, sizeof(arp_entry));
-                    }
-                }
-                if (arp_entry[0] != '\0') {
-                    libnet_status fw_st = file_write(ARP_CACHE_FILE, arp_entry, strlen(arp_entry));
-                    if (fw_st != CNL_STATUS_SUCCESS){
-                        CcspTraceError(("%s %d: File write failed for neighbor list!\n", __FUNCTION__, __LINE__));
-                    }
-                }
-            }
-        }
-        else{
-            CcspTraceError(("%s: Failed to execute neighbour_get_list!\n", __FUNCTION__));
-            neighbour_free_neigh(neighbours);
-            pthread_mutex_unlock(&GetARPEntryMutex);
-            return -1;
-        }
-
-#else
 	v_secure_system("ip -4 nei show | grep %s | grep -v 192.168.10 > "ARP_CACHE_FILE, netName);
-#endif /* CORE_NET_LIB */
-
-#ifdef CORE_NET_LIB
-        if (st == CNL_STATUS_SUCCESS) {
-            for (int i = 0; i < neighbours->neigh_count; ++i) {
-                char arp_entry[128] = {0};
-                // Handle IPv6 address
-#if defined(_HUB4_PRODUCT_REQ_) || defined(_RDKB_GLOBAL_PRODUCT_REQ_)
-                if (neighbours->neigh_arr[i].local == NULL || strlen(neighbours->neigh_arr[i].local) == 0 || strcmp(neighbours->neigh_arr[i].local, "none") == 0) {
-                    CcspTraceError(("%s %d: Invalid local value for neighbor %d\n", __FUNCTION__, __LINE__, i));
-                    continue;
-                }
-#endif /*_HUB4_PRODUCT_REQ_ || _RDKB_GLOBAL_PRODUCT_REQ_*/
-                if (check_nei_ip_type(neighbours->neigh_arr[i].local) == NEI_IPV6) {
-#if defined(_RDKB_GLOBAL_PRODUCT_REQ_)
-                    if (strncmp(neighbours->neigh_arr[i].local, "fd", 2) != 0 && strncmp(neighbours->neigh_arr[i].local, "fc", 2) != 0)
-#elif defined(_HUB4_PRODUCT_REQ_)
-                    if (strstr(neighbours->neigh_arr[i].local, "fd") == NULL && strstr(neighbours->neigh_arr[i].local, "fc") == NULL)
-#endif /*_HUB4_PRODUCT_REQ_*/
-                            format_neighbour_entry(neighbours, i, arp_entry, sizeof(arp_entry));
-                }
-                if (arp_entry[0] != '\0') {
-                    libnet_status fw_st = file_append(ARP_CACHE_FILE, arp_entry, strlen(arp_entry));
-                    if (fw_st != CNL_STATUS_SUCCESS){
-                        CcspTraceError(("%s %d: File write failed for neighbor list!\n", __FUNCTION__, __LINE__));
-                    }
-                }
-            }
-        }
-        neighbour_free_neigh(neighbours);
-#else
 #if defined(_RDKB_GLOBAL_PRODUCT_REQ_)
         v_secure_system("ip -6 nei show | grep %s | egrep -v \'^(fc|fd)\' >> "ARP_CACHE_FILE, netName);
 #elif defined(_HUB4_PRODUCT_REQ_)
 	v_secure_system("ip -6 nei show | grep %s | grep -v fd | grep -v fc >> "ARP_CACHE_FILE, netName);
 #else
         v_secure_system("ip -6 nei show | grep %s  >> "ARP_CACHE_FILE, netName);
-#endif
-#endif /* CORE_NET_LIB */
-
+#endif      
     }
 
     if ( (fp=fopen(ARP_CACHE_FILE, "r")) == NULL )
@@ -1566,15 +1377,15 @@ int getIPAddress(char *physAddress,char *IPAddress)
     char buf[200] = {0};
 #if 0
     v_secure_system("ip -4 nei show | grep brlan0 | grep -v 192.168.10 | grep -i %s | awk '{print $1}' | tail -1 > /tmp/LMgetIP.txt ", physAddress);
-
+     
     fp = fopen ("/tmp/LMgetIP.txt", "r");
-
+  
     if (fp != NULL) 
     {
         while(fgets(output, sizeof(output), fp)!=NULL);
         fclose (fp);
     }
-
+    
     rc = STRCPY_S_NOCLOBBER(IPAddress, 50,output);
     ERR_CHK(rc);
     return 0;
@@ -1592,91 +1403,7 @@ int getIPAddress(char *physAddress,char *IPAddress)
    CASE 2 : handles the updation of host table from neighbour table when clients are disconnected/change mode to DHCP
    CASE 3 : handles the updation of host table from dnsmasq.leases when connected clients are set to receive ip from DHCP.
 */
-
-#ifdef CORE_NET_LIB
-    char *mac_filter = NULL;
-    char *if_filter = NULL;
-    int af_filter = AF_INET;
-    int last_state = -1;
-    libnet_status st = CNL_STATUS_FAILURE;
-
-    if (physAddress != NULL) {
-        mac_filter = strdup(physAddress);
-        if (!mac_filter) {
-            CcspTraceError(("%s: Failed to copy MAC string\n", __FUNCTION__));
-            return -1;
-        }
-    }
-    else{
-        CcspTraceError(("%s: Input MAC address is NULL\n", __FUNCTION__));
-        return -1;
-    }
-
-    struct neighbour_info *neighbours =  init_neighbour_info();
-    if (!neighbours) {
-        CcspTraceError(("%s: Failed to initialize neighbor information structure\n", __FUNCTION__));
-        free(mac_filter);
-        goto CASE_DNSMASQ;
-    }
-
-    st = neighbour_get_list(neighbours, mac_filter, if_filter, af_filter);
-    free(mac_filter);
-    if (st != CNL_STATUS_SUCCESS) {
-        CcspTraceError(("%s: Failed to execute neighbour_get_list!\n", __FUNCTION__));
-        neighbour_free_neigh(neighbours);
-        goto CASE_DNSMASQ;
-    }
-
-    CcspTraceDebug(("%s: Successfully retrieved neighbor list based on MAC:%s, and Neighbour count: %d\n", __FUNCTION__, physAddress, neighbours->neigh_count));
-    if (neighbours->neigh_count <= 0 || neighbours->neigh_arr == NULL) {
-        CcspTraceError(("%s: Neighbour list is empty\n", __FUNCTION__));
-        neighbour_free_neigh(neighbours);
-        goto CASE_DNSMASQ;
-    }
-    for (int i = 0; i < neighbours->neigh_count; ++i) {
-        CcspTraceDebug(("Neighbor %d: local=%s, mac=%s, ifname=%s, state=%d\n",
-            i,
-            neighbours->neigh_arr[i].local ? neighbours->neigh_arr[i].local : "NULL",
-            neighbours->neigh_arr[i].mac ? neighbours->neigh_arr[i].mac : "NULL",
-            neighbours->neigh_arr[i].ifname ? neighbours->neigh_arr[i].ifname : "NULL",
-            neighbours->neigh_arr[i].state));
-
-        if (neighbours->neigh_arr[i].local == NULL || strlen(neighbours->neigh_arr[i].local) == 0 || strcmp(neighbours->neigh_arr[i].local, "none") == 0) {
-            CcspTraceError(("%s %d: Invalid local value for neighbor %d\n", __FUNCTION__, __LINE__, i));
-            continue;
-        }
-
-        if ((neighbours->neigh_arr[i].state == NEIGH_STATE_REACHABLE ||
-                neighbours->neigh_arr[i].state == NEIGH_STATE_DELAY ||
-                neighbours->neigh_arr[i].state == NEIGH_STATE_STALE) &&
-            strstr(neighbours->neigh_arr[i].local, "169.254.") == NULL) {
-
-            memset(output, 0, sizeof(output));
-            strncpy(output, neighbours->neigh_arr[i].local, sizeof(output) - 1);
-            output[sizeof(output) - 1] = '\0'; // Ensure null termination
-            last_state = neighbours->neigh_arr[i].state;
-        }
-    }
-
-    if (output[0] != '\0' &&
-        (last_state == NEIGH_STATE_REACHABLE ||
-         last_state == NEIGH_STATE_DELAY ||
-         last_state == NEIGH_STATE_STALE)) {
-
-        strncpy(IPAddress, output, sizeof(output) - 1);
-        IPAddress[sizeof(output) - 1] = '\0'; // Ensure null termination
-        if (last_state == NEIGH_STATE_STALE) {
-            //CASE 1 : To update neighbour table when Static clients are transistioning between REACHABLE and DELAY
-            AnscTraceWarning(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));  //Case 1
-        } else {
-            //CASE 2 : To update neighbour table when Static clients are disconnected or mode changes to DHCP due to which it receives new IP...existing IP is obsolete
-            AnscTraceWarning(("client is either reachable or delay: MAC %s IP %s\n", physAddress, IPAddress)); //Case 2
-        }
-        neighbour_free_neigh(neighbours);
-        return 0;
-    }
-    neighbour_free_neigh(neighbours);
-#else /* CORE_NET_LIB */
+   AnscTraceWarning(("CoreNetLib changes reverted\n"));
 //CASE 1 : To update neighbour table when Static clients are transistioning between REACHABLE and DELAY
     memset(buf, 0, sizeof(buf));
     memset(output, 0, sizeof(output));
@@ -1726,11 +1453,6 @@ int getIPAddress(char *physAddress,char *IPAddress)
              fp = NULL;
          }
     }
-#endif /* CORE_NET_LIB */
-
-#ifdef CORE_NET_LIB
-CASE_DNSMASQ:
-#endif /* CORE_NET_LIB */
 
 //CASE 3 : Handles details of clients that are set to receive automatic IP via DHCP
     memset(buf, 0, sizeof(buf));

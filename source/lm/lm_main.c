@@ -587,11 +587,11 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
 	memset(addressSource,0,sizeof(addressSource));
 	memset(IPAddress,0,sizeof(IPAddress));
 	memset(interface,0,sizeof(interface));
-    if ( ! pHost->pStringParaValue[LM_HOST_IPAddressId] )
-    {
-        getIPAddress(pHost->pStringParaValue[LM_HOST_PhysAddressId], IPAddress);
-        LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]) , IPAddress);
-    }
+		if ( ! pHost->pStringParaValue[LM_HOST_IPAddressId] )	
+		{
+			 getIPAddress(pHost->pStringParaValue[LM_HOST_PhysAddressId], IPAddress);
+      			  LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]) , IPAddress);
+		}
 /*
 		getAddressSource(pHost->pStringParaValue[LM_HOST_PhysAddressId], addressSource);
 		if ( (pHost->pStringParaValue[LM_HOST_AddressSource]) && (strlen(addressSource)))	
@@ -2823,69 +2823,11 @@ static BOOL ValidateHost (char *mac)
     FILE *fp;
     int ret =0;
 
-#ifdef CORE_NET_LIB
-    char *mac_filter = NULL;
-    char *if_filter = NULL;
-    int af_filter = 0;
-
-    if (mac != NULL) {
-        mac_filter = strdup(mac);
-        if (!mac_filter) {
-            CcspTraceError(("%s: Failed to copy MAC string\n", __FUNCTION__));
-            return FALSE;
-        }
-    }
-    else{
-        CcspTraceError(("%s: Input MAC address is NULL\n", __FUNCTION__));
-        return FALSE;
-    }
-
-    struct neighbour_info *neighbours =  init_neighbour_info();
-    if (!neighbours) {
-        CcspTraceError(("%s: Failed to initialize neighbor information structure\n", __FUNCTION__));
-        free(mac_filter);
-        return FALSE;
-    }
-    libnet_status st = neighbour_get_list(neighbours, mac_filter, if_filter, af_filter);
-    free(mac_filter);
-    if (st == CNL_STATUS_SUCCESS) {
-        CcspTraceDebug(("%s: Successfully retrieved neighbor list based on MAC:%s, and Neighbour count: %d\n", __FUNCTION__, mac, neighbours->neigh_count));
-        if (neighbours->neigh_count <= 0 || neighbours->neigh_arr == NULL) {
-            CcspTraceError(("%s: Neighbour list is empty\n", __FUNCTION__));
-            neighbour_free_neigh(neighbours);
-            return FALSE;
-        }
-        for (int i = 0; i < neighbours->neigh_count; ++i) {
-            CcspTraceDebug(("Neighbor %d: local=%s, mac=%s, ifname=%s,state=%d\n",
-                i,
-                neighbours->neigh_arr[i].local ? neighbours->neigh_arr[i].local : "NULL",
-                neighbours->neigh_arr[i].mac ? neighbours->neigh_arr[i].mac : "NULL",
-                neighbours->neigh_arr[i].ifname ? neighbours->neigh_arr[i].ifname : "NULL",
-                neighbours->neigh_arr[i].state));
-
-            char arp_entry[128] = {0};
-            format_neighbour_entry(neighbours, i, arp_entry, sizeof(arp_entry));
-            if (arp_entry[0] != '\0') {
-                libnet_status fw_st = file_write(ARP_CACHE, arp_entry, strlen(arp_entry));
-                if (fw_st != CNL_STATUS_SUCCESS){
-                    CcspTraceError(("%s %d: File write failed for neighbor list!\n", __FUNCTION__, __LINE__));
-                }
-            }
-        }
-    }
-    else{
-        CcspTraceError(("%s: Failed to execute core net lib neighbour_get_list\n", __FUNCTION__));
-        neighbour_free_neigh(neighbours);
-        return FALSE;
-    }
-    neighbour_free_neigh(neighbours);
-#else
     ret = v_secure_system("ip nei show | grep -i %s > "ARP_CACHE, mac);
     if(ret < 0)
     {
-         CcspTraceError(("Failed in executing the command via v_secure_system ret: %d\n",ret));
+         CcspTraceError(("Failed in executing the command via v_seure_system ret: %d\n",ret));
     }
-#endif /* CORE_NET_LIB */
 
     if ((fp = fopen(ARP_CACHE, "r")) == NULL)
     {
@@ -2924,6 +2866,7 @@ static BOOL ValidateHost (char *mac)
 
     fclose(fp);
     unlink(DNSMASQ_CACHE);
+
     return FALSE;
 }
 
@@ -3110,6 +3053,7 @@ static void *ValidateHost_Thread (void *arg)
     attr.mq_msgsize = MAX_SIZE_VALIDATE_QUEUE;
     attr.mq_curmsgs = 0;
 
+
     /* create the message queue */
     mq = mq_open(VALIDATE_QUEUE_NAME, O_CREAT | O_RDONLY, 0644, &attr);
     if (mq == (mqd_t)-1) {
@@ -3144,7 +3088,6 @@ static void *ValidateHost_Thread (void *arg)
         }
         else
         {
-            CcspTraceError(("%s: ValidateHost execution failed\n", __FUNCTION__));
             /* Host is not valide. Add the host details in retry list */
             UpdateHostRetryValidateList(&ValidateHostMsg, ACTION_FLAG_ADD);
         }
