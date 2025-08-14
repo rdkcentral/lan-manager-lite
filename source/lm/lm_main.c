@@ -89,7 +89,7 @@
 #include "safec_lib_common.h"
 #include "secure_wrapper.h"
 #ifdef FEATURE_SUPPORT_ONBOARD_LOGGING
-#define OnboardLog(...)                     rdk_log_onboard("LM", __VA_ARGS__)
+#define OnboardLog(...)                     rdk_logger_log_onboard("LM", __VA_ARGS__)
 #else
 #define OnboardLog(...)
 #endif
