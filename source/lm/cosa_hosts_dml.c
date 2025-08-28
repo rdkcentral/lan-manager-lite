@@ -622,7 +622,9 @@ Hosts_GetParamStringValue
 
     if ((strcmp(ParamName, "X_RDKCENTRAL-COM_LMHost_Sync_From_WiFi") == 0) ||
         (strcmp(ParamName, "X_RDKCENTRAL-COM_AddPresenceNotificationMac") == 0) ||
-        (strcmp(ParamName, "X_RDKCENTRAL-COM_DeletePresenceNotificationMac") == 0))
+        (strcmp(ParamName, "X_RDKCENTRAL-COM_DeletePresenceNotificationMac") == 0) ||
+        (strcmp(ParamName, "X_RDKCENTRAL-COM_LMHost_Sync_From_MoCA") == 0) ||
+        (strcmp(ParamName, "X_RDKCENTRAL-COM_EthHost_Sync") == 0))
     {
         /* collect value */
         rc = strcpy_s(pValue, *pUlSize, "");
