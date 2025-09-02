@@ -27,41 +27,39 @@ log() {
     echo " "
 }
 
-# Initialize branch variable with an if-else statement
-branch=${BRANCH:-stable2}
-log "INFO" "Using branch: $branch"
-
-# Check if RdkbGMock directory already exists
+# Clone or enter RdkbGMock
 if [ -d "RdkbGMock" ]; then
     log "INFO" "RdkbGMock directory already exists. Skipping clone."
     cd RdkbGMock
 else
-    log "INFO" "RdkbGMock directory does not exist. Cloning repository..."
-    if git clone ssh://gerrit.teamccp.com:29418/rdk/rdkb/components/opensource/ccsp/RdkbGMock/generic RdkbGMock -b "$branch"; then
-        log "INFO" "Entering into RdkbGMock directory..."
+    log "INFO" "Cloning RdkbGMock repository from GitHub..."
+    # Use token for authentication if provided
+    if git clone -b "develop" "https://github.com/rdkcentral/gmock-broadband.git" RdkbGMock; then
         cd RdkbGMock
     else
-        log "ERROR" "Failed to clone RdkbGMock repository."
+        log "ERROR" "Failed to clone repository with branch: develop"
         exit 1
     fi
 fi
 
-# Check if change number/revision is provided for RdkbGMock
+# Check if a pull request ID is provided in argument 1
 if [ -n "$1" ]; then
-    change_revision=$1
-    change_number=$(echo $change_revision | cut -d'/' -f1)
-    revision=$(echo $change_revision | cut -d'/' -f2)
-    last_two_digits=${change_number: -2}
-
-    log "INFO" "Fetching and cherry-picking changes..."
-    if git fetch ssh://gerrit.teamccp.com:29418/rdk/rdkb/components/opensource/ccsp/RdkbGMock/generic refs/changes/"$last_two_digits"/"$change_number"/"$revision" && git cherry-pick FETCH_HEAD; then
-        log "INFO" "Changes fetched and cherry-picked successfully."
+    pr_id="$1"
+    log "INFO" "Fetching PR ID: $pr_id and checking out FETCH_HEAD"
+    if git fetch "https://github.com/rdkcentral/gmock-broadband.git" pull/"$pr_id"/head && git checkout FETCH_HEAD; then
+        log "INFO" "Successfully checked out PR #$pr_id"
     else
-        log "ERROR" "Failed to fetch and cherry-pick changes."
+        log "ERROR" "Failed to fetch or checkout PR #$pr_id"
         exit 1
     fi
 else
-    log "INFO" "No change number/revision provided, skipping git fetch and cherry-pick."
+    log "INFO" "No PR ID provided. Fetching latest from branch: develop"
+    if git fetch "https://github.com/rdkcentral/gmock-broadband.git" develop && git checkout develop; then
+        log "INFO" "Checked out latest branch: develop"
+    else
+        log "ERROR" "Failed to fetch or checkout branch: develop"
+        exit 1
+    fi
 fi
 
 log "INFO" "Start Running RdkbGMock Dependency Component Script..."
@@ -87,7 +85,7 @@ else
 fi
 
 # Run configure with specific options
-log "INFO" "Running configure with option --enable-unitTestDockerSupport..."
+log "INFO" "Running configure with options --enable-unitTestDockerSupport..."
 if ./configure --enable-unitTestDockerSupport; then
     log "INFO" "Configuration successful."
 else
@@ -100,33 +98,56 @@ if [ ! -f "${PWD}/RdkbGMock/docker_scripts/export_var.sh" ]; then
     log "ERROR" "RdkbGMock/docker_scripts/export_var.sh does not exist in the directory $PWD."
     exit 1
 else
-    # Source the export_var.sh script from the current working directory
     source "RdkbGMock/docker_scripts/export_var.sh"
-
-    # Log the paths set by the sourced script
     log "INFO" "C_INCLUDE_PATH is set to: $C_INCLUDE_PATH"
     log "INFO" "CPLUS_INCLUDE_PATH is set to: $CPLUS_INCLUDE_PATH"
 fi
 
-# Run make for specific target
-log "INFO" "Running make for CcspLMLite_gtest.bin..."
-if make -C source/test; then
-    log "INFO" "Make operation completed successfully."
-else
-    log "ERROR" "Make operation failed."
-    exit 1
-fi
-log "INFO" "Completed running UT script."
-
 log "INFO" "Preparing to run the Gtest Binary"
-if [ -f "./source/test/CcspLMLite_gtest.bin" ]; then
-    log "INFO" "Running CcspLMLite_gtest.bin"
-    ./source/test/CcspLMLite_gtest.bin
-    log "INFO" "Completed Test Execution"
-else
-    log "ERROR" "CcspLMLite_gtest.bin does not exist, cannot run tests"
-    exit 1
-fi
+# Generic function to build and run all gtest binaries under source/test and its subfolders
+run_all_gtests() {
+    local test_dirs
+    local make_dir
+    local bin_files
+    local bin_file
+
+    # Only include directories that contain a Makefile and do not contain makefile or GNUmakefile
+    test_dirs=( $(find source/test -type f -name 'Makefile' -exec dirname {} \; | sort -u) )
+
+    for make_dir in "${test_dirs[@]}"; do
+        log "INFO" "Running make in $make_dir..."
+        if make -C "$make_dir"; then
+            log "INFO" "Make operation completed successfully in $make_dir."
+        else
+            log "ERROR" "Make operation failed in $make_dir."
+            exit 1
+        fi
+    done
+
+    log "INFO" "Completed running all make operations."
+
+    # Find all .bin files under source/test and its subfolders
+    bin_files=( $(find source/test -type f -name "*.bin") )
+
+    if [[ ${#bin_files[@]} -eq 0 ]]; then
+        log "ERROR" "No .bin files found under source/test, cannot run tests"
+        exit 1
+    fi
+
+    for bin_file in "${bin_files[@]}"; do
+        if [[ -x "$bin_file" ]]; then
+            log "INFO" "Running $(basename "$bin_file")"
+            "$bin_file"
+            log "INFO" "Completed Test Execution for $(basename "$bin_file")"
+        else
+            log "ERROR" "$(basename "$bin_file") is not executable, skipping"
+        fi
+    done
+}
+
+# Call the generic function to build and run all gtest binaries
+run_all_gtests
+log "INFO" "Completed running all Gtest Binaries"
 
 log "INFO" "Starting Gcov for code coverage analysis"
 # Capture initial coverage data
