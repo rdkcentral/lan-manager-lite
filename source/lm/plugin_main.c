@@ -151,36 +151,42 @@ COSA_Init
     pPlugInfo->RegisterFunction(pPlugInfo->hContext, "XHost_IPv6Address_GetParamStringValue",  XHost_IPv6Address_GetParamStringValue);
 #endif
 
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_GetParamUlongValue",  NetworkDevicesStatus_GetParamUlongValue);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_GetParamBoolValue",  NetworkDevicesStatus_GetParamBoolValue);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_GetParamStringValue",  NetworkDevicesStatus_GetParamStringValue);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_SetParamBoolValue",  NetworkDevicesStatus_SetParamBoolValue);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_SetParamUlongValue",  NetworkDevicesStatus_SetParamUlongValue);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Validate",  NetworkDevicesStatus_Validate);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Commit",  NetworkDevicesStatus_Commit);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Rollback",  NetworkDevicesStatus_Rollback);
+#if defined (RDKB_EXTENDER_ENABLED)
+    syscfg_get(NULL, "Device_Mode", dev_Mode, sizeof(dev_Mode));
+    if (atoi(dev_Mode) == 0)
+#endif
+    {
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_GetParamUlongValue",  NetworkDevicesStatus_GetParamUlongValue);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_GetParamBoolValue",  NetworkDevicesStatus_GetParamBoolValue);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_GetParamStringValue",  NetworkDevicesStatus_GetParamStringValue);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_SetParamBoolValue",  NetworkDevicesStatus_SetParamBoolValue);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_SetParamUlongValue",  NetworkDevicesStatus_SetParamUlongValue);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Validate",  NetworkDevicesStatus_Validate);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Commit",  NetworkDevicesStatus_Commit);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Rollback",  NetworkDevicesStatus_Rollback);
 
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Default_GetParamUlongValue",  NetworkDevicesStatus_Default_GetParamUlongValue);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Default_SetParamUlongValue",  NetworkDevicesStatus_Default_SetParamUlongValue);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Default_Validate",  NetworkDevicesStatus_Default_Validate);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Default_Commit",  NetworkDevicesStatus_Default_Commit);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Default_Rollback",  NetworkDevicesStatus_Default_Rollback);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Default_GetParamUlongValue",  NetworkDevicesStatus_Default_GetParamUlongValue);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Default_SetParamUlongValue",  NetworkDevicesStatus_Default_SetParamUlongValue);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Default_Validate",  NetworkDevicesStatus_Default_Validate);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Default_Commit",  NetworkDevicesStatus_Default_Commit);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_Default_Rollback",  NetworkDevicesStatus_Default_Rollback);
+
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_GetParamUlongValue",  NetworkDevicesTraffic_GetParamUlongValue);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_GetParamBoolValue",  NetworkDevicesTraffic_GetParamBoolValue);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_GetParamStringValue",  NetworkDevicesTraffic_GetParamStringValue);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_SetParamBoolValue",  NetworkDevicesTraffic_SetParamBoolValue);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_SetParamUlongValue",  NetworkDevicesTraffic_SetParamUlongValue);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Validate",  NetworkDevicesTraffic_Validate);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Commit",  NetworkDevicesTraffic_Commit);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Rollback",  NetworkDevicesTraffic_Rollback);
+
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Default_GetParamUlongValue",  NetworkDevicesTraffic_Default_GetParamUlongValue);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Default_SetParamUlongValue",  NetworkDevicesTraffic_Default_SetParamUlongValue);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Default_Validate",  NetworkDevicesTraffic_Default_Validate);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Default_Commit",  NetworkDevicesTraffic_Default_Commit);
+        pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Default_Rollback",  NetworkDevicesTraffic_Default_Rollback);
+    }
     
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_GetParamUlongValue",  NetworkDevicesTraffic_GetParamUlongValue);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_GetParamBoolValue",  NetworkDevicesTraffic_GetParamBoolValue);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_GetParamStringValue",  NetworkDevicesTraffic_GetParamStringValue);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_SetParamBoolValue",  NetworkDevicesTraffic_SetParamBoolValue);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_SetParamUlongValue",  NetworkDevicesTraffic_SetParamUlongValue);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Validate",  NetworkDevicesTraffic_Validate);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Commit",  NetworkDevicesTraffic_Commit);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Rollback",  NetworkDevicesTraffic_Rollback);
-
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Default_GetParamUlongValue",  NetworkDevicesTraffic_Default_GetParamUlongValue);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Default_SetParamUlongValue",  NetworkDevicesTraffic_Default_SetParamUlongValue);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Default_Validate",  NetworkDevicesTraffic_Default_Validate);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Default_Commit",  NetworkDevicesTraffic_Default_Commit);
-    pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesTraffic_Default_Rollback",  NetworkDevicesTraffic_Default_Rollback);
- 
 #if !defined (RESOURCE_OPTIMIZATION)
     pPlugInfo->RegisterFunction(pPlugInfo->hContext, "ManageableDevice_GetEntryCount",  ManageableDevice_GetEntryCount);
     pPlugInfo->RegisterFunction(pPlugInfo->hContext, "ManageableDevice_IsUpdated",  ManageableDevice_IsUpdated);
