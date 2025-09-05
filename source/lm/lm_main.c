@@ -2281,6 +2281,10 @@ static void *Event_HandlerThread(void *threadid)
         /* CID 339816 String not null terminated */
         EventMsg.Msg[MAX_SIZE_EVT-1] = '\0';
         do_dhcpsync = FALSE;
+        if(Hosts_stop_scan())
+        {
+            continue;
+        }
 
         if(EventMsg.MsgType == MSG_TYPE_ETH)
         {
