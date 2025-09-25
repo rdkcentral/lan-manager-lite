@@ -64,7 +64,8 @@
 
 /* Fix RDKB-499 */
 #define DHCPV4_RESERVED_FORMAT  "%17[^,],%63[^,],%63[^,]"
-#define LM_DHCP_CLIENT_FORMAT   "%63d %17s %63s %63s"      
+#define LM_DHCP_CLIENT_FORMAT   "%63d %17s %63s %63s"   
+#define LM_ARP_ENTRY_FORMAT  "%63s %63s %63s %63s %17s %31s"   
 
 extern ANSC_HANDLE bus_handle;
 extern char g_Subsystem[32];
@@ -984,14 +985,14 @@ int lm_wrapper_get_wifi_wsta_list(char netName[LM_NETWORK_NAME_SIZE], int *pCoun
 	parameterValStruct_t **valStrsecmode = NULL;
 	parameterValStruct_t **valStrsecencrymode = NULL;
 	parameterValStruct_t **valStrssid = NULL;
-	int nval, retval,retband;
+    int nval = 0, retval = -1, retband = 0;
 	char str[2][80];
 	char * name[2] = {(char*) str[0], (char*) str[1]};  
 	int interface ;
 	char secMode[128]  = {'\0'};
 	char secEncMode[128] = {'\0'};
 	char ssid[128] = {'\0'};
-        char  *paramNames[1] ;
+    char  *paramNames[1]  = {NULL};
 	int radioInt = 0;
 	int currentChannel = 0;
         LM_wifi_wsta_t *hosts = *ppWstaArray;
@@ -1085,13 +1086,19 @@ int lm_wrapper_get_wifi_wsta_list(char netName[LM_NETWORK_NAME_SIZE], int *pCoun
 		if(ret != CCSP_Message_Bus_OK){
 			CcspTraceError(("%s CcspBaseIf_getParameterValues %s error %d!\n", __FUNCTION__, name, ret));
 			printf("%s CcspBaseIf_getParameterValues %s error %d!\n", __FUNCTION__, name, ret);
-			goto RET1;
+			goto RET7;
 		}
 
 		if(strncmp("true", valStrchannel[0]->parameterValue, 5)==0)
 			retval = 0;
 
 		currentChannel = atoi(valStrchannel[1]->parameterValue);
+        if (valStrchannel)
+        {
+            CcspTraceWarning(("%s Freeing valStrchannel after use!\n", __FUNCTION__));
+            free_parameterValStruct_t(bus_handle, nval, valStrchannel);
+            valStrchannel = NULL;
+        }
 		
 		snprintf(secMode, sizeof(secMode), WIFI_DM_BSS_SECURITY_MODE,interface);
 		paramNames[0] = AnscCloneString(secMode);;
@@ -1106,11 +1113,17 @@ int lm_wrapper_get_wifi_wsta_list(char netName[LM_NETWORK_NAME_SIZE], int *pCoun
 		if(ret != CCSP_Message_Bus_OK){
 			CcspTraceError(("%s CcspBaseIf_getParameterValues %s error %d!\n", __FUNCTION__, secMode, ret));
 			printf("%s CcspBaseIf_getParameterValues %s error %d!\n", __FUNCTION__, secMode, ret);
-		        goto RET1;
+		        goto RET7;
 		} 
 
 		snprintf(secEncMode, sizeof(secEncMode),WIFI_DM_BSS_SECURITY_ENCRYMODE,interface);
-                paramNames[0] = AnscCloneString(secEncMode);
+        if(paramNames[0])
+        {
+            CcspTraceWarning(("%s Freeing paramNames after use!\n", __FUNCTION__));
+            free(paramNames[0]);
+            paramNames[0] = NULL;
+        }
+            paramNames[0] = AnscCloneString(secEncMode);
 		ret = CcspBaseIf_getParameterValues(
 		    bus_handle,
 		    pWiFiComponentName,
@@ -1122,10 +1135,28 @@ int lm_wrapper_get_wifi_wsta_list(char netName[LM_NETWORK_NAME_SIZE], int *pCoun
 		if(ret != CCSP_Message_Bus_OK){
 			CcspTraceError(("%s CcspBaseIf_getParameterValues %s error %d!\n", __FUNCTION__, secEncMode, ret));
 			printf("%s CcspBaseIf_getParameterValues %s error %d!\n", __FUNCTION__, secEncMode, ret);
-			goto RET1;
+            if (valStrsecencrymode)
+            {
+                CcspTraceWarning(("%s Freeing valStrsecencrymode!\n", __FUNCTION__));
+                free_parameterValStruct_t(bus_handle, nval, valStrsecencrymode);
+                valStrsecencrymode = NULL;
+            }
+            if (valStrsecmode)
+            {
+                CcspTraceWarning(("%s Freeing valStrsecmode!\n", __FUNCTION__));
+                free_parameterValStruct_t(bus_handle, nval, valStrsecmode);
+                valStrsecmode = NULL;
+            }
+			goto RET7;
 		} 
 
 		snprintf(ssid, sizeof(ssid),WIFI_DM_SSID,interface);
+        if(paramNames[0])
+        {
+            CcspTraceWarning(("%s Freeing paramNames after use!!\n", __FUNCTION__));
+            free(paramNames[0]);
+            paramNames[0] = NULL;
+        }
 	        paramNames[0] = AnscCloneString(ssid);
 		ret = CcspBaseIf_getParameterValues(
 		    bus_handle,
@@ -1138,7 +1169,31 @@ int lm_wrapper_get_wifi_wsta_list(char netName[LM_NETWORK_NAME_SIZE], int *pCoun
 		if(ret != CCSP_Message_Bus_OK){
 			CcspTraceError(("%s CcspBaseIf_getParameterValues %s error %d!\n", __FUNCTION__, ssid, ret));
 			printf("%s CcspBaseIf_getParameterValues %s error %d!\n", __FUNCTION__, ssid, ret);
-			goto RET1;
+            if (valStrssid)
+            {
+                CcspTraceWarning(("%s Freeing valStrssid on error case!\n", __FUNCTION__));
+                free_parameterValStruct_t(bus_handle, nval, valStrssid);
+                valStrssid = NULL;
+            }
+            if (valStrsecencrymode)
+            {
+                CcspTraceWarning(("%s Freeing valStrsecencrymode on error case!\n", __FUNCTION__));
+                free_parameterValStruct_t(bus_handle, nval, valStrsecencrymode);
+                valStrsecencrymode = NULL;
+            }
+            if (valStrsecmode)
+            {
+                CcspTraceWarning(("%s Freeing valStrsecmode on error case!\n", __FUNCTION__));
+                free_parameterValStruct_t(bus_handle, nval, valStrsecmode);
+                valStrsecmode = NULL;
+            }
+            if(paramNames[0])
+            {
+                CcspTraceWarning(("%s Freeing paramNames after use !!!\n", __FUNCTION__));
+                free(paramNames[0]);
+                paramNames[0] = NULL;
+            }
+			goto RET7;
 		}
 		CcspTraceWarning(("No of Wifi clients connected : %d \n",*pCount));
 		CcspTraceWarning(("Device No : %d MAC - %s interface: ath%d band %dGHz RSSI %d \n",i+1,hosts[i].phyAddr,interface-1,band,hosts[i].RSSI));
@@ -1378,7 +1433,7 @@ int lm_wrapper_get_arp_entries (char netName[LM_NETWORK_NAME_SIZE], int *pCount,
         192.168.1.206 dev brlan0 lladdr f0:de:f1:0b:39:65 REACHABLE
         192.168.100.3 dev lan0 lladdr 00:13:20:fa:72:25 STALE
         */
-        ret = sscanf(buf, "%63s %63s %63s %63s %17s %31s",
+        ret = sscanf(buf, LM_ARP_ENTRY_FORMAT,
                  hosts[index].ipAddr,
                  stub,
                  hosts[index].ifName,
@@ -1464,6 +1519,7 @@ void getAddressSource(char *physAddress, char *pAddressSource)
    }
 
     fclose(fp);
+    fp=NULL;
 memset(buf,0,sizeof(buf));
    if ( (fp=fopen(DNSMASQ_RESERVED_FILE, "r")) == NULL )
     {
@@ -1573,6 +1629,7 @@ int getIPAddress(char *physAddress,char *IPAddress)
     {
         while(fgets(output, sizeof(output), fp)!=NULL);
         fclose (fp);
+        fp=NULL
     }
 
     rc = STRCPY_S_NOCLOBBER(IPAddress, 50,output);
