@@ -4483,7 +4483,6 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
                 return -1;
             }
         }
-        free(node);
     }
     return 0;
 }
