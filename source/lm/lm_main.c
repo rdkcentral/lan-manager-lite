@@ -4327,8 +4327,10 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
             PLmObjectHost pHost = ctx->pHost;
 
             // Check IPv4
+	    pthread_mutex_lock (&LmHostObjectMutex);
             ctx->ipv4 = pHost->pStringParaValue[LM_HOST_IPAddressId] ? 
                 pHost->pStringParaValue[LM_HOST_IPAddressId] : NULL;
+	    pthread_mutex_unlock (&LmHostObjectMutex);
             if (ctx->ipv4 ) {
                 completed = true;
             } else if (++curr->retry_count > IP_MAX_RETRIES) { //Increment the retry_ocunt per host 
@@ -4338,13 +4340,15 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 
             if ((completed) || (ctx->status == CLIENT_STATE_OFFLINE)){
                 //If IP addresses are obtained or retry_count exceeded 
+		pthread_mutex_lock (&LmHostObjectMutex);
                 Send_PresenceNotification(
                         ctx->interface,
                         pHost->pStringParaValue[LM_HOST_PhysAddressId],
                         ctx->status,
                         pHost->pStringParaValue[LM_HOST_HostNameId],
                         ctx->ipv4
-                        );
+			);
+		pthread_mutex_unlock (&LmHostObjectMutex);
                 CcspTraceWarning(("Notification sent from %s, line:%d\n", __FUNCTION__, __LINE__));
 
                 //Deletion logic
@@ -4464,7 +4468,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         }
         node->ctx = ctx;
 
-        pthread_mutex_lock(&LmRetryHostListMutex);
+        pthread_mutex_lock(&LmRetryNotifyHostListMutex);
         node->next = pNotifyListHead;
         pNotifyListHead = node;
         //Notify IPaddress Listener thread
@@ -4477,13 +4481,13 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
             res = pthread_create(&NotifyIPMonitorThread, NULL, UpdateAndSendHostIPAddress_Thread, NULL);
             if (res != 0) {
                 worker_thread_running = false;
-                pthread_mutex_unlock(&LmRetryHostListMutex);
+                pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
                 free(node);
                 free(ctx);
                 return -1;
             }
         }
-        pthread_mutex_unlock(&LmRetryHostListMutex);
+        pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
     }
     return 0;
 }
