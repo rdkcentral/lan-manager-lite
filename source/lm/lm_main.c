@@ -4469,8 +4469,6 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         pNotifyListHead = node;
         //Notify IPaddress Listener thread
         pthread_cond_signal(&LmNotifyCond);
-        pthread_mutex_unlock(&LmRetryHostListMutex);
-
         //Start worker thread once
         if (!worker_thread_running) {
             CcspTraceWarning(("%s UpdateAndSendHostIPAddress_Thread creation line:%d\n", __FUNCTION__, __LINE__));
@@ -4478,11 +4476,14 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
             // Start thread to handle IP retry + notification
             res = pthread_create(&NotifyIPMonitorThread, NULL, UpdateAndSendHostIPAddress_Thread, NULL);
             if (res != 0) {
+                worker_thread_running = false;
+                pthread_mutex_unlock(&LmRetryHostListMutex);
                 free(node);
                 free(ctx);
                 return -1;
             }
         }
+        pthread_mutex_unlock(&LmRetryHostListMutex);
     }
     return 0;
 }
