@@ -4333,7 +4333,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 	    pthread_mutex_unlock (&LmHostObjectMutex);
             if (ctx->ipv4 ) {
                 completed = true;
-            } else if (++curr->retry_count > IP_MAX_RETRIES) { //Increment the retry_ocunt per host 
+            } else if (++curr->retry_count > IP_MAX_RETRIES) { //Increment the retry_count per host 
                 CcspTraceWarning(("Retry limit exceeded for host, removing.\n"));
                 completed = true;
             }
