@@ -2233,11 +2233,11 @@ void XHosts_SyncWifi()
 static void *Event_HandlerThread(void *threadid)
 {
     UNREFERENCED_PARAMETER(threadid);
-    LM_wifi_wsta_t hosts;
+    LM_wifi_wsta_t hosts = {0}; //CID 339816
 #if !defined (NO_MOCA_FEATURE_SUPPORT)
-    LM_moca_cpe_t mhosts;
+    LM_moca_cpe_t mhosts = {0};
 #endif
-    PLmObjectHost pHost;
+    PLmObjectHost pHost = {0}; 
     //printf("Hello World! It's me, thread #%ld!\n", tid);
     mqd_t mq;
     struct mq_attr attr;
@@ -2364,6 +2364,9 @@ static void *Event_HandlerThread(void *threadid)
         else if(EventMsg.MsgType == MSG_TYPE_WIFI)
         {
             memcpy(&hosts,EventMsg.Msg,sizeof(hosts));
+            /* CID 339816 String not null terminated */
+            hosts.phyAddr[sizeof(hosts.phyAddr) - 1] = '\0';
+
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             pthread_mutex_lock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -4047,11 +4050,17 @@ int Hosts_DisablePresenceDetectionTask()
     char tmpmac[64];
     char dbParam[128];
     int i = 0;
+
+    /* CID 559858 Check of thread-shared field evades lock acquisition */
+    pthread_mutex_lock(&LmHostObjectMutex);
     if (!lmHosts.enablePresence)
     {
+        pthread_mutex_unlock(&LmHostObjectMutex);
         CcspTraceWarning(("RDKB_PRESENCE: Presence Detection already disabled !!!\n"));
         return 0;
     }
+    pthread_mutex_unlock(&LmHostObjectMutex);
+
     // clear all param related to presence.
     Sendmsg_dnsmasq(FALSE);
     syscfg_set(NULL, "notify_presence_webpa", "false");
