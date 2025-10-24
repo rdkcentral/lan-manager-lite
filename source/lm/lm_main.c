@@ -4469,7 +4469,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         pNotifyListHead = node;
         // Notify IP address Listener thread
         pthread_cond_signal(&LmNotifyCond);
-        //Start worker thread once
+        // Start worker thread once
         if (!worker_thread_running) {
             CcspTraceWarning(("%s UpdateAndSendHostIPAddress_Thread creation line:%d\n", __FUNCTION__, __LINE__));
             worker_thread_running = true;
