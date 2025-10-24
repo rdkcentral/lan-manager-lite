@@ -4327,8 +4327,10 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
             PLmObjectHost pHost = ctx->pHost;
 
             // Check IPv4
+	    pthread_mutex_lock (&LmHostObjectMutex);
             ctx->ipv4 = pHost->pStringParaValue[LM_HOST_IPAddressId] ? 
                 pHost->pStringParaValue[LM_HOST_IPAddressId] : NULL;
+	    pthread_mutex_unlock (&LmHostObjectMutex);
             if (ctx->ipv4 ) {
                 completed = true;
             } else if (++curr->retry_count > IP_MAX_RETRIES) { //Increment the retry_count per host 
@@ -4338,6 +4340,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 
             if ((completed) || (ctx->status == CLIENT_STATE_OFFLINE)){
                 //If IP addresses are obtained or retry_count exceeded 
+		pthread_mutex_lock (&LmHostObjectMutex);
                 Send_PresenceNotification(
                         ctx->interface,
                         pHost->pStringParaValue[LM_HOST_PhysAddressId],
@@ -4345,6 +4348,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                         pHost->pStringParaValue[LM_HOST_HostNameId],
                         ctx->ipv4
 			);
+		pthread_mutex_unlock (&LmHostObjectMutex);
                 CcspTraceWarning(("Notification sent from %s, line:%d\n", __FUNCTION__, __LINE__));
 
                 //Deletion logic
@@ -4472,9 +4476,9 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         pthread_mutex_lock(&LmRetryNotifyHostListMutex);
         node->next = pNotifyListHead;
         pNotifyListHead = node;
-        // Notify IP address Listener thread
-        pthread_cond_signal(&LmNotifyCond);
-        // Start worker thread once
+        pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
+        
+	//Start worker thread once
         if (!worker_thread_running) {
             CcspTraceWarning(("%s UpdateAndSendHostIPAddress_Thread creation line:%d\n", __FUNCTION__, __LINE__));
             worker_thread_running = true;
@@ -4482,13 +4486,11 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
             res = pthread_create(&NotifyIPMonitorThread, NULL, UpdateAndSendHostIPAddress_Thread, NULL);
             if (res != 0) {
                 worker_thread_running = false;
-                pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
                 free(node);
                 free(ctx);
                 return -1;
             }
         }
-        pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
     }
     return 0;
 }
