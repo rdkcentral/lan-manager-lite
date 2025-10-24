@@ -4359,7 +4359,12 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                 RetryNotifyHostList *toDelete = curr;
                 curr = curr->next;
 
-                free(toDelete->ctx); //memory allocated for LMPresenceNotifyAddressInfo  is freed
+                if (toDelete->ctx) {
+                    if (toDelete->ctx->ipv4) {
+                        free(toDelete->ctx->ipv4);
+                    }
+                    free(toDelete->ctx); //memory allocated for LMPresenceNotifyAddressInfo  is freed
+                }
                 free(toDelete);
             } else {
                 prev = curr;
