@@ -4368,7 +4368,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                 free(toDelete);
             } else {
                 prev = curr;
-                curr = curr->next; //Move to next host
+                curr = curr->next; // Move to next host
             }
         }
         pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
