@@ -4375,9 +4375,15 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                 curr = curr->next; // Move to next host
             }
         }
+        // Instead of sleeping outside the mutex, use pthread_cond_timedwait to wait for new items or timeout
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec += IP_RETRY_INTERVAL;
+        // Only wait if the list is empty after processing
+        if (!pNotifyListHead) {
+            pthread_cond_timedwait(&LmNotifyCond, &LmRetryNotifyHostListMutex, &ts);
+        }
         pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
-        sleep(IP_RETRY_INTERVAL);  // Short delay before next scan cycle
-    }
     return NULL;
 }
 
