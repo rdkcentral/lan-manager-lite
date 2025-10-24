@@ -232,6 +232,8 @@ typedef struct {
     char interface[32];
     ClientConnectState status;
     char *ipv4;
+    char *hostName;
+    char *physAddr;
 } LMPresenceNotifyAddressInfo;
 
 typedef struct RetryNotifyHostList {
@@ -4330,7 +4332,9 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 	    pthread_mutex_lock (&LmHostObjectMutex);
 	    if (pHost->pStringParaValue[LM_HOST_IPAddressId]) {
 		ctx->ipv4 = strdup(pHost->pStringParaValue[LM_HOST_IPAddressId]);
-	    } 
+	    }
+	    ctx->physAddr = strdup(pHost->pStringParaValue[LM_HOST_PhysAddressId]);
+	    ctx->hostName = strdup(pHost->pStringParaValue[LM_HOST_HostNameId]);
 	    pthread_mutex_unlock (&LmHostObjectMutex);
             if (ctx->ipv4 ) {
                 completed = true;
@@ -4344,9 +4348,9 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 		pthread_mutex_lock (&LmHostObjectMutex);
                 Send_PresenceNotification(
                         ctx->interface,
-                        pHost->pStringParaValue[LM_HOST_PhysAddressId],
+                        ctx->physAddr,
                         ctx->status,
-                        pHost->pStringParaValue[LM_HOST_HostNameId],
+                        ctx->hostName,
                         ctx->ipv4
                 );
 		pthread_mutex_unlock (&LmHostObjectMutex);
@@ -4365,9 +4369,9 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                 curr = curr->next;
 
                 if (toDelete->ctx) {
-                    if (toDelete->ctx->ipv4) {
-                        free(toDelete->ctx->ipv4);
-                    }
+		    free(toDelete->ctx->ipv4);
+		    free(toDelete->ctx->physAddr);
+		    free(toDelete->ctx->hostName);
                     free(toDelete->ctx); // memory allocated for LMPresenceNotifyAddressInfo  is freed
                 }
                 free(toDelete);
@@ -4498,9 +4502,23 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
 	    } else {
 		CcspTraceError(("%s: Failed to create Notify thread (res=%d)\n", __FUNCTION__, res));
 		worker_thread_running = false;
-                free(node);
-                free(ctx);
-                return -1;
+	        /* Remove node from the list since thread creation failed */
+		pthread_mutex_lock(&LmRetryNotifyHostListMutex);
+		if (pNotifyListHead == node) {
+		    // node was head
+		    pNotifyListHead = node->next;
+		} else {
+		    // search and unlink
+		    RetryNotifyHostList *prev = pNotifyListHead;
+		    while (prev && prev->next != node)
+			prev = prev->next;
+		    if (prev)
+			prev->next = node->next;
+		}
+		pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
+		free(node);
+		free(ctx);
+		return -1;
             }
         }
     }
