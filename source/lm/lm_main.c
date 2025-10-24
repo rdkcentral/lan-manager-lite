@@ -4313,7 +4313,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
     while (1) {
         pthread_mutex_lock(&LmRetryNotifyHostListMutex);
         while (!pNotifyListHead) {
-            CcspTraceWarning((" %s line:%d\n", __FUNCTION__, __LINE__));
+            CcspTraceDebug((" %s line:%d\n", __FUNCTION__, __LINE__));
             pthread_cond_wait(&LmNotifyCond, &LmRetryNotifyHostListMutex);
         }
 
@@ -4328,18 +4328,19 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 
             // Check IPv4
 	    pthread_mutex_lock (&LmHostObjectMutex);
-            ctx->ipv4 = pHost->pStringParaValue[LM_HOST_IPAddressId] ? 
-                pHost->pStringParaValue[LM_HOST_IPAddressId] : NULL;
+	    if (pHost->pStringParaValue[LM_HOST_IPAddressId]) {
+		ctx->ipv4 = strdup(pHost->pStringParaValue[LM_HOST_IPAddressId]);
+	    } 
 	    pthread_mutex_unlock (&LmHostObjectMutex);
             if (ctx->ipv4 ) {
                 completed = true;
-            } else if (++curr->retry_count > IP_MAX_RETRIES) { //Increment the retry_count per host 
+            } else if (++curr->retry_count > IP_MAX_RETRIES) { // Increment the retry_count per host 
                 CcspTraceWarning(("Retry limit exceeded for host, removing.\n"));
                 completed = true;
             }
 
-            if ((completed) || (ctx->status == CLIENT_STATE_OFFLINE)){
-                //If IP addresses are obtained or retry_count exceeded 
+            if (completed){
+                // If IP addresses are obtained or retry_count exceeded 
 		pthread_mutex_lock (&LmHostObjectMutex);
                 Send_PresenceNotification(
                         ctx->interface,
@@ -4351,15 +4352,15 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 		pthread_mutex_unlock (&LmHostObjectMutex);
                 CcspTraceWarning(("Notification sent from %s, line:%d\n", __FUNCTION__, __LINE__));
 
-                //Deletion logic
+                // Deletion logic
                 if (prev) {
                     prev->next = curr->next;
                 } else {
-                    //If it is head node
+                    // If it is head node
                     pNotifyListHead = curr->next;
                 }
 
-                //Delete the node as the notification is sent for the node
+                // Delete the node as the notification is sent for the node
                 RetryNotifyHostList *toDelete = curr;
                 curr = curr->next;
 
@@ -4367,7 +4368,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                     if (toDelete->ctx->ipv4) {
                         free(toDelete->ctx->ipv4);
                     }
-                    free(toDelete->ctx); //memory allocated for LMPresenceNotifyAddressInfo  is freed
+                    free(toDelete->ctx); // memory allocated for LMPresenceNotifyAddressInfo  is freed
                 }
                 free(toDelete);
             } else {
@@ -4490,8 +4491,13 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
             worker_thread_running = true;
             // Start thread to handle IP retry + notification (up to 6 retries at 10-second intervals, totaling 60 seconds)
             res = pthread_create(&NotifyIPMonitorThread, NULL, UpdateAndSendHostIPAddress_Thread, NULL);
-            if (res != 0) {
-                worker_thread_running = false;
+	    if (res == 0) {
+		pthread_detach(NotifyIPMonitorThread);
+		worker_thread_running = true;
+		CcspTraceInfo(("%s: Notify thread created and detached successfully\n", __FUNCTION__));
+	    } else {
+		CcspTraceError(("%s: Failed to create Notify thread (res=%d)\n", __FUNCTION__, res));
+		worker_thread_running = false;
                 free(node);
                 free(ctx);
                 return -1;
