@@ -4347,7 +4347,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                         ctx->status,
                         pHost->pStringParaValue[LM_HOST_HostNameId],
                         ctx->ipv4
-			);
+                );
 		pthread_mutex_unlock (&LmHostObjectMutex);
                 CcspTraceWarning(("Notification sent from %s, line:%d\n", __FUNCTION__, __LINE__));
 
