@@ -4467,7 +4467,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         pthread_mutex_lock(&LmRetryNotifyHostListMutex);
         node->next = pNotifyListHead;
         pNotifyListHead = node;
-        //Notify IPaddress Listener thread
+        // Notify IP address Listener thread
         pthread_cond_signal(&LmNotifyCond);
         //Start worker thread once
         if (!worker_thread_running) {
