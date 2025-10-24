@@ -4478,7 +4478,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         if (!worker_thread_running) {
             CcspTraceWarning(("%s UpdateAndSendHostIPAddress_Thread creation line:%d\n", __FUNCTION__, __LINE__));
             worker_thread_running = true;
-            // Start thread to handle IP retry + notification
+            // Start thread to handle IP retry + notification (up to 6 retries at 10-second intervals, totaling 60 seconds)
             res = pthread_create(&NotifyIPMonitorThread, NULL, UpdateAndSendHostIPAddress_Thread, NULL);
             if (res != 0) {
                 worker_thread_running = false;
