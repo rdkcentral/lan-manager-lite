@@ -819,7 +819,7 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                       WTC_LOG_INFO("ClientList is NULL");
                       return DscpTree;
                     }
-                    for(UINT i=0; CLIENT_ALLOC_SLAB > i < cliIndex; i++) // CID 560298 Overflowed array index read
+                    for(UINT i=0; (i<CLIENT_ALLOC_SLAB && i<cliIndex); i++) // CID 560298 Overflowed array index read
                     {
                         UINT j;
                         for(j=0; j<dscpIndex; j++)
