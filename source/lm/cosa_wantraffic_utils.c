@@ -783,7 +783,7 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                   {
                     if( ((INT)(DscpTree->MemorySlab - cliIndex)) < 0 || resetMemorySlab )
                     {
-                        if ( !(DscpTree->MemorySlab = SetMemoryslab(cliIndex)) )
+                        if ( !((INT)DscpTree->MemorySlab = SetMemoryslab(cliIndex)) )
                         {
                             DscpTree->NumClients = 0;
                         }
@@ -868,7 +868,7 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                     // Add new client entries
                     if (cliIndex > count)
                     {
-                        for(UINT i=0; i<cliIndex; i++)
+                        for(UINT i=0; (i<CLIENT_ALLOC_SLAB && i<cliIndex); i++) // CID 560298 Overflowed array index read
                         {
                             UINT j;
                             for(j=0; j<DscpTree->NumClients; j++)
