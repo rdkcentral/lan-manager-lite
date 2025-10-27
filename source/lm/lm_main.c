@@ -4389,6 +4389,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
             pthread_cond_timedwait(&LmNotifyCond, &LmRetryNotifyHostListMutex, &ts);
         }
         pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
+    }
     return NULL;
 }
 
