@@ -2233,11 +2233,11 @@ void XHosts_SyncWifi()
 static void *Event_HandlerThread(void *threadid)
 {
     UNREFERENCED_PARAMETER(threadid);
-    LM_wifi_wsta_t hosts = {0}; //CID 339816
+    LM_wifi_wsta_t hosts;
 #if !defined (NO_MOCA_FEATURE_SUPPORT)
-    LM_moca_cpe_t mhosts = {0};
+    LM_moca_cpe_t mhosts;
 #endif
-    PLmObjectHost pHost = {0}; 
+    PLmObjectHost pHost;
     //printf("Hello World! It's me, thread #%ld!\n", tid);
     mqd_t mq;
     struct mq_attr attr;
