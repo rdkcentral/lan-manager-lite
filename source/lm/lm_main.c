@@ -4490,7 +4490,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         pNotifyListHead = node;
         pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
         
-	//Start worker thread once
+	// Start worker thread once
         if (!worker_thread_running) {
             CcspTraceWarning(("%s UpdateAndSendHostIPAddress_Thread creation line:%d\n", __FUNCTION__, __LINE__));
             worker_thread_running = true;
