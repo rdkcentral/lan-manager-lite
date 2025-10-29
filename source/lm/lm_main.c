@@ -4326,15 +4326,17 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 
             bool completed = false;
             LMPresenceNotifyAddressInfo *ctx = curr->ctx;
-            PLmObjectHost pHost = ctx->pHost;
 
             // Check IPv4
 	    pthread_mutex_lock (&LmHostObjectMutex);
-	    if (pHost->pStringParaValue[LM_HOST_IPAddressId]) {
-		ctx->ipv4 = strdup(pHost->pStringParaValue[LM_HOST_IPAddressId]);
-	    }
-	    ctx->physAddr = strdup(pHost->pStringParaValue[LM_HOST_PhysAddressId]);
-	    ctx->hostName = strdup(pHost->pStringParaValue[LM_HOST_HostNameId]);
+            PLmObjectHost pHost = ctx->pHost;
+            if (pHost != NULL) {
+                if (pHost->pStringParaValue[LM_HOST_IPAddressId]) {
+                    ctx->ipv4 = strdup(pHost->pStringParaValue[LM_HOST_IPAddressId]);
+                }
+                ctx->physAddr = strdup(pHost->pStringParaValue[LM_HOST_PhysAddressId]);
+                ctx->hostName = strdup(pHost->pStringParaValue[LM_HOST_HostNameId]);
+            }
 	    if ((pHost->pStringParaValue[LM_HOST_PhysAddressId] && ctx->physAddr == NULL) ||
 	        (pHost->pStringParaValue[LM_HOST_HostNameId] && ctx->hostName == NULL)) {
 	        CcspTraceWarning(("Memory allocation failed for physAddr or hostName in %s at line %d\n", __FUNCTION__, __LINE__));
