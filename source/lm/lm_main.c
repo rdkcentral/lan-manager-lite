@@ -4335,6 +4335,27 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 	    }
 	    ctx->physAddr = strdup(pHost->pStringParaValue[LM_HOST_PhysAddressId]);
 	    ctx->hostName = strdup(pHost->pStringParaValue[LM_HOST_HostNameId]);
+	    if ((pHost->pStringParaValue[LM_HOST_PhysAddressId] && ctx->physAddr == NULL) ||
+	        (pHost->pStringParaValue[LM_HOST_HostNameId] && ctx->hostName == NULL)) {
+	        CcspTraceWarning(("Memory allocation failed for physAddr or hostName in %s at line %d\n", __FUNCTION__, __LINE__));
+	        free(ctx->ipv4);
+	        free(ctx->physAddr);
+	        free(ctx->hostName);
+	        pthread_mutex_unlock (&LmHostObjectMutex);
+	        // Remove this node from the list and free its memory
+	        if (prev) {
+	            prev->next = curr->next;
+	        } else {
+	            pNotifyListHead = curr->next;
+	        }
+	        RetryNotifyHostList *toDelete = curr;
+	        curr = curr->next;
+	        if (toDelete->ctx) {
+	            free(toDelete->ctx);
+	        }
+	        free(toDelete);
+	        continue;
+	    }
 	    pthread_mutex_unlock (&LmHostObjectMutex);
             if (ctx->ipv4 ) {
                 completed = true;
