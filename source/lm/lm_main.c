@@ -4368,7 +4368,6 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 
             if (completed){
                 // If IP addresses are obtained or retry_count exceeded 
-		pthread_mutex_lock (&LmHostObjectMutex);
                 Send_PresenceNotification(
                         ctx->interface,
                         ctx->physAddr,
@@ -4376,7 +4375,6 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                         ctx->hostName,
                         ctx->ipv4
                 );
-		pthread_mutex_unlock (&LmHostObjectMutex);
                 CcspTraceWarning(("Notification sent from %s, line:%d\n", __FUNCTION__, __LINE__));
 
                 // Deletion logic
@@ -4484,10 +4482,11 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
 #endif
             else if (strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "Ethernet")) {
                 rc = strcpy_s(interface, sizeof(interface), "Ethernet");
+                ERR_CHK(rc);
             } else {
                 rc = strcpy_s(interface, sizeof(interface), "Other");
+                ERR_CHK(rc);
             }
-            ERR_CHK(rc);
         }
 
         // Allocate context and populate
@@ -4516,7 +4515,6 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
 	// Start worker thread once
         if (!worker_thread_running) {
             CcspTraceWarning(("%s UpdateAndSendHostIPAddress_Thread creation line:%d\n", __FUNCTION__, __LINE__));
-            worker_thread_running = true;
             // Start thread to handle IP retry + notification (up to 6 retries at 10-second intervals, totaling 60 seconds)
             res = pthread_create(&NotifyIPMonitorThread, NULL, UpdateAndSendHostIPAddress_Thread, NULL);
 	    if (res == 0) {
