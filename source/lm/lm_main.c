@@ -4372,7 +4372,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 		    free(toDelete->ctx->ipv4);
 		    free(toDelete->ctx->physAddr);
 		    free(toDelete->ctx->hostName);
-                    free(toDelete->ctx); // memory allocated for LMPresenceNotifyAddressInfo  is freed
+                    free(toDelete->ctx); // memory allocated for LMPresenceNotifyAddressInfo is freed
                 }
                 free(toDelete);
             } else {
