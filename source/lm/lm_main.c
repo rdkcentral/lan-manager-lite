@@ -4414,10 +4414,8 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
         ts.tv_sec += IP_RETRY_INTERVAL;
-        // Only wait if the list is empty after processing
-        if (!pNotifyListHead) {
-            pthread_cond_timedwait(&LmNotifyCond, &LmRetryNotifyHostListMutex, &ts);
-        }
+        // Always wait for either new items or timeout to avoid busy loop
+        pthread_cond_timedwait(&LmNotifyCond, &LmRetryNotifyHostListMutex, &ts);
         pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
     }
     return NULL;
