@@ -4337,9 +4337,10 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                 ctx->physAddr = strdup(pHost->pStringParaValue[LM_HOST_PhysAddressId]);
                 ctx->hostName = strdup(pHost->pStringParaValue[LM_HOST_HostNameId]);
             }
-	    if ((pHost->pStringParaValue[LM_HOST_PhysAddressId] && ctx->physAddr == NULL) ||
+	    if ((pHost->pStringParaValue[LM_HOST_IPAddressId] && ctx->ipv4 == NULL) ||
+	        (pHost->pStringParaValue[LM_HOST_PhysAddressId] && ctx->physAddr == NULL) ||
 	        (pHost->pStringParaValue[LM_HOST_HostNameId] && ctx->hostName == NULL)) {
-	        CcspTraceWarning(("Memory allocation failed for physAddr or hostName in %s at line %d\n", __FUNCTION__, __LINE__));
+	        CcspTraceWarning(("Memory allocation failed for ipv4, physAddr, or hostName in %s at line %d\n", __FUNCTION__, __LINE__));
 	        free(ctx->ipv4);
 	        free(ctx->physAddr);
 	        free(ctx->hostName);
