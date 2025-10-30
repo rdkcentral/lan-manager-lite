@@ -4432,7 +4432,10 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
 
     pthread_mutex_lock(&LmHostObjectMutex);
     if (!pHost)
+    {
+	pthread_mutex_unlock(&LmHostObjectMutex);
         return -1;
+    }
     if (HOST_PRESENCE_JOIN == presencestatus)    
     {
         if (!pHost->bBoolParaValue[LM_HOST_PresenceActiveId])
@@ -4443,6 +4446,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         }
         else
         {
+	    pthread_mutex_unlock(&LmHostObjectMutex);
             return 0;
         }
 
@@ -4456,12 +4460,15 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         }
         else
         {
+	    pthread_mutex_unlock(&LmHostObjectMutex);
             return 0;
         }
     }
     if (!pHost->bBoolParaValue[LM_HOST_PresenceNotificationEnabledId])
+    {
+	pthread_mutex_unlock(&LmHostObjectMutex);
         return -1;
-
+    }
     /*CID: 63335 Array compared against 0*/
     if(!syscfg_get( NULL, "notify_presence_webpa", buf, sizeof(buf)))
     {
@@ -4499,13 +4506,15 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         // Allocate context and populate
         LMPresenceNotifyAddressInfo *ctx = calloc(1, sizeof(LMPresenceNotifyAddressInfo));
         if (!ctx)
-            return -1;
-
+	{
+	    pthread_mutex_unlock(&LmHostObjectMutex);
+	    return -1;
+	}
 	if (pHost)
 	{
 	    ctx->pHost = pHost;
 	}
-	pthread_mutex_lock(&LmHostObjectMutex);
+	pthread_mutex_unlock(&LmHostObjectMutex);
         strncpy(ctx->interface, interface, sizeof(ctx->interface) - 1);
         ctx->interface[sizeof(ctx->interface) - 1] = '\0'; // ensure null-termination
         ctx->status = status;
