@@ -4524,37 +4524,38 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
             pthread_cond_signal(&LmNotifyCond);
         }
         
-	// Start worker thread once
+        // Start worker thread once, protected by mutex to avoid race condition
+        pthread_mutex_lock(&LmRetryNotifyHostListMutex);
         if (!worker_thread_running) {
             CcspTraceWarning(("%s UpdateAndSendHostIPAddress_Thread creation line:%d\n", __FUNCTION__, __LINE__));
             // Start thread to handle IP retry + notification (up to 6 retries at 10-second intervals, totaling 60 seconds)
             res = pthread_create(&NotifyIPMonitorThread, NULL, UpdateAndSendHostIPAddress_Thread, NULL);
-	    if (res == 0) {
-		pthread_detach(NotifyIPMonitorThread);
-		worker_thread_running = true;
-		CcspTraceInfo(("%s: Notify thread created and detached successfully\n", __FUNCTION__));
-	    } else {
-		CcspTraceError(("%s: Failed to create Notify thread (res=%d)\n", __FUNCTION__, res));
-		worker_thread_running = false;
-	        /* Remove node from the list since thread creation failed */
-		pthread_mutex_lock(&LmRetryNotifyHostListMutex);
-		if (pNotifyListHead == node) {
-		    // node was head
-		    pNotifyListHead = node->next;
-		} else {
-		    // search and unlink
-		    RetryNotifyHostList *prev = pNotifyListHead;
-		    while (prev && prev->next != node)
-			prev = prev->next;
-		    if (prev)
-			prev->next = node->next;
-		}
-		pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
-		free(node);
-		free(ctx);
-		return -1;
+            if (res == 0) {
+                pthread_detach(NotifyIPMonitorThread);
+                worker_thread_running = true;
+                CcspTraceInfo(("%s: Notify thread created and detached successfully\n", __FUNCTION__));
+            } else {
+                CcspTraceError(("%s: Failed to create Notify thread (res=%d)\n", __FUNCTION__, res));
+                worker_thread_running = false;
+                /* Remove node from the list since thread creation failed */
+                if (pNotifyListHead == node) {
+                    // node was head
+                    pNotifyListHead = node->next;
+                } else {
+                    // search and unlink
+                    RetryNotifyHostList *prev = pNotifyListHead;
+                    while (prev && prev->next != node)
+                        prev = prev->next;
+                    if (prev)
+                        prev->next = node->next;
+                }
+                pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
+                free(node);
+                free(ctx);
+                return -1;
             }
         }
+        pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
     }
     return 0;
 }
