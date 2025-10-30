@@ -4332,16 +4332,31 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
             PLmObjectHost pHost = ctx->pHost;
             if (pHost != NULL) {
                 if (pHost->pStringParaValue[LM_HOST_IPAddressId]) {
+                    if (ctx->ipv4) {
+                        free(ctx->ipv4);
+                    }
                     ctx->ipv4 = strdup(pHost->pStringParaValue[LM_HOST_IPAddressId]);
                 }
                 if (pHost->pStringParaValue[LM_HOST_PhysAddressId]) {
+                    if (ctx->physAddr) {
+                        free(ctx->physAddr);
+                    }
                     ctx->physAddr = strdup(pHost->pStringParaValue[LM_HOST_PhysAddressId]);
                 } else {
+                    if (ctx->physAddr) {
+                        free(ctx->physAddr);
+                    }
                     ctx->physAddr = NULL;
                 }
                 if (pHost->pStringParaValue[LM_HOST_HostNameId]) {
+                    if (ctx->hostName) {
+                        free(ctx->hostName);
+                    }
                     ctx->hostName = strdup(pHost->pStringParaValue[LM_HOST_HostNameId]);
                 } else {
+                    if (ctx->hostName) {
+                        free(ctx->hostName);
+                    }
                     ctx->hostName = NULL;
                 }
             } else if ((pHost == NULL) || (pHost->pStringParaValue[LM_HOST_IPAddressId] && ctx->ipv4 == NULL) ||
