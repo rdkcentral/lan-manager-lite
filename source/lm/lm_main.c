@@ -4344,8 +4344,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                 } else {
                     ctx->hostName = NULL;
                 }
-            }
-	    if ((pHost->pStringParaValue[LM_HOST_IPAddressId] && ctx->ipv4 == NULL) ||
+            } else if ((pHost == NULL) || (pHost->pStringParaValue[LM_HOST_IPAddressId] && ctx->ipv4 == NULL) ||
 	        (pHost->pStringParaValue[LM_HOST_PhysAddressId] && ctx->physAddr == NULL) ||
 	        (pHost->pStringParaValue[LM_HOST_HostNameId] && ctx->hostName == NULL)) {
 	        CcspTraceWarning(("Memory allocation failed for ipv4, physAddr, or hostName in %s at line %d\n", __FUNCTION__, __LINE__));
@@ -4431,6 +4430,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
 
     char interface[32] = {0};
 
+    pthread_mutex_lock(&LmHostObjectMutex);
     if (!pHost)
         return -1;
     if (HOST_PRESENCE_JOIN == presencestatus)    
@@ -4501,7 +4501,11 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         if (!ctx)
             return -1;
 
-        ctx->pHost = pHost;
+	if (pHost)
+	{
+	    ctx->pHost = pHost;
+	}
+	pthread_mutex_lock(&LmHostObjectMutex);
         strncpy(ctx->interface, interface, sizeof(ctx->interface) - 1);
         ctx->interface[sizeof(ctx->interface) - 1] = '\0'; // ensure null-termination
         ctx->status = status;
@@ -4517,7 +4521,6 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         pthread_mutex_lock(&LmRetryNotifyHostListMutex);
         node->next = pNotifyListHead;
         pNotifyListHead = node;
-        pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
 
         // Signal the worker thread if it is already running
         if (worker_thread_running) {
@@ -4525,7 +4528,6 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         }
         
         // Start worker thread once, protected by mutex to avoid race condition
-        pthread_mutex_lock(&LmRetryNotifyHostListMutex);
         if (!worker_thread_running) {
             CcspTraceWarning(("%s UpdateAndSendHostIPAddress_Thread creation line:%d\n", __FUNCTION__, __LINE__));
             // Start thread to handle IP retry + notification (up to 6 retries at 10-second intervals, totaling 60 seconds)
