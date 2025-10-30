@@ -4334,8 +4334,16 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                 if (pHost->pStringParaValue[LM_HOST_IPAddressId]) {
                     ctx->ipv4 = strdup(pHost->pStringParaValue[LM_HOST_IPAddressId]);
                 }
-                ctx->physAddr = strdup(pHost->pStringParaValue[LM_HOST_PhysAddressId]);
-                ctx->hostName = strdup(pHost->pStringParaValue[LM_HOST_HostNameId]);
+                if (pHost->pStringParaValue[LM_HOST_PhysAddressId]) {
+                    ctx->physAddr = strdup(pHost->pStringParaValue[LM_HOST_PhysAddressId]);
+                } else {
+                    ctx->physAddr = NULL;
+                }
+                if (pHost->pStringParaValue[LM_HOST_HostNameId]) {
+                    ctx->hostName = strdup(pHost->pStringParaValue[LM_HOST_HostNameId]);
+                } else {
+                    ctx->hostName = NULL;
+                }
             }
 	    if ((pHost->pStringParaValue[LM_HOST_IPAddressId] && ctx->ipv4 == NULL) ||
 	        (pHost->pStringParaValue[LM_HOST_PhysAddressId] && ctx->physAddr == NULL) ||
