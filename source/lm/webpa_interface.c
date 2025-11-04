@@ -720,3 +720,31 @@ int subscribeTo_InterfaceActiveStatus_Event()
       return rc;
 }
 #endif
+
+//get the value of Device.X_RDK_Remote.Device.2.MAC
+bool get_RemoteDeviceMacAddress(char *macaddr)
+{
+   rbusValue_t value;
+   int rc = RBUS_ERROR_SUCCESS;
+
+   rc = rbus_get(rbus_handle, LMLITE_X_RDK_REMOTE_DEVICE_MAC_PARAM , &value);
+   if (rc == RBUS_ERROR_SUCCESS )
+   {
+      macaddr = rbusValue_ToString(value,0,0);
+      if (macaddr != NULL)
+      {
+         CcspTraceInfo(("%s: the value of %s = %s \n", __FUNCTION__,LMLITE_X_RDK_REMOTE_DEVICE_MAC_PARAM , macaddr));
+      }
+      else
+      {
+            CcspTraceError(("%s: macaddr is NULL\n",__FUNCTION__));
+            return false;
+      }
+   }
+   else
+   { 
+      CcspTraceError(("%s: rbus get is failed for %s , Errorcode: %d - %s \n", __FUNCTION__,LMLITE_X_RDK_REMOTE_DEVICE_MAC_PARAM , rc, rbusError_ToString(rc)));
+      return false;
+   }
+   return true;
+}

@@ -1320,6 +1320,7 @@ PLmObjectHost Hosts_AddHostByPhysAddress(char *physAddress)
     char vendor_class[256] = {0};
     char vendor_retry_count = 0;
 #endif
+    CcspTraceWarning(("%s: Entry \n", __FUNCTION__));
     if (!physAddress || (validate_mac(physAddress) != 0))
     {
         CcspTraceWarning(("RDKB_CONNECTED_CLIENT: Invalid MacAddress ignored\n"));
@@ -1329,6 +1330,22 @@ PLmObjectHost Hosts_AddHostByPhysAddress(char *physAddress)
     if ((strlen(physAddress) != (MACADDR_SZ - 1)) ||
         (memcmp(physAddress, "00:00:00:00:00:00", MACADDR_SZ) == 0))
     {
+        return NULL;
+    }
+
+    char macaddr[32] = {0};
+    CcspTraceWarning(("%s:Remote Device Mac address Reading...\n",__FUNCTION__));
+    if(get_RemoteDeviceMacAddress(macaddr) == true)
+    {
+        CcspTraceWarning(("Remote Device Mac address = %s and connected client mac addr = %s\n",macaddr, physAddress ));
+    }
+    else
+    {
+        CcspTraceError(("Error: Remote Device Mac address = %s and connected client mac addr = %s\n",macaddr, physAddress ));
+    }
+    if(strncmp(macaddr,physAddress , sizeof(macaddr)-1) == 0 )
+    {
+        CcspTraceWarning(("RDKB_CONNECTED_CLIENT: xle MacAddress - ignored\n"));
         return NULL;
     }
 

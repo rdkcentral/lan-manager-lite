@@ -31,6 +31,7 @@
 
 #define LMLITE_COMPONENT_NAME "lmlite"
 #define LMLITE_INTERFACE_ACTIVESTATUS_PARAM "Device.X_RDK_WanManager.InterfaceActiveStatus"
+#define LMLITE_X_RDK_REMOTE_DEVICE_MAC_PARAM "Device.X_RDK_Remote.Device.2.MAC"
 
 typedef enum
 {
@@ -73,5 +74,7 @@ void get_WanManager_ActiveInterface();
 char * get_ActiveInterface(char *interface);
 int subscribeTo_InterfaceActiveStatus_Event();
 #endif
+
+bool get_RemoteDeviceMacAddress(char *macaddr);
 
 #endif /* WEB_INTERFACE_H_ */
