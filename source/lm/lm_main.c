@@ -4357,7 +4357,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 	    if (pHost->pStringParaValue[LM_HOST_IPAddressId]) {
 		ctx->ipv4 = strdup(pHost->pStringParaValue[LM_HOST_IPAddressId]);
 	    } else {
-		ctx->ipv4 = NULL;
+		ctx->ipv4 = strdup("");
 	    }
 	    if (pHost->pStringParaValue[LM_HOST_PhysAddressId]) {
 		ctx->physAddr = strdup(pHost->pStringParaValue[LM_HOST_PhysAddressId]);
