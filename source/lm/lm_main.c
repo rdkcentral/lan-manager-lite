@@ -395,7 +395,7 @@ static void Send_PresenceNotification (char *interface, char *mac, ClientConnect
                                     mac,
                                     status_str,
                                     hostname != NULL ? (strlen(hostname) > 0 ? hostname : "NULL") : "NULL",
-                                    ipv4 != NULL ? (strlen(ipv4) > 0 ? ipv4 : "NULL") : "NULL");
+                                    ipv4 != NULL ? (strlen(ipv4) > 0 ? ipv4 : "") : "");
 
         CcspTraceWarning(("\n%s\n",str));
         notif_val[0].parameterName = param_name;
