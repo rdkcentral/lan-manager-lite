@@ -1574,10 +1574,14 @@ void *processPresenceNotification(void *pArgs)
             pHost = Hosts_FindHostByPhysAddress(info.physaddress);
             if (pHost)
             {
+                pthread_mutex_unlock(&LmHostObjectMutex);
                 Hosts_PresenceHandling(pHost,info.status);
             }
-            pthread_mutex_unlock(&LmHostObjectMutex);
-            CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+	    else 
+	    {
+                pthread_mutex_unlock(&LmHostObjectMutex);
+                CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+	    }
         }
         else if (MSG_TYPE_PRESENCE_ADD == sEventMsg.MsgType)
         {
