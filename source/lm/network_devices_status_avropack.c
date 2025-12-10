@@ -261,6 +261,12 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
 #endif
   tstamp_av_main = tstamp_av_main/1000;
 
+  // CID 339693 -  Explicit null dereferenced (FORWARD_NULL)
+  if (optional.iface == NULL)
+  {
+    CcspTraceWarning(("optional.iface is NULL"));  
+    return;
+  }
   avro_value_set_long(&optional, tstamp_av_main );
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, timestamp = ""%" PRId64 "\n", tstamp_av_main ));
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, timestamp\tType: %d\n", avro_value_get_type(&optional)));
@@ -427,8 +433,20 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
     // assume 1 parent ONLY
     // Parent MAC
     avro_value_set_branch(&adrField, 1, &parent_optional);
+    // CID 559659 -  Explicit null dereferenced (FORWARD_NULL)
+    if (parent_optional.iface == NULL)
+    {
+      CcspTraceWarning(("parent_optional.iface is NULL"));  
+      return;
+    }
     avro_value_get_by_name(&parent_optional, "mac_address", &parent_adrField, NULL);
     if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
+    // CID 559459 -  Explicit null dereferenced (FORWARD_NULL)
+    if (parent_adrField.iface == NULL)
+    {
+      CcspTraceWarning(("parent_adrField.iface is NULL"));  
+      return;
+    }
     avro_value_set_branch(&parent_adrField, 1, &parent_optional);
     avro_value_set_fixed(&parent_optional, CpeMacid, 6);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, parent mac_address\tType: %d\n", avro_value_get_type(&parent_optional)));
@@ -487,6 +505,12 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
 
       //Append a DeviceReport item to array
       avro_value_append(&adrField, &dr, NULL);
+      //CID 559702 Explicit null dereferenced (FORWARD_NULL)
+      if (dr.iface == NULL)
+      {
+        CcspTraceWarning(("dr.iface is NULL"));  
+        break;
+      }
       CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, \tDevice Status Report\tType: %d\n", avro_value_get_type(&dr)));
 
       //data array block
@@ -508,6 +532,12 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
       //device_mac - fixed 6 bytes
       avro_value_get_by_name(&dr, "device_id", &drField, NULL);
       if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
+      //CID 559702 Explicit null dereferenced (FORWARD_NULL)
+      if (drField.iface == NULL)
+      {
+        CcspTraceWarning(("drField.iface is NULL"));
+        break;
+      }
       CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, device_id\tType: %d\n", avro_value_get_type(&drField)));
       avro_value_get_by_name(&drField, "mac_address", &drField, NULL);
       if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
