@@ -1482,9 +1482,8 @@ void getAddressSource(char *physAddress, char *pAddressSource)
     int ret;
     LM_host_entry_t dhcpHost;
     errno_t rc = -1;
-    char ipAddress[50] = {0};
+    char ipAddress[MAX_IP_LEN] = {0};
     getIPAddress(physAddress , ipAddress);
-
     if ( (fp=fopen(DNSMASQ_LEASES_FILE, "r")) == NULL )
     {
         return;
@@ -1618,7 +1617,7 @@ int getIPAddress(char *physAddress,char *IPAddress)
 {
 
     FILE *fp = NULL;
-    char output[50] = {0};
+    char output[MAX_IP_LEN] = {0};
     char buf[200] = {0};
 #if 0
     v_secure_system("ip -4 nei show | grep brlan0 | grep -v 192.168.10 | grep -i %s | awk '{print $1}' | tail -1 > /tmp/LMgetIP.txt ", physAddress);
@@ -1742,21 +1741,26 @@ int getIPAddress(char *physAddress,char *IPAddress)
     {
         while(fgets(output, sizeof(output), fp)!=NULL)
         {
-                output[strlen(output) - 1] = '\0';
+            size_t len = strlen(output);
+            if ( (len > 0) && (output[len -1] != '\n') )
+            {
+                output[len - 1] = '\0';
+            }
         }
         if (output[0] != '\0')
         {
-            memcpy(IPAddress,output,sizeof(output));
+            strncpy(IPAddress,output, MAX_IP_LEN -1);
+            IPAddress[MAX_IP_LEN-1] = '\0' ;
             AnscTraceWarning(("client is either reachable or delay: MAC %s IP %s\n", physAddress, IPAddress));
             pclose(fp);
             fp = NULL;
             return 0;
-         }
-         else
-         {
-             pclose(fp);
-             fp = NULL;
-         }
+        }
+        else
+        {
+            pclose(fp);
+            fp = NULL;
+        }
     }
 
 //CASE 2 : To update neighbour table when Static clients are disconnected or mode changes to DHCP due to which it receives new IP...existing IP is obsolete
@@ -1767,11 +1771,16 @@ int getIPAddress(char *physAddress,char *IPAddress)
     {
         while(fgets(output, sizeof(output), fp)!=NULL)
         {
-                output[strlen(output) - 1] = '\0';
+            size_t len = strnlen(output);
+            if ((len > 0) && (output[len-1] != '\n'))
+            {
+                output[len - 1] = '\0';
+            }
         }
         if (output[0] != '\0')
         {
-             memcpy(IPAddress,output,sizeof(output));
+             strncpy(IPAddress,output, MAX_IP_LEN -1);
+             IPAddress[MAX_IP_LEN-1] = '\0' ; 
              AnscTraceWarning(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));
              pclose(fp);
              fp = NULL;
@@ -1794,26 +1803,31 @@ CASE_DNSMASQ:
     memset(output, 0, sizeof(output));
     snprintf(buf, sizeof(buf), "cat /nvram/dnsmasq.leases | grep -i %s | cut -d ' ' -f3", physAddress);
 
-   if( ( (access( "/nvram/dnsmasq.leases", F_OK ) != -1)) && (fp = popen(buf, "r")))
+    if( ( (access( "/nvram/dnsmasq.leases", F_OK ) != -1)) && (fp = popen(buf, "r")))
     {
-         while(fgets(output, sizeof(output), fp)!=NULL)
-         {
-             output[strlen(output) - 1] = '\0';
-         }
+        while(fgets(output, sizeof(output), fp)!=NULL)
+        {
+            size_t len = strlen(output);
+            if((len > 0) && output[len -1 ] != '\n') 
+            {
+                 output[len - 1] = '\0';
+            }
+        }
 
-         if (output[0] != '\0')
-         {
-             memcpy(IPAddress,output,sizeof(output));
-             AnscTraceWarning(("client mac present in dnsmasq: MAC %s IP %s\n", physAddress, IPAddress));
-             pclose(fp);
-             fp = NULL;
-             return 0;
-         }
-         else
-         {
-             pclose(fp);
-             fp = NULL;
-         }
+        if (output[0] != '\0')
+        {
+            strncpy(IPAddress,output, MAX_IP_LEN - 1);
+            IPAddress[MAX_IP_LEN-1] = '\0' ; 
+            AnscTraceWarning(("client mac present in dnsmasq: MAC %s IP %s\n", physAddress, IPAddress));
+            pclose(fp);
+            fp = NULL;
+            return 0;
+        }
+        else
+        {
+            pclose(fp);
+            fp = NULL;
+        }
     }
 //FIX END
 //Return empty and update primray IP in caller
@@ -1984,7 +1998,7 @@ void lm_wrapper_get_dhcpv4_client()
                 }
 	}
             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AddressSource]), "DHCP");
-            char ipAddress[50] = {0};
+            char ipAddress[MAX_IP_LEN] = {0};
             getIPAddress((char *)dhcpHost.phyAddr, ipAddress);
 
             pIP = Host_AddIPv4Address

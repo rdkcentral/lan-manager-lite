@@ -610,7 +610,7 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
     if(pHost->bBoolParaValue[LM_HOST_ActiveId] != state){
 
         char addressSource[20] = {0};
-	char IPAddress[50] = {0};
+	char IPAddress[MAX_IP_LEN] = {0};
 	memset(addressSource,0,sizeof(addressSource));
 	memset(IPAddress,0,sizeof(IPAddress));
 	memset(interface,0,sizeof(interface));
@@ -1488,7 +1488,6 @@ static PLmObjectHostIPAddress Add_Update_IPv4Address (PLmObjectHost pHost, char 
 	ppHeader = &(pHost->ipv4AddrArray);
 	pHost->ipv4Active = TRUE;
 	pPre = NULL;
-
    for(pCur = pIpAddrList; pCur != NULL; pPre = pCur, pCur = pCur->pNext){
         if (strcasecmp(pCur->pStringParaValue[LM_HOST_IPAddress_IPAddressId], ipAddress) == 0){
 			break;
