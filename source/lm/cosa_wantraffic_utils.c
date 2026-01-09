@@ -783,7 +783,7 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                   {
                     if( ((INT)(DscpTree->MemorySlab - cliIndex)) < 0 || resetMemorySlab )
                     {
-                        if ( !((INT)(DscpTree->MemorySlab = SetMemoryslab(cliIndex))) )
+                        if ( !(DscpTree->MemorySlab = SetMemoryslab(cliIndex)) )
                         {
                             DscpTree->NumClients = 0;
                         }
@@ -819,8 +819,7 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                       WTC_LOG_INFO("ClientList is NULL");
                       return DscpTree;
                     }
-                    /* Number of clients associated with the DSCP value in DSCP_Element. Maximum value for numClients is 255 range [ 0-255] */
-                    for(UINT i=0; (i<255 && i<cliIndex); i++) // CID 560298 Overflowed array index read
+                    for(UINT i=0; i<cliIndex; i++)
                     {
                         UINT j;
                         for(j=0; j<dscpIndex; j++)
@@ -869,7 +868,7 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                     // Add new client entries
                     if (cliIndex > count)
                     {
-                        for(UINT i=0; (i<255 && i<cliIndex); i++) // CID 560298 Overflowed array index read
+                        for(UINT i=0; i<cliIndex; i++)
                         {
                             UINT j;
                             for(j=0; j<DscpTree->NumClients; j++)

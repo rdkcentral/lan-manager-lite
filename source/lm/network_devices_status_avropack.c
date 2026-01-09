@@ -56,7 +56,7 @@ uint8_t UUID[16] = {0x30, 0x53, 0xb4, 0xab, 0xd3, 0xf9, 0x4c, 0xc9,
 
 
 static char *macStr = NULL;
-static char CpemacStr[ 32 ] = {0}; //CID 559876 Buffer not null terminated
+static char CpemacStr[ 32 ];
 BOOL schema_file_parsed = FALSE;
 char *ndsschemabuffer = NULL;
 char *nds_schemaidbuffer = "3053b4ab-d3f9-4cc9-8c3e-f0bde4a2e6ca/da29287d0199d6279cf934ce884426af";
@@ -303,7 +303,7 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
       macStr = getDeviceMac();
 	if (macStr !=NULL )
 	{
-      strncpy( CpemacStr, macStr, sizeof(CpemacStr) - 1); //CID 559876 Buffer not null terminated
+      strncpy( CpemacStr, macStr, sizeof(CpemacStr));
       CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, Received DeviceMac from Atom side: %s\n",macStr));
    	 }
 	else
@@ -402,7 +402,7 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
       macStr = getDeviceMac();
 	if( macStr != NULL )
 		{
-	      strncpy( CpemacStr, macStr, sizeof(CpemacStr) - 1); //CID 559876 Buffer not null terminated
+	strncpy( CpemacStr, macStr, sizeof(CpemacStr));
         CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, Received DeviceMac from Atom side: %s\n",macStr));
 		}
 	else
