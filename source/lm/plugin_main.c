@@ -151,6 +151,10 @@ COSA_Init
     pPlugInfo->RegisterFunction(pPlugInfo->hContext, "XHost_IPv6Address_GetParamStringValue",  XHost_IPv6Address_GetParamStringValue);
 #endif
 
+#if defined (RDKB_EXTENDER_ENABLED)
+    syscfg_get(NULL, "Device_Mode", dev_Mode, sizeof(dev_Mode));
+    if (atoi(dev_Mode) == 0)
+#endif
     {
         pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_GetParamUlongValue",  NetworkDevicesStatus_GetParamUlongValue);
         pPlugInfo->RegisterFunction(pPlugInfo->hContext, "NetworkDevicesStatus_GetParamBoolValue",  NetworkDevicesStatus_GetParamBoolValue);

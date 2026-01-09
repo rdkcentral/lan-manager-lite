@@ -60,11 +60,6 @@ SetNDTPollingPeriodInNVRAM(ULONG pPollingVal)
 {
     ANSC_STATUS     returnStatus = ANSC_STATUS_SUCCESS;
 
-    if (g_pReports == NULL ) 
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, LMLite %s NDS report is not initialized", __FUNCTION__));
-        return ANSC_STATUS_FAILURE;
-    }
     //Acquire mutex
     pthread_mutex_lock(&g_ndtNvramMutex);
 
@@ -83,11 +78,6 @@ ANSC_STATUS
 SetNDTReportingPeriodInNVRAM(ULONG pReportingVal)
 {
     ANSC_STATUS     returnStatus = ANSC_STATUS_SUCCESS;
-    if (g_pReports == NULL ) 
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, LMLite %s NDS report is not initialized", __FUNCTION__));
-        return ANSC_STATUS_FAILURE;
-    }
 
     //Acquire mutex
     pthread_mutex_lock(&g_ndtNvramMutex);
@@ -186,12 +176,6 @@ NetworkDevicesTraffic_SetParamUlongValue
 {
     UNREFERENCED_PARAMETER(hInsContext);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : ENTER \n", __FUNCTION__ ));
-    if (g_pReports == NULL ) 
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, LMLite %s report is not initialized and it not supported in Ext mode", __FUNCTION__));
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, LMLite %s NDS report is not initialized", __FUNCTION__));
-        return FALSE;
-    }
 
     if (strcmp(ParamName, "PollingPeriod") == 0)
     {
@@ -348,12 +332,6 @@ NetworkDevicesTraffic_SetParamBoolValue
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : ENTER \n", __FUNCTION__ ));
     /* check the parameter name and set the corresponding value */
 
-    if (g_pReports == NULL ) 
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, LMLite %s NDS report is not initialized", __FUNCTION__));
-        return FALSE;
-    }
-
     if (strcmp(ParamName, "Enabled") == 0)
     {
         g_pReports->bNDTEnabledChanged = true;
@@ -414,11 +392,6 @@ NetworkDevicesTraffic_Validate
     UNREFERENCED_PARAMETER(hInsContext);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : ENTER \n", __FUNCTION__ ));
     errno_t  rc = -1;
-    if (g_pReports == NULL ) 
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, LMLite %s NDS report is not initialized", __FUNCTION__));
-        return FALSE;
-    }
 
     if(g_pReports->bNDTPollingPeriodChanged)
     {
@@ -551,12 +524,6 @@ NetworkDevicesTraffic_Commit
     ULONG psmValue = 0;
     ULONG uVal = 0;
     /* Network Device Parameters*/
-    
-    if (g_pReports == NULL ) 
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, LMLite %s NDS report is not initialized", __FUNCTION__));
-        return 1;
-    }
 
     if(g_pReports->bNDTEnabledChanged)
     {
@@ -618,11 +585,6 @@ NetworkDevicesTraffic_Rollback
 {
     UNREFERENCED_PARAMETER(hInsContext);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : ENTER \n", __FUNCTION__ ));
-    if (g_pReports == NULL ) 
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, LMLite %s NDS report is not initialized", __FUNCTION__));
-        return 1;
-    }
 
     if(g_pReports->bNDTEnabledChanged)
     {
@@ -656,11 +618,6 @@ NetworkDevicesTraffic_Default_GetParamUlongValue
 {
     UNREFERENCED_PARAMETER(hInsContext);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : ENTER \n", __FUNCTION__ ));
-    if (g_pReports == NULL ) 
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, LMLite %s NDS report is not initialized", __FUNCTION__));
-        return FALSE;
-    }
 
     if (strcmp(ParamName, "PollingPeriod") == 0)
     {
@@ -698,11 +655,6 @@ NetworkDevicesTraffic_Default_SetParamUlongValue
 {
     UNREFERENCED_PARAMETER(hInsContext);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : ENTER \n", __FUNCTION__ ));
-    if (g_pReports == NULL ) 
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, LMLite %s NDS report is not initialized", __FUNCTION__));
-        return FALSE;
-    }
 
     if (strcmp(ParamName, "PollingPeriod") == 0)
     {
@@ -763,11 +715,6 @@ NetworkDevicesTraffic_Default_Validate
 {
     UNREFERENCED_PARAMETER(hInsContext);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : ENTER \n", __FUNCTION__ ));
-    if (g_pReports == NULL ) 
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, LMLite %s NDS report is not initialized", __FUNCTION__));
-        return FALSE;
-    }
     errno_t  rc = -1;
 
     if(g_pReports->bNDTDefPollingPeriodChanged)
@@ -874,11 +821,6 @@ NetworkDevicesTraffic_Default_Rollback
 {
     UNREFERENCED_PARAMETER(hInsContext);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : ENTER \n", __FUNCTION__ ));
-    if (g_pReports == NULL ) 
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, LMLite %s NDS report is not initialized", __FUNCTION__));
-        return 1;
-    }
 
     if(g_pReports->bNDTDefPollingPeriodChanged)
     {
@@ -927,11 +869,6 @@ NetworkDevicesTraffic_Default_Commit
     UNREFERENCED_PARAMETER(hInsContext);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : ENTER \n", __FUNCTION__ ));
     ULONG psmValue = 0;
-    if (g_pReports == NULL ) 
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, LMLite %s NDS report is not initialized", __FUNCTION__));
-        return 1;
-    }
 
     if(g_pReports->bNDTDefReportingPeriodChanged)
     {
