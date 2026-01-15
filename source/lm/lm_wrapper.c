@@ -1614,6 +1614,22 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
     }
 }
 
+#ifdef CORE_NET_LIB
+static int neigh_state_score(int state)
+{
+    switch (state) {
+        case NEIGH_STATE_REACHABLE:
+            return 300;
+        case NEIGH_STATE_DELAY:
+            return 200;
+        case NEIGH_STATE_STALE:
+            return 100;
+        default:
+            return 0;
+    }
+}
+#endif
+
 int getIPAddress(char *physAddress,char *IPAddress)
 {
 
@@ -1690,6 +1706,16 @@ int getIPAddress(char *physAddress,char *IPAddress)
         neighbour_free_neigh(neighbours);
         goto CASE_DNSMASQ;
     }
+
+    /* FIX:
+     * Choose the best neighbour instead of the last one.
+     * Priority is based on neighbour state while still allowing
+     * STALE to win if it is the only valid entry.
+     */
+    int best_score = -1;
+    int best_state = -1;
+    char best_ip[50] = {0};
+
     for (int i = 0; i < neighbours->neigh_count; ++i) {
         CcspTraceDebug(("Neighbor %d: local=%s, mac=%s, ifname=%s, state=%d\n",
             i,
@@ -1698,31 +1724,34 @@ int getIPAddress(char *physAddress,char *IPAddress)
             neighbours->neigh_arr[i].ifname ? neighbours->neigh_arr[i].ifname : "NULL",
             neighbours->neigh_arr[i].state));
 
-        if (neighbours->neigh_arr[i].local == NULL || strlen(neighbours->neigh_arr[i].local) == 0 || strcmp(neighbours->neigh_arr[i].local, "none") == 0) {
-            CcspTraceError(("%s %d: Invalid local value for neighbor %d\n", __FUNCTION__, __LINE__, i));
+        if (neighbours->neigh_arr[i].local == NULL ||
+            strlen(neighbours->neigh_arr[i].local) == 0 ||
+            strcmp(neighbours->neigh_arr[i].local, "none") == 0) {
             continue;
         }
 
-        if ((neighbours->neigh_arr[i].state == NEIGH_STATE_REACHABLE ||
-                neighbours->neigh_arr[i].state == NEIGH_STATE_DELAY ||
-                neighbours->neigh_arr[i].state == NEIGH_STATE_STALE) &&
-            strstr(neighbours->neigh_arr[i].local, "169.254.") == NULL) {
+        if (strstr(neighbours->neigh_arr[i].local, "169.254.") != NULL) {
+            continue;
+        }
 
-            memset(output, 0, sizeof(output));
-            strncpy(output, neighbours->neigh_arr[i].local, sizeof(output) - 1);
-            output[sizeof(output) - 1] = '\0'; // Ensure null termination
-            last_state = neighbours->neigh_arr[i].state;
+        int score = neigh_state_score(neighbours->neigh_arr[i].state);
+        if (score <= 0) {
+            continue;
+        }
+
+        if (score > best_score) {
+            best_score = score;
+            best_state = neighbours->neigh_arr[i].state;
+            strncpy(best_ip, neighbours->neigh_arr[i].local, sizeof(best_ip) - 1);
         }
     }
 
-    if (output[0] != '\0' &&
-        (last_state == NEIGH_STATE_REACHABLE ||
-         last_state == NEIGH_STATE_DELAY ||
-         last_state == NEIGH_STATE_STALE)) {
+    if (best_ip[0] != '\0') {
 
-        strncpy(IPAddress, output, sizeof(output) - 1);
-        IPAddress[sizeof(output) - 1] = '\0'; // Ensure null termination
-        if (last_state == NEIGH_STATE_STALE) {
+        strncpy(IPAddress, best_ip, 50 - 1);
+        IPAddress[50 - 1] = '\0';
+
+        if (best_state == NEIGH_STATE_STALE) {
             //CASE 1 : To update neighbour table when Static clients are transistioning between REACHABLE and DELAY
             AnscTraceWarning(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));  //Case 1
         } else {
