@@ -1670,7 +1670,6 @@ int getIPAddress(char *physAddress,char *IPAddress)
     char *mac_filter = NULL;
     char *if_filter = NULL;
     int af_filter = AF_INET;
-    int last_state = -1;
     libnet_status st = CNL_STATUS_FAILURE;
 
     if (physAddress != NULL) {
