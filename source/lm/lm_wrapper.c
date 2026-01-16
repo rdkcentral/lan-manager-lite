@@ -114,7 +114,25 @@ typedef struct mac_band_record {
 static mac_band_record *Mac_to_band_mapping[HASHSIZE] = { NULL };
 #endif
 
+#define IP_ADDR_STR_LEN  INET6_ADDRSTRLEN
+
 #ifdef CORE_NET_LIB
+
+// Custom scores to denote precedence
+#define NEIGH_SCORE_REACHABLE   30
+#define NEIGH_SCORE_DELAY       20
+#define NEIGH_SCORE_STALE       10
+
+struct neigh_state_score_map {
+    int state;
+    int score;
+};
+
+static const struct neigh_state_score_map neigh_score_map[] = {
+    { NEIGH_STATE_REACHABLE, NEIGH_SCORE_REACHABLE },
+    { NEIGH_STATE_DELAY, NEIGH_SCORE_DELAY },
+    { NEIGH_STATE_STALE, NEIGH_SCORE_STALE },
+};
 
 static libnet_status file_append(const char *file_name ,const char *buf, size_t count)
 {
@@ -1316,7 +1334,7 @@ int lm_wrapper_get_arp_entries (char netName[LM_NETWORK_NAME_SIZE], int *pCount,
         if (st == CNL_STATUS_SUCCESS) {
             CcspTraceDebug(("%s: Successfully retrieved neighbor list based on interface:%s, and Neighbour count: %d\n", __FUNCTION__, netName, neighbours->neigh_count));
             if (neighbours->neigh_count <= 0 || neighbours->neigh_arr == NULL) {
-                CcspTraceError(("%s: Neighbour list is empty\n", __FUNCTION__));
+                CcspTraceDebug(("%s: Neighbour list is empty\n", __FUNCTION__));
                 neighbour_free_neigh(neighbours);
                 pthread_mutex_unlock(&GetARPEntryMutex);
                 return -1;
@@ -1617,16 +1635,11 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
 #ifdef CORE_NET_LIB
 static int neigh_state_score(int state)
 {
-    switch (state) {
-        case NEIGH_STATE_REACHABLE:
-            return 300;
-        case NEIGH_STATE_DELAY:
-            return 200;
-        case NEIGH_STATE_STALE:
-            return 100;
-        default:
-            return 0;
+    for (size_t i = 0; i < sizeof(neigh_score_map); i++) {
+        if (neigh_score_map[i].state == state)
+            return neigh_score_map[i].score;
     }
+    return 0;
 }
 #endif
 
@@ -1634,7 +1647,7 @@ int getIPAddress(char *physAddress,char *IPAddress)
 {
 
     FILE *fp = NULL;
-    char output[50] = {0};
+    char output[IP_ADDR_STR_LEN] = {0};
     char buf[200] = {0};
 #if 0
     v_secure_system("ip -4 nei show | grep brlan0 | grep -v 192.168.10 | grep -i %s | awk '{print $1}' | tail -1 > /tmp/LMgetIP.txt ", physAddress);
@@ -1701,19 +1714,18 @@ int getIPAddress(char *physAddress,char *IPAddress)
 
     CcspTraceDebug(("%s: Successfully retrieved neighbor list based on MAC:%s, and Neighbour count: %d\n", __FUNCTION__, physAddress, neighbours->neigh_count));
     if (neighbours->neigh_count <= 0 || neighbours->neigh_arr == NULL) {
-        CcspTraceError(("%s: Neighbour list is empty\n", __FUNCTION__));
+        CcspTraceDebug(("%s: Neighbour list is empty\n", __FUNCTION__));
         neighbour_free_neigh(neighbours);
         goto CASE_DNSMASQ;
     }
 
-    /* FIX:
-     * Choose the best neighbour instead of the last one.
+    /* Choose the best neighbour based on scoring precedence
      * Priority is based on neighbour state while still allowing
-     * STALE to win if it is the only valid entry.
+     * STALE to win if it is the only valid entry
      */
     int best_score = -1;
     int best_state = -1;
-    char best_ip[50] = {0};
+    char best_ip[IP_ADDR_STR_LEN] = {0};
 
     for (int i = 0; i < neighbours->neigh_count; ++i) {
         CcspTraceDebug(("Neighbor %d: local=%s, mac=%s, ifname=%s, state=%d\n",
@@ -1723,9 +1735,8 @@ int getIPAddress(char *physAddress,char *IPAddress)
             neighbours->neigh_arr[i].ifname ? neighbours->neigh_arr[i].ifname : "NULL",
             neighbours->neigh_arr[i].state));
 
-        if (neighbours->neigh_arr[i].local == NULL ||
-            strlen(neighbours->neigh_arr[i].local) == 0 ||
-            strcmp(neighbours->neigh_arr[i].local, "none") == 0) {
+        if (neighbours->neigh_arr[i].local == NULL || strlen(neighbours->neigh_arr[i].local) == 0 || strcmp(neighbours->neigh_arr[i].local, "none") == 0) {
+            CcspTraceError(("%s %d: Invalid local value for neighbor %d\n", __FUNCTION__, __LINE__, i));
             continue;
         }
 
@@ -1742,13 +1753,14 @@ int getIPAddress(char *physAddress,char *IPAddress)
             best_score = score;
             best_state = neighbours->neigh_arr[i].state;
             strncpy(best_ip, neighbours->neigh_arr[i].local, sizeof(best_ip) - 1);
+	    best_ip[sizeof(best_ip) - 1] = '\0';
         }
     }
 
     if (best_ip[0] != '\0') {
 
-        strncpy(IPAddress, best_ip, 50 - 1);
-        IPAddress[50 - 1] = '\0';
+        strncpy(IPAddress, best_ip, sizeof(best_ip) - 1);
+        IPAddress[sizeof(best_ip) - 1] = '\0';
 
         if (best_state == NEIGH_STATE_STALE) {
             //CASE 1 : To update neighbour table when Static clients are transistioning between REACHABLE and DELAY
@@ -1832,7 +1844,7 @@ CASE_DNSMASQ:
          if (output[0] != '\0')
          {
              memcpy(IPAddress,output,sizeof(output));
-             AnscTraceWarning(("client mac present in dnsmasq: MAC %s IP %s\n", physAddress, IPAddress));
+             CcspTraceDebug(("client mac present in dnsmasq: MAC %s IP %s\n", physAddress, IPAddress));
              pclose(fp);
              fp = NULL;
              return 0;
