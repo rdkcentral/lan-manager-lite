@@ -122,6 +122,7 @@ static mac_band_record *Mac_to_band_mapping[HASHSIZE] = { NULL };
 #define NEIGH_SCORE_REACHABLE   30
 #define NEIGH_SCORE_DELAY       20
 #define NEIGH_SCORE_STALE       10
+#define ARRAY_SIZE(arr)         (sizeof(arr) / sizeof((arr)[0]))
 
 struct neigh_state_score_map {
     int state;
@@ -1635,7 +1636,7 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
 #ifdef CORE_NET_LIB
 static int neigh_state_score(int state)
 {
-    for (size_t i = 0; i < sizeof(neigh_score_map); i++) {
+    for (size_t i = 0; i < ARRAY_SIZE(neigh_score_map); i++) {
         if (neigh_score_map[i].state == state)
             return neigh_score_map[i].score;
     }
@@ -1753,7 +1754,7 @@ int getIPAddress(char *physAddress,char *IPAddress)
             best_score = score;
             best_state = neighbours->neigh_arr[i].state;
             strncpy(best_ip, neighbours->neigh_arr[i].local, sizeof(best_ip) - 1);
-	    best_ip[sizeof(best_ip) - 1] = '\0';
+            best_ip[sizeof(best_ip) - 1] = '\0';
         }
     }
 
@@ -1763,7 +1764,7 @@ int getIPAddress(char *physAddress,char *IPAddress)
         IPAddress[sizeof(best_ip) - 1] = '\0';
 
         if (best_state == NEIGH_STATE_STALE) {
-            //CASE 1 : To update neighbour table when Static clients are transistioning between REACHABLE and DELAY
+            //CASE 1 : To update neighbour table when Static clients are transitioning between REACHABLE and DELAY
             CcspTraceDebug(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));  //Case 1
         } else {
             //CASE 2 : To update neighbour table when Static clients are disconnected or mode changes to DHCP due to which it receives new IP...existing IP is obsolete
@@ -1774,7 +1775,7 @@ int getIPAddress(char *physAddress,char *IPAddress)
     }
     neighbour_free_neigh(neighbours);
 #else /* CORE_NET_LIB */
-//CASE 1 : To update neighbour table when Static clients are transistioning between REACHABLE and DELAY
+//CASE 1 : To update neighbour table when Static clients are transitioning between REACHABLE and DELAY
     memset(buf, 0, sizeof(buf));
     memset(output, 0, sizeof(output));
     snprintf(buf, sizeof(buf), "ip -4 nei show | grep -i %s | grep -e REACHABLE -e DELAY | awk '{print $1}' | grep -v 169.254. | tail -1", physAddress); //Link local IP is filtered.
