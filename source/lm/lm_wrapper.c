@@ -1764,10 +1764,10 @@ int getIPAddress(char *physAddress,char *IPAddress)
 
         if (best_state == NEIGH_STATE_STALE) {
             //CASE 1 : To update neighbour table when Static clients are transistioning between REACHABLE and DELAY
-            AnscTraceWarning(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));  //Case 1
+            CcspTraceDebug(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));  //Case 1
         } else {
             //CASE 2 : To update neighbour table when Static clients are disconnected or mode changes to DHCP due to which it receives new IP...existing IP is obsolete
-            AnscTraceWarning(("client is either reachable or delay: MAC %s IP %s\n", physAddress, IPAddress)); //Case 2
+            CcspTraceDebug(("client is either reachable or delay: MAC %s IP %s\n", physAddress, IPAddress)); //Case 2
         }
         neighbour_free_neigh(neighbours);
         return 0;
