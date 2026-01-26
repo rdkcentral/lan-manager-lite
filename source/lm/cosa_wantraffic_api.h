@@ -93,7 +93,7 @@
 #define BUFLEN_20480                20480
 
 #define UNIT_KB                     1024
-#if defined (_SCER11BEL_PRODUCT_REQ_)
+#if defined (_SCER11BEL_PRODUCT_REQ_) || defined (_SCXF11BFL_PRODUCT_REQ_)
 #define SUPPORTED_WAN_MODES         1
 #else
 #define SUPPORTED_WAN_MODES         2
