@@ -7,19 +7,6 @@
     "_comment": "External repositories needed by this component",
     "repos": [
       {
-        "name": "wrp-c",
-        "repo": "https://github.com/xmidt-org/wrp-c.git",
-        "branch": "v1.1.3",
-        "header_paths": [
-          { "source": "src", "destination": "$HOME/usr/include/rdkb/wrp-c" }
-        ],
-        "build": {
-          "type": "cmake",
-          "build_dir": "build",
-          "cmake_flags": "-DCMAKE_INSTALL_PREFIX=$HOME/usr -DCMAKE_PREFIX_PATH=/usr -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=ON"
-        }
-      },
-      {
         "name": "Utopia",
         "repo": "https://github.com/rdkcentral/utopia.git",
         "branch": "develop",
@@ -158,6 +145,19 @@
         ]
       },
       {
+        "name": "wrp-c",
+        "repo": "https://github.com/xmidt-org/wrp-c.git",
+        "branch": "v1.1.3",
+        "header_paths": [
+          { "source": "src", "destination": "$HOME/usr/include/rdkb/wrp-c" }
+        ],
+        "build": {
+          "type": "cmake",
+          "build_dir": "build",
+          "cmake_flags": "-DCMAKE_INSTALL_PREFIX=$HOME/usr -DCMAKE_PREFIX_PATH=/usr -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=ON"
+        }
+      },
+      {
         "name": "libparodus",
         "repo": "https://github.com/xmidt-org/libparodus.git",
         "branch": "master",
@@ -167,7 +167,7 @@
         "build": {
           "type": "cmake",
           "build_dir": "build",
-            "cmake_flags": "-DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_PREFIX_PATH=/usr -DCMAKE_C_FLAGS=-I$HOME/usr/include/rdkb -DCMAKE_CXX_FLAGS=-I$HOME/usr/include/rdkb -DBUILD_FOR_DESKTOP=ON -DCMAKE_BUILD_TYPE=Debug"
+            "cmake_flags": "-DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_PREFIX_PATH=/usr -DCMAKE_C_FLAGS=-I$HOME/usr/include/rdkb -DCMAKE_CXX_FLAGS=-I$HOME/usr/include/rdkb -DMAIN_PROJ_BUILD=ON -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Debug"
         }
       },
       {
@@ -218,7 +218,7 @@
         "command": "./autogen.sh",
         "command": "./configure",
         "description": "Build liblmapi.la",
-        "command": "make liblmapi.la"
+        "command": "make liblmapi.la CPPFLAGS=\"-I$HOME/usr/include/rdkb/\" LDFLAGS=\"-L$HOME/usr/lib\""
       }
     ],
     "build": {
