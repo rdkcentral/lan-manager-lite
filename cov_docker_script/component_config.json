@@ -154,7 +154,7 @@
         "build": {
           "type": "cmake",
           "build_dir": "build",
-          "cmake_flags": "-DCMAKE_INSTALL_PREFIX=$HOME/usr -DCMAKE_PREFIX_PATH=/usr -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=ON"
+          "cmake_flags": "-DCMAKE_INSTALL_PREFIX=$HOME/usr -DCMAKE_PREFIX_PATH=$HOME/usr -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=ON -DBUILD_TESTING=OFF"
         }
       },
       {
