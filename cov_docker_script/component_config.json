@@ -213,10 +213,17 @@
     "pre_build_commands": [
       {
         "description": "Generate dm_pack_datamodel.c from XML",
-        "command": "python3 $HOME/usr/include/rdkb/dm_pack_code_gen.py config/LMLite.XML source/Ssp/dm_pack_datamodel.c",
+        "command": "python3 $HOME/usr/include/rdkb/dm_pack_code_gen.py config/LMLite.XML source/Ssp/dm_pack_datamodel.c"
+      },
+      {
         "description": "Run autogen.sh",
-        "command": "./autogen.sh",
-        "command": "./configure",
+        "command": "./autogen.sh"
+      },
+      {
+        "description": "Run configure",
+        "command": "./configure"
+      },
+      {
         "description": "Build liblmapi.la",
         "command": "make liblmapi.la CPPFLAGS=\"-I$HOME/usr/include/rdkb/\" LDFLAGS=\"-L$HOME/usr/lib\""
       }
