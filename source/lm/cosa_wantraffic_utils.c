@@ -250,7 +250,7 @@ WAN_INTERFACE GetEthWANIndex(VOID)
         if ((rc == EOK) && (!ind))
         {
             WTC_LOG_INFO("EWAN Mode");
-#if  defined (_SCER11BEL_PRODUCT_REQ_)
+#if  defined (_SCER11BEL_PRODUCT_REQ_) || defined (_SCXF11BFL_PRODUCT_REQ_)
             return EWAN - 1;
 #else
             return EWAN;
