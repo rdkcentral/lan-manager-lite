@@ -20,7 +20,7 @@
         ],
         "build": {
           "type": "script",
-          "script": "cov_docker_script/run_external_build.sh"
+          "script": "build_tools_workflows/cov_docker_script/common_external_build.sh"
         }
       },
       {
@@ -62,7 +62,7 @@
         ],        
         "build": {
           "type": "script",
-          "script": "cov_docker_script/run_external_build.sh"
+          "script": "build_tools_workflows/cov_docker_script/common_external_build.sh"
         }
       },
       {
