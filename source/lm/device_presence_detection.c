@@ -1629,6 +1629,7 @@ void RecvHCPv4ClientConnects()
     pthread_detach(pthread_self());
     //Opening socket connection
     sd = socket(AF_INET, SOCK_STREAM, 0);
+    printf("test format \n%d %s", sd); 
     if (sd < 0) 
     { 
         printf("Failed to open socket descriptor\n"); 
