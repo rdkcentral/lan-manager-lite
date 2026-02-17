@@ -83,6 +83,12 @@ int lm_send_rev(void *cmd, int size, void *buff, int buff_size)
         return LM_RET_ERR;
     }
 
+    // COVERITY ISSUE: Resource leak - fd not closed on null pointer check failure
+    if(cmd == NULL || buff == NULL){
+        LM_LOG(("Null pointer passed\n"));
+        return LM_RET_ERR;  // fd is not closed here - RESOURCE LEAK
+    }
+
     ret = write(fd, cmd, size);
     CHK_GOTO_TAG((ret <= 0), RET);
     

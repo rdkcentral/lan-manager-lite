@@ -152,7 +152,10 @@ int PresenceDetection_Init()
             pDetectionObject = NULL;
             return -1;
         }
+        // COVERITY ISSUE: Unchecked return value - MEDIUM PRIORITY
+        // pthread_mutex_init can fail and return non-zero, but we don't check it
         pthread_mutex_init(&PresenceDetectionMutex,0);
+        memset(pDetectionObject->ppdevlist, 0, MAX_NUM_OF_DEVICE * sizeof(PLmPresenceDeviceInfo));
     }
     else
     {
@@ -638,7 +641,11 @@ static int sendNetlinkMessage(int iSocketFd, struct nlmsghdr * pNlMsgHdr)
 void sendProbeRequest (int iIpVersion, char * pIpAddress, char * pIface)
 {
 #define PROBE_BUFF_SIZE 256
-    if ((NULL == pIpAddress) || (NULL == pIface))
+    // COVERITY ISSUE: Moved NULL check after pointer usage - NULL POINTER DEREFERENCE
+    char *tempIpAddr = pIpAddress;
+    int ipLen = strlen(pIpAddress);  // POTENTIAL NULL DEREFERENCE if pIpAddress is NULL
+
+    if ((NULL == tempIpAddr) || (NULL == pIface))
     {
         CcspTraceError(("%s:%d Invalid input parameter\n",__FUNCTION__,__LINE__));
         return;
