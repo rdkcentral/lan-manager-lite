@@ -109,7 +109,11 @@
 #define DNS_LEASE "/nvram/dnsmasq.leases"
 #define DEBUG_INI_NAME  "/etc/debug.ini"
 #define HOST_ENTRY_LIMIT 175
+#if defined (_COSA_QCA_ARM_)
+#define HOST_OBJECT_SIZE       512
+#else
 #define HOST_OBJECT_SIZE	200
+#endif
 #define ARP_IPv6 0
 #define DIBBLER_IPv6 1
 
