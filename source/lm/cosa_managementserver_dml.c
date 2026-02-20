@@ -94,6 +94,11 @@ ManageableDevice_GetEntryCount
         ANSC_HANDLE                 hInsContext
     )
 {
+    if (g_pReports == NULL ) 
+    {
+        CcspTraceError(("LMLite %s report is not initialized", __FUNCTION__));
+        return 0;
+    }
 #if defined(DEVICE_GATEWAY_ASSOCIATION_FEATURE)
     return AnscSListQueryDepth(&g_pReports->MangDevList);
 #else
@@ -133,6 +138,11 @@ ManageableDevice_GetEntry
 #if defined(DEVICE_GATEWAY_ASSOCIATION_FEATURE)
     PCOSA_CONTEXT_LINK_OBJ           pLinkObj    = NULL;
     PSINGLE_LINK_ENTRY                  pSLinkEntry = NULL;
+    if (g_pReports == NULL ) 
+    {
+        CcspTraceError(("LMLite %s report is not initialized", __FUNCTION__));
+        return 0;
+    }
     pSLinkEntry = AnscQueueGetEntryByIndex((ANSC_HANDLE)&g_pReports->MangDevList, nIndex);
     if (pSLinkEntry)
     {
@@ -180,6 +190,11 @@ ManageableDevice_IsUpdated
     int                                leaseUpdated = 0;
     retValv4 = stat(DHCP_VENDOR_CLIENT_V4_PATH, &fileStatv4);
     
+    if (g_pReports == NULL ) 
+    {
+        CcspTraceError(("LMLite %s report is not initialized", __FUNCTION__));
+        return FALSE;
+    }
     if (retValv4 == 0)
     {
         /* Check whether the file is modified or not. */
@@ -256,6 +271,13 @@ static BOOL findAndUpdateMatchedEntry
     PSINGLE_LINK_ENTRY                   pSListEntry       = NULL;
     PCOSA_CONTEXT_LINK_OBJ            pCxtLink          = NULL;
     PCOSA_DML_MANG_DEV                   pMangDevEntry     = NULL;
+
+    //Check what to be return if g_pReports is not initialized
+    if (g_pReports == NULL ) 
+    {
+        CcspTraceError(("LMLite %s report is not initialized", __FUNCTION__));
+        return FALSE;
+    }
     pSListEntry =   AnscSListGetFirstEntry(&g_pReports->MangDevList);
     while (pSListEntry)
     {
@@ -358,6 +380,11 @@ ManageableDevice_Synchronize
     PCOSA_CONTEXT_LINK_OBJ            pCxtLink          = NULL;
     PSINGLE_LINK_ENTRY                   pSListEntry       = NULL;
     PSINGLE_LINK_ENTRY                   pTmpSListEntry    = NULL;
+    if (g_pReports == NULL ) 
+    {
+        CcspTraceError(("LMLite %s report is not initialized", __FUNCTION__));
+        return ANSC_STATUS_FAILURE;
+    }
     pMangDevTable = CosaDmlGetManageableDevices(&tableEntryCount, DHCP_VENDOR_CLIENT_ALL_PATH);
     if ((pMangDevTable != NULL) && (tableEntryCount > 0))
     {
