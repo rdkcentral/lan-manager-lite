@@ -2391,6 +2391,9 @@ static void *Event_HandlerThread(void *threadid)
         else if(EventMsg.MsgType == MSG_TYPE_WIFI)
         {
             memcpy(&hosts,EventMsg.Msg,sizeof(hosts));
+            /* CID 339816 String not null terminated */
+            hosts.phyAddr[sizeof(hosts.phyAddr) - 1] = '\0';
+
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             pthread_mutex_lock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -2420,6 +2423,9 @@ static void *Event_HandlerThread(void *threadid)
                 
             }
 
+            /* CID 339816  String not NULL terminated */
+            hosts.ssid[LM_GEN_STR_SIZE - 1] = '\0';
+            hosts.AssociatedDevice[LM_GEN_STR_SIZE - 1] = '\0';
             if(hosts.Status)
             {
 				memset(radio,0,sizeof(radio));	
@@ -2481,6 +2487,9 @@ static void *Event_HandlerThread(void *threadid)
         else if(EventMsg.MsgType == MSG_TYPE_MOCA)
         {
             memcpy(&mhosts,EventMsg.Msg,sizeof(mhosts));
+
+            /* CID 339816 String not null terminated */
+            mhosts.phyAddr[sizeof(mhosts.phyAddr) - 1] = '\0';
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             pthread_mutex_lock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -2505,6 +2514,11 @@ static void *Event_HandlerThread(void *threadid)
                 }   
             }
 
+            /* CID 339816 String not null terminated */
+            mhosts.ssid[LM_GEN_STR_SIZE - 1] = '\0';
+            mhosts.AssociatedDevice[LM_GEN_STR_SIZE - 1] = '\0';
+            mhosts.parentMac[sizeof(mhosts.parentMac) - 1] = '\0';
+            mhosts.deviceType[sizeof(mhosts.deviceType) - 1] = '\0';
             if(mhosts.Status)
             {
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)mhosts.ssid);
@@ -4075,17 +4089,24 @@ int Hosts_DisablePresenceDetectionTask()
     char tmpmac[64];
     char dbParam[128];
     int i = 0;
+
+    /* CID 559858 Check of thread-shared field evades lock acquisition */
+    CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+    pthread_mutex_lock(&LmHostObjectMutex);
+    CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     if (!lmHosts.enablePresence)
     {
+        pthread_mutex_unlock(&LmHostObjectMutex);
+        CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
         CcspTraceWarning(("RDKB_PRESENCE: Presence Detection already disabled !!!\n"));
         return 0;
     }
     // clear all param related to presence.
     Sendmsg_dnsmasq(FALSE);
     syscfg_set(NULL, "notify_presence_webpa", "false");
-    CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-    pthread_mutex_lock(&LmHostObjectMutex);
-    CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+    //CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+    //pthread_mutex_lock(&LmHostObjectMutex);
+    //CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     lmHosts.enablePresence = FALSE;
     for(i = 0; i < lmHosts.numHost; i++)
     {
