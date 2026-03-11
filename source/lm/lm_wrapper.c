@@ -209,6 +209,7 @@ static int AreIPv4AddressesInSameSubnet(char* ipaddress, char* ipaddres2, char* 
 }
 
 #ifndef USE_NOTIFY_COMPONENT
+USE_NOTIFY_COMPONENT_NOTDEF
 static unsigned long hash (char *s)
 {
 	unsigned long hashval=0;
@@ -563,6 +564,7 @@ void SyncWiFi()
 }
 
 #ifdef USE_NOTIFY_COMPONENT
+IFDEF_USE_NOTIFY_COMPONENT
 #if 0
 void Wifi_Server_Thread_func()
 {
