@@ -658,17 +658,24 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
 #if !defined (NO_MOCA_FEATURE_SUPPORT)
 		else if ((strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId],"MoCA")))
 		{
-			if(pHost->ipv4Active == TRUE)
+			if(state)
 			{
-				  if(state) {
+				  if(pHost->ipv4Active == TRUE) {
 					CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is MoCA, MacAddress is %s and HostName is %s appeared online \n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]));
 					OnboardLog("RDKB_CONNECTED_CLIENTS: Client type is MoCA, MacAddress is %s and HostName is %s appeared online \n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]);
 					CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: IP Address : %s , address source : %s, HostName : %s \n",pHost->pStringParaValue[LM_HOST_IPAddressId],pHost->pStringParaValue[LM_HOST_AddressSource],pHost->pStringParaValue[LM_HOST_HostNameId]));
-				}  else {
+				}
+		       }
+		       else 
+		       {
+			        if(pHost->ipv4Active == TRUE) {
 					CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: MoCA client with %s MacAddress and HostName is %s gone offline \n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]));
 					OnboardLog("RDKB_CONNECTED_CLIENTS: MoCA client with %s MacAddress and HostName is %s gone offline \n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]);
 
 				}
+				#ifndef USE_NOTIFY_COMPONENT
+				remove_Mac_to_band_mapping(pHost->pStringParaValue[LM_HOST_PhysAddressId]);
+                                #endif
 			}
 			rc = strcpy_s(interface, sizeof(interface),"MoCA");
 			ERR_CHK(rc);
