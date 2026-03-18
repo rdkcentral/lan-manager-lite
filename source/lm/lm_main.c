@@ -658,17 +658,24 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
 #if !defined (NO_MOCA_FEATURE_SUPPORT)
 		else if ((strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId],"MoCA")))
 		{
-			if(pHost->ipv4Active == TRUE)
+			if(state)
 			{
-				  if(state) {
+				  if(pHost->ipv4Active == TRUE) {
 					CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is MoCA, MacAddress is %s and HostName is %s appeared online \n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]));
 					OnboardLog("RDKB_CONNECTED_CLIENTS: Client type is MoCA, MacAddress is %s and HostName is %s appeared online \n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]);
 					CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: IP Address : %s , address source : %s, HostName : %s \n",pHost->pStringParaValue[LM_HOST_IPAddressId],pHost->pStringParaValue[LM_HOST_AddressSource],pHost->pStringParaValue[LM_HOST_HostNameId]));
-				}  else {
+				}
+		       }
+		       else 
+		       {
+			        if(pHost->ipv4Active == TRUE) {
 					CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: MoCA client with %s MacAddress and HostName is %s gone offline \n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]));
 					OnboardLog("RDKB_CONNECTED_CLIENTS: MoCA client with %s MacAddress and HostName is %s gone offline \n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]);
 
 				}
+				#ifndef USE_NOTIFY_COMPONENT
+				remove_Mac_to_band_mapping(pHost->pStringParaValue[LM_HOST_PhysAddressId]);
+                                #endif
 			}
 			rc = strcpy_s(interface, sizeof(interface),"MoCA");
 			ERR_CHK(rc);
@@ -2315,6 +2322,7 @@ static void *Event_HandlerThread(void *threadid)
 
         if(EventMsg.MsgType == MSG_TYPE_ETH)
         {
+            CcspTraceError(("Debug RDKB-63938:%s:%d:EventMsg.Msg:%s ", __FUNCTION__, __LINE__,EventMsg.Msg));
             memcpy(&EthHost,EventMsg.Msg,sizeof(EthHost));
             /* CID 339816 String not null terminated */
             EthHost.MacAddr[sizeof(EthHost.MacAddr) - 1] = '\0';
@@ -2336,6 +2344,7 @@ static void *Event_HandlerThread(void *threadid)
                 {
                     if ( pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] )
                     {
+                         CcspTraceError(("Debug RDKB-63938:%s:%d: :Freeing Eth type HOST", __FUNCTION__, __LINE__));
                          AnscFreeMemory(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]);
                          pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] = NULL;
                     }
@@ -2351,6 +2360,7 @@ static void *Event_HandlerThread(void *threadid)
             if(EthHost.Active)
             {
                 CcspTraceDebug(("%s-%d LM Ethernet client is active \n",__FUNCTION__,__LINE__));
+                CcspTraceError(("Debug RDKB-63938:%s-%d LM Ethernet client is active \n",__FUNCTION__,__LINE__));
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), "Ethernet");
                 if ( ! pHost->pStringParaValue[LM_HOST_IPAddressId] )
                 {
@@ -2363,6 +2373,7 @@ static void *Event_HandlerThread(void *threadid)
             else
             {
                 CcspTraceDebug(("%s-%d LM Ethernet client is NOT active \n",__FUNCTION__,__LINE__));
+                CcspTraceError(("Debug RDKB-63938:%s-%d LM Ethernet client is NOT active \n",__FUNCTION__,__LINE__));
                 LM_SET_ACTIVE_STATE_TIME(pHost, FALSE);
             }
            
@@ -2394,6 +2405,7 @@ static void *Event_HandlerThread(void *threadid)
             /* CID 339816 String not null terminated */
             hosts.phyAddr[sizeof(hosts.phyAddr) - 1] = '\0';
 
+            CcspTraceError(("Debug RDKB-63938:%s:%d:Msg Type WIFi EventMsg.Msg:%s ", __FUNCTION__, __LINE__,EventMsg.Msg));
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             pthread_mutex_lock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -2410,6 +2422,7 @@ static void *Event_HandlerThread(void *threadid)
                 {
                     if ( pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] )
                     {
+                        CcspTraceError(("Debug RDKB-63938:%s:%d: :Freeing WiFi type HOST", __FUNCTION__, __LINE__));
                         AnscFreeMemory(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]);
                         pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] = NULL;
                     }
@@ -2450,6 +2463,7 @@ static void *Event_HandlerThread(void *threadid)
                 {
                     if(!strcmp(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], (const char *)hosts.ssid))
                     {
+                        CcspTraceError(("Debug RDKB-63938:%s-%d Array compared against WiFI  Host SET active Time \n",__FUNCTION__,__LINE__));
                         memset(radio,0,sizeof(radio));
                         convert_ssid_to_radio((char *)hosts.ssid, radio);
                         DelAndShuffleAssoDevIndx(pHost);
@@ -2490,6 +2504,7 @@ static void *Event_HandlerThread(void *threadid)
 
             /* CID 339816 String not null terminated */
             mhosts.phyAddr[sizeof(mhosts.phyAddr) - 1] = '\0';
+            CcspTraceError(("Debug RDKB-63938:%s:%d:Msg Type MOCA EventMsg.Msg:%s ", __FUNCTION__, __LINE__,EventMsg.Msg));
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             pthread_mutex_lock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -2502,6 +2517,7 @@ static void *Event_HandlerThread(void *threadid)
                 {
                     if ( pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] )
                     {
+                        CcspTraceError(("Debug RDKB-63938:%s:%d: :Freeing MOCA type HOST", __FUNCTION__, __LINE__));
                         AnscFreeMemory(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]);
                         pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] = NULL;
                     }
@@ -2591,6 +2607,7 @@ static void *Event_HandlerThread(void *threadid)
             }
             else
             {
+                CcspTraceError(("Debug RDKB-63938:%s-%d EventMsg.Msg is FALSE, calling Hosts_DisablePresenceDetectionTask \n",__FUNCTION__,__LINE__));
                 Hosts_DisablePresenceDetectionTask();
             }
 #if defined (RDKB_EXTENDER_ENABLED)
@@ -4104,6 +4121,7 @@ int Hosts_DisablePresenceDetectionTask()
     // clear all param related to presence.
     Sendmsg_dnsmasq(FALSE);
     syscfg_set(NULL, "notify_presence_webpa", "false");
+    CcspTraceError(("Debug RDKB-63938:%s-%d  notify_presence_webpa set to FALSE \n",__FUNCTION__,__LINE__));
     //CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     //pthread_mutex_lock(&LmHostObjectMutex);
     //CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -4526,6 +4544,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
 
     if (notify_to_webpa)
     {
+        CcspTraceError(("Debug RDKB-63938:%s-%d notify_to_webpa == TRUE \n",__FUNCTION__,__LINE__));
 
         if(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL)
         {
@@ -4561,6 +4580,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
 	    ctx->pHost = pHost;
 	}
 	pthread_mutex_unlock(&LmHostObjectMutex);
+        CcspTraceError(("Debug RDKB-63938:%s:%d: unlock LmHostObjectMutex", __FUNCTION__, __LINE__));
         strncpy(ctx->interface, interface, sizeof(ctx->interface) - 1);
         ctx->interface[sizeof(ctx->interface) - 1] = '\0'; // ensure null-termination
         ctx->status = status;
@@ -4613,6 +4633,11 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
             }
         }
         pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
+    }
+    else
+    {
+        pthread_mutex_unlock(&LmHostObjectMutex);
+        CcspTraceError(("Debug RDKB-63938:%s:%d: Else unlock LmHostObjectMutex", __FUNCTION__, __LINE__));
     }
     return 0;
 }
