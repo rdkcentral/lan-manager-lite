@@ -4349,11 +4349,14 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
             LMPresenceNotifyAddressInfo *ctx = curr->ctx;
 
             // Check IPv4
+            CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 	    pthread_mutex_lock (&LmHostObjectMutex);
+            CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             PLmObjectHost pHost = ctx->pHost;
 	    if (!pHost) {
 		/* Host pointer gone: remove node and free it */
 		pthread_mutex_unlock(&LmHostObjectMutex);
+                CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 
 		if (prev) {
 		    prev->next = curr->next;
@@ -4398,6 +4401,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 		free(ctx->physAddr);
 		free(ctx->hostName);
 		pthread_mutex_unlock (&LmHostObjectMutex);
+                CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 		// Remove this node from the list and free its memory
 		if (prev) {
 		    prev->next = curr->next;
@@ -4413,6 +4417,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 		continue;
 	    }
 	    pthread_mutex_unlock (&LmHostObjectMutex);
+            CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 	    if (ctx->ipv4 ) {
 		completed = true;
 	    } else if (++curr->retry_count > IP_MAX_RETRIES) { // Increment the retry_count per host 
@@ -4476,10 +4481,13 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
 
     char interface[32] = {0};
 
+    CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     pthread_mutex_lock(&LmHostObjectMutex);
+    CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     if (!pHost)
     {
 	pthread_mutex_unlock(&LmHostObjectMutex);
+        CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
         return -1;
     }
     if (HOST_PRESENCE_JOIN == presencestatus)    
@@ -4493,6 +4501,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         else
         {
 	    pthread_mutex_unlock(&LmHostObjectMutex);
+            CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             return 0;
         }
 
@@ -4507,12 +4516,14 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         else
         {
 	    pthread_mutex_unlock(&LmHostObjectMutex);
+            CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             return 0;
         }
     }
     if (!pHost->bBoolParaValue[LM_HOST_PresenceNotificationEnabledId])
     {
 	pthread_mutex_unlock(&LmHostObjectMutex);
+        CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
         return -1;
     }
     /*CID: 63335 Array compared against 0*/
@@ -4523,8 +4534,13 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
     } else {
         CcspTraceError(("Error in syscfg_get for notify_presence_webpa"));
     }
-
-    if (notify_to_webpa)
+    if (false == notify_to_webpa)
+    {
+        pthread_mutex_unlock(&LmHostObjectMutex);
+        CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+        return -1;
+    }
+    else if (notify_to_webpa)
     {
 
         if(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL)
@@ -4554,6 +4570,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
         if (!ctx)
 	{
 	    pthread_mutex_unlock(&LmHostObjectMutex);
+            CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 	    return -1;
 	}
 	if (pHost)
@@ -4561,6 +4578,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
 	    ctx->pHost = pHost;
 	}
 	pthread_mutex_unlock(&LmHostObjectMutex);
+        CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
         strncpy(ctx->interface, interface, sizeof(ctx->interface) - 1);
         ctx->interface[sizeof(ctx->interface) - 1] = '\0'; // ensure null-termination
         ctx->status = status;
