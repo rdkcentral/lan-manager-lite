@@ -4340,124 +4340,150 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
             pthread_cond_wait(&LmNotifyCond, &LmRetryNotifyHostListMutex);
         }
 
-        // Pop the entire list
-        RetryNotifyHostList *list = pNotifyListHead;
+        /* FIX: Detach list and unlock before acquiring LmHostObjectMutex
+           to avoid lock-order inversion */
+        RetryNotifyHostList *localHead = pNotifyListHead;
         pNotifyListHead = NULL;
         pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
 
-        RetryNotifyHostList *curr = list;
+        RetryNotifyHostList *prev = NULL;
+        RetryNotifyHostList *curr = localHead;
+
         while (curr != NULL) {
+
             bool completed = false;
             LMPresenceNotifyAddressInfo *ctx = curr->ctx;
 
             // Check IPv4
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-            pthread_mutex_lock (&LmHostObjectMutex);
+	    pthread_mutex_lock (&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             PLmObjectHost pHost = ctx->pHost;
-            if (!pHost) {
-                /* Host pointer gone: remove node and free it */
-                pthread_mutex_unlock(&LmHostObjectMutex);
+	    if (!pHost) {
+		/* Host pointer gone: remove node and free it */
+		pthread_mutex_unlock(&LmHostObjectMutex);
                 CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 
-                RetryNotifyHostList *toDelete = curr;
-                curr = curr->next;
+		if (prev) {
+		    prev->next = curr->next;
+		} else {
+            localHead = curr->next;
+		}
 
-                if (ctx) {
-                    /* if ctx owned any strings, free them; ctx should be freshly allocated earlier */
-                    free(ctx->ipv4);
-                    free(ctx->physAddr);
-                    free(ctx->hostName);
-                    free(ctx);
-                }
-                free(toDelete);
-                continue;
-            }
+		RetryNotifyHostList *toDelete = curr;
+		curr = curr->next;
 
-            // Free any previous allocations before overwriting (for retry case)
-            free(ctx->ipv4);
-            free(ctx->physAddr);
-            free(ctx->hostName);
-            ctx->ipv4 = NULL;
-            ctx->physAddr = NULL;
-            ctx->hostName = NULL;
+		if (toDelete->ctx) {
+		    /* if ctx owned any strings, free them; ctx should be freshly allocated earlier */
+		    free(toDelete->ctx->ipv4);
+		    free(toDelete->ctx->physAddr);
+		    free(toDelete->ctx->hostName);
+		    free(toDelete->ctx);
+		}
+		free(toDelete);
+		continue;
+	    }
+        /* FIX: Free previous allocations before overwriting (for retry case) */
+        free(ctx->ipv4);
+        free(ctx->physAddr);
+        free(ctx->hostName);
+        ctx->ipv4 = NULL;
+        ctx->physAddr = NULL;
+        ctx->hostName = NULL;
 
-            if (pHost->pStringParaValue[LM_HOST_IPAddressId]) {
-                ctx->ipv4 = strdup(pHost->pStringParaValue[LM_HOST_IPAddressId]);
-            }
-            else
-                ctx->ipv4 = NULL;
-            if (pHost->pStringParaValue[LM_HOST_PhysAddressId]) {
-                ctx->physAddr = strdup(pHost->pStringParaValue[LM_HOST_PhysAddressId]);
-            }
-            else
-                ctx->physAddr = NULL;
-
-            if (pHost->pStringParaValue[LM_HOST_HostNameId]) {
-                ctx->hostName = strdup(pHost->pStringParaValue[LM_HOST_HostNameId]);
-            }
-            else
-                ctx->hostName = NULL;
-            if ((pHost->pStringParaValue[LM_HOST_IPAddressId] && ctx->ipv4 == NULL) ||
-                    (pHost->pStringParaValue[LM_HOST_PhysAddressId] && ctx->physAddr == NULL) ||
-                    (pHost->pStringParaValue[LM_HOST_HostNameId] && ctx->hostName == NULL)) {
-                CcspTraceWarning(("Memory allocation failed for ipv4, physAddr, or hostName in %s at line %d\n", __FUNCTION__, __LINE__));
-                pthread_mutex_unlock(&LmHostObjectMutex);
+	    if (pHost->pStringParaValue[LM_HOST_IPAddressId]) {
+		ctx->ipv4 = strdup(pHost->pStringParaValue[LM_HOST_IPAddressId]);
+	    } else {
+		ctx->ipv4 = NULL;
+	    }
+	    if (pHost->pStringParaValue[LM_HOST_PhysAddressId]) {
+		ctx->physAddr = strdup(pHost->pStringParaValue[LM_HOST_PhysAddressId]);
+	    } else {
+		ctx->physAddr = NULL;
+	    }
+	    if (pHost->pStringParaValue[LM_HOST_HostNameId]) {
+		ctx->hostName = strdup(pHost->pStringParaValue[LM_HOST_HostNameId]);
+	    } else {
+		ctx->hostName = NULL;
+	    }
+	    if ((pHost->pStringParaValue[LM_HOST_IPAddressId] && ctx->ipv4 == NULL) ||
+		    (pHost->pStringParaValue[LM_HOST_PhysAddressId] && ctx->physAddr == NULL) ||
+		    (pHost->pStringParaValue[LM_HOST_HostNameId] && ctx->hostName == NULL)) {
+		CcspTraceWarning(("Memory allocation failed for ipv4, physAddr, or hostName in %s at line %d\n", __FUNCTION__, __LINE__));
+		free(ctx->ipv4);
+		free(ctx->physAddr);
+		free(ctx->hostName);
+		pthread_mutex_unlock (&LmHostObjectMutex);
                 CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-                RetryNotifyHostList *toDelete = curr;
-                curr = curr->next;
-                if (ctx) {
-                    free(ctx->ipv4);
-                    free(ctx->physAddr);
-                    free(ctx->hostName);
-                    free(ctx);
-                }
-                free(toDelete);
-                continue;
-            }
-            pthread_mutex_unlock(&LmHostObjectMutex);
+
+		// Remove this node from the list and free its memory
+		if (prev) {
+		    prev->next = curr->next;
+		} else {
+            localHead = curr->next;
+		}
+		RetryNotifyHostList *toDelete = curr;
+		curr = curr->next;
+		if (toDelete->ctx) {
+		    free(toDelete->ctx);
+		}
+		free(toDelete);
+		continue;
+	    }
+	    pthread_mutex_unlock (&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+	    if (ctx->ipv4 ) {
+		completed = true;
+	    } else if (++curr->retry_count > IP_MAX_RETRIES) { // Increment the retry_count per host 
+		CcspTraceWarning(("Retry limit exceeded for host, removing.\n"));
+		completed = true;
+	    }
 
-            if (ctx->ipv4 ) {
-                completed = true;
-            } else if (++curr->retry_count > IP_MAX_RETRIES) { // Increment the retry_count per host
-                CcspTraceWarning(("Retry limit exceeded for host, removing.\n"));
-                completed = true;
-            }
+	    if (completed){
+		// If IP addresses are obtained or retry_count exceeded 
+		Send_PresenceNotification(
+			ctx->interface,
+			ctx->physAddr,
+			ctx->status,
+			ctx->hostName,
+			ctx->ipv4
+			);
+		CcspTraceWarning(("Notification sent from %s, line:%d\n", __FUNCTION__, __LINE__));
 
-            if (completed){
-                // If IP addresses are obtained or retry_count exceeded
-                Send_PresenceNotification(
-                        ctx->interface,
-                        ctx->physAddr,
-                        ctx->status,
-                        ctx->hostName,
-                        ctx->ipv4
-                        );
-                CcspTraceWarning(("Notification sent from %s, line:%d\n", __FUNCTION__, __LINE__));
+                // Deletion logic
+                if (prev) {
+                    prev->next = curr->next;
+                } else {
+                    // If it is head node
+                    localHead = curr->next;
+                }
 
                 // Delete the node as the notification is sent for the node
                 RetryNotifyHostList *toDelete = curr;
                 curr = curr->next;
-                if (ctx) {
-                    free(ctx->ipv4);
-                    free(ctx->physAddr);
-                    free(ctx->hostName);
-                    free(ctx); // memory allocated for LMPresenceNotifyAddressInfo is freed
+
+                if (toDelete->ctx) {
+		    free(toDelete->ctx->ipv4);
+		    free(toDelete->ctx->physAddr);
+		    free(toDelete->ctx->hostName);
+                    free(toDelete->ctx); // memory allocated for LMPresenceNotifyAddressInfo is freed
                 }
                 free(toDelete);
             } else {
-                // Not completed: requeue for retry
-                RetryNotifyHostList *toRequeue = curr;
-                curr = curr->next;
-                pthread_mutex_lock(&LmRetryNotifyHostListMutex);
-                toRequeue->next = pNotifyListHead;
-                pNotifyListHead = toRequeue;
-                pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
+                prev = curr;
+                curr = curr->next; // Move to next host
             }
         }
-        // Wait for either new items or timeout to avoid busy loop
+
+        /* FIX: Re-attach remaining retry nodes back to the shared list */
         pthread_mutex_lock(&LmRetryNotifyHostListMutex);
+        if (localHead) {
+            RetryNotifyHostList *tail = localHead;
+            while (tail->next)
+                tail = tail->next;
+            tail->next = pNotifyListHead;
+            pNotifyListHead = localHead;
+        }
         // Instead of sleeping outside the mutex, use pthread_cond_timedwait to wait for new items or timeout
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
