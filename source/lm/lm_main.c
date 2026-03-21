@@ -4348,11 +4348,21 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 
         RetryNotifyHostList *prev = NULL;
         RetryNotifyHostList *curr = localHead;
+        RetryNotifyHostList *localTail = NULL;
 
         while (curr != NULL) {
 
             bool completed = false;
             LMPresenceNotifyAddressInfo *ctx = curr->ctx;
+
+            /* FIX: Free previous allocations before overwriting (for retry case)
+               These belong to per-node context, no need to hold LmHostObjectMutex */
+            free(ctx->ipv4);
+            free(ctx->physAddr);
+            free(ctx->hostName);
+            ctx->ipv4 = NULL;
+            ctx->physAddr = NULL;
+            ctx->hostName = NULL;
 
             // Check IPv4
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -4374,22 +4384,11 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 		curr = curr->next;
 
 		if (toDelete->ctx) {
-		    /* if ctx owned any strings, free them; ctx should be freshly allocated earlier */
-		    free(toDelete->ctx->ipv4);
-		    free(toDelete->ctx->physAddr);
-		    free(toDelete->ctx->hostName);
 		    free(toDelete->ctx);
 		}
 		free(toDelete);
 		continue;
 	    }
-        /* FIX: Free previous allocations before overwriting (for retry case) */
-        free(ctx->ipv4);
-        free(ctx->physAddr);
-        free(ctx->hostName);
-        ctx->ipv4 = NULL;
-        ctx->physAddr = NULL;
-        ctx->hostName = NULL;
 
 	    if (pHost->pStringParaValue[LM_HOST_IPAddressId]) {
 		ctx->ipv4 = strdup(pHost->pStringParaValue[LM_HOST_IPAddressId]);
@@ -4470,18 +4469,16 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                 }
                 free(toDelete);
             } else {
+                localTail = curr; /* track tail for O(1) re-attach */
                 prev = curr;
                 curr = curr->next; // Move to next host
             }
         }
 
-        /* FIX: Re-attach remaining retry nodes back to the shared list */
+        /* FIX: Re-attach remaining retry nodes back to the shared list (O(1)) */
         pthread_mutex_lock(&LmRetryNotifyHostListMutex);
-        if (localHead) {
-            RetryNotifyHostList *tail = localHead;
-            while (tail->next)
-                tail = tail->next;
-            tail->next = pNotifyListHead;
+        if (localHead && localTail) {
+            localTail->next = pNotifyListHead;
             pNotifyListHead = localHead;
         }
         // Instead of sleeping outside the mutex, use pthread_cond_timedwait to wait for new items or timeout
