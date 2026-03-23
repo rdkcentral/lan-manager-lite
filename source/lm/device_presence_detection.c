@@ -1578,11 +1578,11 @@ void *processPresenceNotification(void *pArgs)
                 CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
                 Hosts_PresenceHandling(pHost,info.status);
             }
-	    else 
-	    {
+            else
+            {
                 pthread_mutex_unlock(&LmHostObjectMutex);
                 CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-	    }
+            }
         }
         else if (MSG_TYPE_PRESENCE_ADD == sEventMsg.MsgType)
         {
