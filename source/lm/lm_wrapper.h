@@ -117,6 +117,7 @@ typedef struct {
     	int RSSI;
 #ifdef USE_NOTIFY_COMPONENT
 	int Status;
+	unsigned char mldAddr[18]; /* MLO Multi-Link Device (MLD) MAC address */
 }__attribute__((packed, aligned(1))) LM_wifi_wsta_t;
 
 typedef struct{

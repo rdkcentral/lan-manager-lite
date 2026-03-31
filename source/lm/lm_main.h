@@ -164,11 +164,12 @@ LmObjectHostPossibleDeviceTypeKeyWords,  *PLmObjectHostPossibleDeviceTypeKeyWord
 #define LM_HOST_X_RDKCENTRAL_COM_Parent                 19
 #define LM_HOST_X_RDKCENTRAL_COM_DeviceType             20
 #define LM_HOST_X_RDKCENTRAL_COM_Layer1Interface        21
+#define LM_HOST_X_RDKCENTRAL_COM_MLD_ADDR               22
 #ifdef VENDOR_CLASS_ID
-#define LM_HOST_VendorClassID                           22
-#define LM_HOST_NumStringPara                           23
+#define LM_HOST_VendorClassID                           23
+#define LM_HOST_NumStringPara                           24
 #else
-#define LM_HOST_NumStringPara                           22
+#define LM_HOST_NumStringPara                           23
 #endif
 #define LM_HOST_IPAddress_IPAddressId     0
 #define LM_HOST_IPAddress_IPAddressSourceId     1
@@ -309,7 +310,7 @@ int LMDmlHostsSetHostComment (char *pMac, char *pComment);
 
 char* FindParentIPInExtenderList(char* mac_address);
 char* FindMACByIPAddress(char * ip_address);
-void Wifi_Server_Sync_Function( char *phyAddr, char *AssociatedDevice, char *ssid, int RSSI, int Status );
+void Wifi_Server_Sync_Function( char *phyAddr, char *AssociatedDevice, char *ssid, int RSSI, int Status, char *mldAddr );
 void convert_ssid_to_radio(char *ssid, char *radio);
 PLmObjectHostIPAddress LM_FindIPv4BaseFromLink( PLmObjectHost pHost, char * ipAddress );
 BOOL Hosts_GetPresenceNotificationEnableStatus(char *Mac);

@@ -189,6 +189,7 @@ typedef struct _ValidateHostQData
     char ssid[LM_GEN_STR_SIZE];
     int RSSI;
     int Status;
+    char mldAddr[18]; /* MLO Multi-Link Device (MLD) MAC address */
 } ValidateHostQData;
 
 typedef struct _RetryHostList
@@ -300,7 +301,8 @@ LmObjectHosts lmHosts = {
                                         "X_CISCO_COM_UPnPDevice", "X_CISCO_COM_HNAPDevice", "X_CISCO_COM_DNSRecords", "X_CISCO_COM_HardwareVendor",
                                         "X_CISCO_COM_SoftwareVendor", "X_CISCO_COM_SerialNumbre", "X_CISCO_COM_DefinedDeviceType",
                                         "X_CISCO_COM_DefinedHWVendor", "X_CISCO_COM_DefinedSWVendor", "AddressSource", "Comments",
-                                        "X_RDKCENTRAL-COM_Parent", "X_RDKCENTRAL-COM_DeviceType", "X_RDKCENTRAL-COM_Layer1Interface"
+                                        "X_RDKCENTRAL-COM_Parent", "X_RDKCENTRAL-COM_DeviceType", "X_RDKCENTRAL-COM_Layer1Interface",
+                                        "X_RDKCENTRAL-COM_MLDAddress"
 #ifdef VENDOR_CLASS_ID
 , "VendorClassID"
 #endif
@@ -318,7 +320,8 @@ LmObjectHosts XlmHosts = {
                                         "X_CISCO_COM_UPnPDevice", "X_CISCO_COM_HNAPDevice", "X_CISCO_COM_DNSRecords", "X_CISCO_COM_HardwareVendor",
                                         "X_CISCO_COM_SoftwareVendor", "X_CISCO_COM_SerialNumbre", "X_CISCO_COM_DefinedDeviceType",
                                         "X_CISCO_COM_DefinedHWVendor", "X_CISCO_COM_DefinedSWVendor", "AddressSource", "Comments",
-                                        "X_RDKCENTRAL-COM_Parent", "X_RDKCENTRAL-COM_DeviceType", "X_RDKCENTRAL-COM_Layer1Interface"
+                                        "X_RDKCENTRAL-COM_Parent", "X_RDKCENTRAL-COM_DeviceType", "X_RDKCENTRAL-COM_Layer1Interface",
+                                        "X_RDKCENTRAL-COM_MLDAddress"
 #ifdef VENDOR_CLASS_ID
 , "VendorClassID"
 #endif
@@ -344,7 +347,7 @@ extern pthread_mutex_t PresenceDetectionMutex;
 pthread_mutex_t XLmHostObjectMutex;
 #endif
 
-static void Wifi_ServerSyncHost(char *phyAddr, char *AssociatedDevice, char *ssid, int RSSI, int Status);
+static void Wifi_ServerSyncHost(char *phyAddr, char *AssociatedDevice, char *ssid, int RSSI, int Status, char *mldAddr);
 static void Host_FreeIPAddress(PLmObjectHost pHost, int version);
 static void Hosts_SyncDHCP(void);
 static void Sendmsg_dnsmasq(BOOL enablePresenceFeature);
@@ -2464,6 +2467,8 @@ static void *Event_HandlerThread(void *threadid)
             
             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Parent]), getFullDeviceMac());
             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_DeviceType]), " ");
+            hosts.mldAddr[sizeof(hosts.mldAddr) - 1] = '\0';
+            LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_MLD_ADDR]), (const char *)hosts.mldAddr);
             pthread_mutex_unlock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 
@@ -3119,7 +3124,8 @@ static void *ValidateHostRetry_Thread (void *arg)
                                         retryList->host.AssociatedDevice,
                                         retryList->host.ssid,
                                         retryList->host.RSSI,
-                                        retryList->host.Status);
+                                        retryList->host.Status,
+                                        retryList->host.mldAddr);
                     /* Valide Host. Remove from Retry Validate list */
                     RemoveHostRetryValidateList(prevNode, retryList);
                     retryList = (NULL == prevNode) ? pListHead : prevNode->next;
@@ -3183,7 +3189,8 @@ static void *ValidateHost_Thread (void *arg)
                                 ValidateHostMsg.AssociatedDevice,
                                 ValidateHostMsg.ssid,
                                 ValidateHostMsg.RSSI,
-                                ValidateHostMsg.Status);
+                                ValidateHostMsg.Status,
+                                ValidateHostMsg.mldAddr);
             /* Valid Host. Remove from retry list if present */
             UpdateHostRetryValidateList(&ValidateHostMsg, ACTION_FLAG_DEL);
         }
@@ -3567,7 +3574,7 @@ int XLM_get_host_info()
 }
 #endif
 
-void Wifi_ServerSyncHost (char *phyAddr, char *AssociatedDevice, char *ssid, int RSSI, int Status)
+void Wifi_ServerSyncHost (char *phyAddr, char *AssociatedDevice, char *ssid, int RSSI, int Status, char *mldAddr)
 {
 	char *Xpos2 = NULL;
 	char *Xpos5 = NULL;
@@ -3618,6 +3625,7 @@ void Wifi_ServerSyncHost (char *phyAddr, char *AssociatedDevice, char *ssid, int
 			pHost->activityChangeTime = time((time_t*)NULL);
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Parent]), getFullDeviceMac());
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_DeviceType]), " ");
+			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_MLD_ADDR]), mldAddr ? mldAddr : "");
 
 			if( Status ) 
 			{
@@ -3690,6 +3698,10 @@ void Wifi_ServerSyncHost (char *phyAddr, char *AssociatedDevice, char *ssid, int
 		}
 		hosts.RSSI = RSSI;
 		hosts.Status = Status;
+		if (mldAddr) {
+		    strncpy((char *)hosts.mldAddr, mldAddr, sizeof(hosts.mldAddr)-1);
+		    hosts.mldAddr[sizeof(hosts.mldAddr)-1] = '\0';
+		}
 		EventQData EventMsg;
 		mqd_t mq;
         char buffer[MAX_SIZE];
@@ -3706,19 +3718,20 @@ void Wifi_ServerSyncHost (char *phyAddr, char *AssociatedDevice, char *ssid, int
 	}
 }
 
-void Wifi_Server_Sync_Function( char *phyAddr, char *AssociatedDevice, char *ssid, int RSSI, int Status )
+void Wifi_Server_Sync_Function( char *phyAddr, char *AssociatedDevice, char *ssid, int RSSI, int Status, char *mldAddr )
 {
 	ValidateHostQData ValidateHostMsg;
 	memset(&ValidateHostMsg, 0, sizeof(ValidateHostQData));
 	mqd_t mq;
 
-	CcspTraceWarning(("%s [%s %s %s %d %d]\n",
+	CcspTraceWarning(("%s [%s %s %s %d %d %s]\n",
 						__FUNCTION__,
 						(NULL != phyAddr) ? phyAddr : "NULL",
 						(NULL != AssociatedDevice) ? AssociatedDevice : "NULL",
 						(NULL != ssid) ? ssid : "NULL",
 						RSSI,
-						Status));
+						Status,
+						(NULL != mldAddr) ? mldAddr : "NULL"));
 	mq = mq_open(VALIDATE_QUEUE_NAME, O_WRONLY);
     CHECK((mqd_t)-1 != mq);
 
@@ -3739,6 +3752,11 @@ void Wifi_Server_Sync_Function( char *phyAddr, char *AssociatedDevice, char *ssi
     }
     ValidateHostMsg.RSSI = RSSI;
     ValidateHostMsg.Status = Status;
+    if(mldAddr != NULL)
+    {
+        strncpy(ValidateHostMsg.mldAddr, mldAddr, sizeof(ValidateHostMsg.mldAddr)-1);
+        ValidateHostMsg.mldAddr[sizeof(ValidateHostMsg.mldAddr)-1] = '\0';
+    }
 
 	CHECK(0 <= mq_send(mq, (char *)&ValidateHostMsg, MAX_SIZE_VALIDATE_QUEUE, 0));
 	CHECK((mqd_t)-1 != mq_close(mq));

@@ -771,13 +771,15 @@ Hosts_SetParamStringValue
 			 *AssociatedDevice, 
 			 *phyAddr, 
 			 *RSSI, 
-			 *Status;
+			 *Status,
+			 *mldAddr;
 		int  iRSSI,
 			 iStatus,
              count_tok;
 			 
         count_tok = DelimiterCount(pString);
-        if (count_tok != 4) {
+        /* Accept 4 delimiters (legacy format) or 5 delimiters (MLO format with mldAddr) */
+        if (count_tok != 4 && count_tok != 5) {
             CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Missing required tokens in ParamString  \n",__FUNCTION__,__LINE__));
             return FALSE;
         }
@@ -788,6 +790,8 @@ Hosts_SetParamStringValue
 		ssid 			 = strtok_r(NULL, ",", &st);
 		RSSI 			 = strtok_r(NULL, ",", &st);
 		Status 			 = strtok_r(NULL, ",", &st);
+		/* MLO format: 6th field is the MLD MAC address */
+		mldAddr          = (count_tok == 5) ? strtok_r(NULL, ",", &st) : NULL;
 
         if ((phyAddr == NULL) || (AssociatedDevice == NULL) || (ssid == NULL) || (RSSI == NULL) || (Status == NULL)) {
             CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > One or more tokens are missing in ParamString  \n",__FUNCTION__,__LINE__));
@@ -800,7 +804,14 @@ Hosts_SetParamStringValue
           return FALSE;
           }
 
-        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > <phyAddr=%s> <AssociatedDevice=%s> <ssid=%s> <RSSI=%s> <Status=%s>\n",__FUNCTION__,__LINE__, phyAddr,AssociatedDevice,ssid,RSSI,Status));
+        /* Validate mldAddr if present */
+        if (mldAddr != NULL && mldAddr[0] != '\0' && IsProperMac(mldAddr) == 0)
+        {
+            CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Not a proper MLD addr in ParamString  \n",__FUNCTION__,__LINE__));
+            return FALSE;
+        }
+
+        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > <phyAddr=%s> <AssociatedDevice=%s> <ssid=%s> <RSSI=%s> <Status=%s> <mldAddr=%s>\n",__FUNCTION__,__LINE__, phyAddr,AssociatedDevice,ssid,RSSI,Status,mldAddr ? mldAddr : "N/A"));
   if (IsNumberString(RSSI)) {
          iRSSI = atoi(RSSI);
      } else {
@@ -819,7 +830,7 @@ Hosts_SetParamStringValue
         return FALSE;
     }
 
-		Wifi_Server_Sync_Function( phyAddr, AssociatedDevice, ssid, iRSSI, iStatus );
+		Wifi_Server_Sync_Function( phyAddr, AssociatedDevice, ssid, iRSSI, iStatus, mldAddr );
 #endif /* USE_NOTIFY_COMPONENT */
 		
         return TRUE;
