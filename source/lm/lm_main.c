@@ -3698,9 +3698,11 @@ void Wifi_ServerSyncHost (char *phyAddr, char *AssociatedDevice, char *ssid, int
 		}
 		hosts.RSSI = RSSI;
 		hosts.Status = Status;
-		if (mldAddr) {
+		if (mldAddr != NULL) {
 		    strncpy((char *)hosts.mldAddr, mldAddr, sizeof(hosts.mldAddr)-1);
 		    hosts.mldAddr[sizeof(hosts.mldAddr)-1] = '\0';
+		} else {
+		    hosts.mldAddr[0] = '\0';
 		}
 		EventQData EventMsg;
 		mqd_t mq;
