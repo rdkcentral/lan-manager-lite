@@ -377,10 +377,13 @@ VOID WTC_ApplyStateChange
             }
             else
             {
+                //CID 560247 Data race condition (MISSING_LOCK)
+                pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
                 if(WanTrafficCountInfo_t[index]->ThreadStatus == WTC_THRD_DISMISSED)
                 {
                     WTC_RbusUnsubscribe(index);
                 }
+                pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
                 WTC_LOG_INFO("[%s-%s] DscpList/SleepInterval is Not Configured"
                              , wanMode[index]
                              , WTC_ThreadStatusToStr(thrdStatus));
@@ -1242,7 +1245,10 @@ static VOID WTC_CreateThread
         }
         pthread_detach(WTCinfo->WanTrafficThreadId);
     }
+    /* CID 560033 Data race condition (MISSING LOCK) */
+    pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
     WanTrafficCountInfo_t[index]->ThreadState = WTC_THRD_INITIALIZE;
+    pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
     return;
 }
 

@@ -213,7 +213,7 @@ _LmObjectHostIPAddress
     int     active;
     int     l3unReachableCnt; 
     char    *pStringParaValue[LM_HOST_IPAddress_NumStringPara];
-    int     LeaseTime;
+    ULONG   LeaseTime; /* Changed int -> ULONG to fix CID 559502 Overflowed constant (INTEGER_OVERFLOW) */
 	int     instanceNum;  /* instance number */
     struct _LmObjectHostIPAddress *pNext;
 }
