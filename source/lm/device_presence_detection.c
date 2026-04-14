@@ -16,8 +16,10 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-
+    
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
