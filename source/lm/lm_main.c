@@ -65,7 +65,9 @@
         09/16/2011    initial revision.
 
 **************************************************************************/
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <time.h>
 #include <sys/sysinfo.h>
 #include <string.h>
