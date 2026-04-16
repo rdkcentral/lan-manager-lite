@@ -3080,9 +3080,12 @@ static RetryHostList *CreateValidateHostEntry(ValidateHostQData *pValidateHost)
         memset(pHost, 0, sizeof(RetryHostList));
         rc = strcpy_s(pHost->host.phyAddr, sizeof(pHost->host.phyAddr), pValidateHost->phyAddr);
         ERR_CHK(rc);
-        memcpy(pHost->host.apList,   pValidateHost->apList,   sizeof(pValidateHost->apList));
-        memcpy(pHost->host.ssidList, pValidateHost->ssidList, sizeof(pValidateHost->ssidList));
-        memcpy(pHost->host.rssiList, pValidateHost->rssiList, sizeof(pValidateHost->rssiList));
+        rc = memcpy_s(pHost->host.apList, sizeof(pHost->host.apList), pValidateHost->apList,   sizeof(pValidateHost->apList));
+        ERR_CHK(rc);
+        rc = memcpy_s(pHost->host.ssidList, sizeof(pHost->host.ssidList), pValidateHost->ssidList, sizeof(pValidateHost->ssidList));
+        ERR_CHK(rc);
+        rc = memcpy_s(pHost->host.rssiList, sizeof(pHost->host.rssiList), pValidateHost->rssiList, sizeof(pValidateHost->rssiList));
+        ERR_CHK(rc);
 
         pHost->host.Status = pValidateHost->Status;
         pHost->host.mloEnable = pValidateHost->mloEnable;
