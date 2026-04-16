@@ -859,7 +859,7 @@ Hosts_SetParamStringValue
         return FALSE;
     }
 
-    /* ── Split the three ';'-delimited bracket lists ── */
+    /* Split the three ';'-delimited bracket lists */
     int linkCount = StripBracketsAndSplit(apListStr,   apArray,   MAX_MLO_LINKS);
     (void)StripBracketsAndSplit(ssidListStr, ssidArray, MAX_MLO_LINKS);
     (void)StripBracketsAndSplit(rssiListStr, rssiStrArray, MAX_MLO_LINKS);

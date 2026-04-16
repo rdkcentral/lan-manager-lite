@@ -3135,9 +3135,12 @@ static void UpdateHostRetryValidateList(ValidateHostQData *pValidateHostMsg, int
                  * update info, and reset the retry count 
                  */
                 if (!retryList->host.Status && pValidateHostMsg->Status) {
-                    memcpy(retryList->host.apList,   pValidateHostMsg->apList,   sizeof(pValidateHostMsg->apList));
-                    memcpy(retryList->host.ssidList, pValidateHostMsg->ssidList, sizeof(pValidateHostMsg->ssidList));
-                    memcpy(retryList->host.rssiList, pValidateHostMsg->rssiList, sizeof(pValidateHostMsg->rssiList));
+                    rc = memcpy_s(retryList->host.apList, sizeof(retryList->host.apList),  pValidateHostMsg->apList, sizeof(pValidateHostMsg->apList));
+                    ERR_CHK(rc);
+                    rc = memcpy_s(retryList->host.ssidList, sizeof(retryList->host.ssidList), pValidateHostMsg->ssidList, sizeof(pValidateHostMsg->ssidList));
+                    ERR_CHK(rc);
+                    rc = memcpy_s(retryList->host.rssiList, sizeof(retryList->host.rssiList), pValidateHostMsg->rssiList, sizeof(pValidateHostMsg->rssiList));
+                    ERR_CHK(rc);
 
                     retryList->host.Status = pValidateHostMsg->Status;
                     retryList->host.mloEnable = pValidateHostMsg->mloEnable;
