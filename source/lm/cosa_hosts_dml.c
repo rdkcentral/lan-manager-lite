@@ -860,8 +860,9 @@ Hosts_SetParamStringValue
     }
 
     /* Split the three ';'-delimited bracket lists */
-    int linkCount = StripBracketsAndSplit(apListStr,   apArray,   MAX_MLO_LINKS);
-    (void)StripBracketsAndSplit(ssidListStr, ssidArray, MAX_MLO_LINKS);
+    /* linkCount is got from ssidList to support empty aplist on disconnect */
+    (void)StripBracketsAndSplit(apListStr,   apArray,   MAX_MLO_LINKS);
+    int linkCount = StripBracketsAndSplit(ssidListStr, ssidArray, MAX_MLO_LINKS);
     (void)StripBracketsAndSplit(rssiListStr, rssiStrArray, MAX_MLO_LINKS);
 
     for (int j = 0; j < linkCount; j++) {

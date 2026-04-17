@@ -2483,8 +2483,18 @@ static void *Event_HandlerThread(void *threadid)
                         pLink->instanceNum     = pHost->numMloLinks + 1;
                         pLink->rssi            = hosts.rssiList[lnk];
                         pLink->layer1Interface = AnscCloneString((char *)hosts.ssidList[lnk]);
-                        pLink->pNext           = pHost->mloLinkArray;
-                        pHost->mloLinkArray    = pLink;
+                        pLink->pNext           = NULL;
+                        if (pHost->mloLinkArray == NULL)
+                        {
+                            pHost->mloLinkArray = pLink;
+                        }
+                        else
+                        {
+                            PLmObjectMloLink pTail = pHost->mloLinkArray;
+                            while (pTail->pNext != NULL)
+                                pTail = pTail->pNext;
+                            pTail->pNext = pLink;
+                        }
                         pHost->numMloLinks++;
                     }
                 }
@@ -3758,8 +3768,18 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
                         pLink->instanceNum   = pHost->numMloLinks + 1;
                         pLink->rssi          = rssiList[k];
                         pLink->layer1Interface = AnscCloneString(ssidList[k]);
-                        pLink->pNext         = pHost->mloLinkArray;
-                        pHost->mloLinkArray  = pLink;
+                        pLink->pNext         = NULL;
+                        if (pHost->mloLinkArray == NULL)
+                        {
+                            pHost->mloLinkArray = pLink;
+                        }
+                        else
+                        {
+                            PLmObjectMloLink pTail = pHost->mloLinkArray;
+                            while (pTail->pNext != NULL)
+                                pTail = pTail->pNext;
+                            pTail->pNext = pLink;
+                        }
                         pHost->numMloLinks++;
                     }
                 }
