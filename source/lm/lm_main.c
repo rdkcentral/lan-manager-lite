@@ -3618,9 +3618,10 @@ void Wifi_ServerSyncHost (char *phyAddr, char *AssociatedDevice, char *ssid, int
 			convert_ssid_to_radio(ssid, radio);
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), ssid);
-			if(strncmp(AssociatedDevice,"NULL",strlen(AssociatedDevice)) == 0)
-				LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " ");
-			else
+			//if(strncmp(AssociatedDevice,"NULL",strlen(AssociatedDevice)) == 0)
+			//	LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " ");
+			//else
+			if (AssociatedDevice)
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), AssociatedDevice);
 			pHost->iIntParaValue[LM_HOST_X_CISCO_COM_RSSIId] = RSSI;
 			pHost->l1unReachableCnt = 1;
