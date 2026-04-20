@@ -3621,8 +3621,16 @@ void Wifi_ServerSyncHost (char *phyAddr, char *AssociatedDevice, char *ssid, int
 			//if(strncmp(AssociatedDevice,"NULL",strlen(AssociatedDevice)) == 0)
 			//	LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " ");
 			//else
-			if (AssociatedDevice)
-			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), AssociatedDevice);
+			if (AssociatedDevice != NULL && AssociatedDevice[0] == '\0)
+			{
+				CcspTraceError(("Debug RDKB-63938:%s-%d AssociatedDevice is not NULL \n",__FUNCTION__,__LINE__));
+				LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), AssociatedDevice);
+			}
+			else
+			{
+				CcspTraceError(("Debug RDKB-63938:%s-%d AssociatedDevice is  NULL setting LM_HOST_AssociatedDeviceId to \" \" \n",__FUNCTION__,__LINE__));
+				LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " ");
+			}
 			pHost->iIntParaValue[LM_HOST_X_CISCO_COM_RSSIId] = RSSI;
 			pHost->l1unReachableCnt = 1;
 			pHost->bBoolParaValue[LM_HOST_ActiveId] = Status;
