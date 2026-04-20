@@ -29,14 +29,7 @@
 #include <stdbool.h>
 #include <rbus/rbus.h>
 
-#define LMLITE_COMPONENT_NAME "lmlite"
 #define LMLITE_INTERFACE_ACTIVESTATUS_PARAM "Device.X_RDK_WanManager.InterfaceActiveStatus"
-
-typedef enum
-{
-    LMLITE_SUCCESS = 0,
-    LMLITE_FAILURE
-} LMLITE_STATUS;
 
 #endif
 /**
@@ -66,12 +59,11 @@ void initparodusTask();
 const char *rdk_logger_module_fetch(void); 
 
 #ifdef WAN_FAILOVER_SUPPORTED
-bool checkRbusEnabled();
-LMLITE_STATUS lmliteRbusInit(const char *pComponentName);
 char* getInterface(char *interface);
 void get_WanManager_ActiveInterface();
 char * get_ActiveInterface(char *interface);
-int subscribeTo_InterfaceActiveStatus_Event();
+int subscribeTo_InterfaceActiveStatus_Event();\
+void set_rbus_handle();
 #endif
 
 #endif /* WEB_INTERFACE_H_ */

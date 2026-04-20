@@ -32,6 +32,7 @@
 #include "platform_hal.h"
 #ifdef WAN_FAILOVER_SUPPORTED
 #include "network_devices_traffic_avropack.h"
+#include "lm_rbus_api.h"
 #endif
 
 #ifdef MLT_ENABLED
@@ -497,38 +498,11 @@ char * getDeviceMac()
 }
 
 #ifdef WAN_FAILOVER_SUPPORTED
-static bool isRbus = false ;
 char newSource[512] = { '\0' };
 
-//Checking the Rbus active status
-bool checkRbusEnabled()
-{
-        if(RBUS_ENABLED == rbus_checkStatus())
-	{
-		isRbus = true;
-	}
-	else
-	{
-		isRbus = false;
-	}
-	CcspTraceInfo(("LMLite RBUS mode active status = %s\n", isRbus ? "true":"false"));
-	return isRbus;
-}
 
-//Initiate Rbus
-LMLITE_STATUS lmliteRbusInit(const char *pComponentName)
-{
-	int ret = RBUS_ERROR_SUCCESS;
-        CcspTraceDebug(("rbus_open for component %s\n", pComponentName));
-	ret = rbus_open(&rbus_handle, pComponentName);
-	if(ret != RBUS_ERROR_SUCCESS)
-	{
-		CcspTraceError(("LMLiteRbusInit failed with error code %d\n", ret));
-		return LMLITE_FAILURE;
-	}
-	CcspTraceInfo(("LMLiteRbusInit is success. ret is %d\n", ret));
-	return LMLITE_SUCCESS;
-}
+void set_rbus_handle()
+{  rbus_handle = get_rbus_handle(); }
 
 //Filter the active Interfaces
 char* get_ActiveInterface(char *interface) {
