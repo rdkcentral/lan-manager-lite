@@ -1044,6 +1044,7 @@ int lm_wrapper_get_wifi_wsta_list(char netName[LM_NETWORK_NAME_SIZE], int *pCoun
 			{
 			 	if((strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId],"WiFi"))) 
 				{
+                                        CcspTraceWarning(("Debug RDKB-62906: func:%s:%d WiFi-> pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]:%s",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
 					rc = strcpy_s(macstring, sizeof(macstring),hosts[i].phyAddr);
 					ERR_CHK(rc);
                                         if(!strlen(hosts[i].phyAddr) >=17) continue;
@@ -1058,9 +1059,19 @@ int lm_wrapper_get_wifi_wsta_list(char netName[LM_NETWORK_NAME_SIZE], int *pCoun
                					insert_Mac_to_band_mapping(macstring,band);
 						CcspTraceWarning(("Wifi Client %s connected to  band %d GHz RSSI %d \n",hosts[i].phyAddr,band,pwifi_wsta[i].RSSI));
 					}
-			     	} else continue;
+			     	} 
+				else{ 
+				    if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] !=NULL)//DEEPAK
+				        CcspTraceWarning(("Debug RDKB-62906: func:%s:%d Not WiFI-> pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]:%s hosts[i].phyAddr:%s i:%d",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_Layer1InterfaceId],hosts[i].phyAddr,i));
+					continue;
+				}
 		    	}  
-			else continue;
+			else {
+                              if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] !=NULL)//DEEPAK
+			        CcspTraceWarning(("Debug RDKB-62906: func:%s:%d Not WiFI-> pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]:%s hosts[i].phyAddr:%s i:%d",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_Layer1InterfaceId],hosts[i].phyAddr,i));
+
+			       	continue;
+			}
 		} 
 		else 
 		{
@@ -1084,6 +1095,15 @@ int lm_wrapper_get_wifi_wsta_list(char netName[LM_NETWORK_NAME_SIZE], int *pCoun
 			{
                			insert_Mac_to_band_mapping(macstring,band);
                                 CcspTraceWarning(("New Wifi Client %s connected to  band %d GHz RSSI %d \n",hosts[i].phyAddr,band,hosts[i].RSSI));
+                                if(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]!=NULL) //DEEPAK
+		                {
+                                    CcspTraceWarning(("Debug RDKB-62906:else func:%s:%d pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]:%s",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
+			        }
+
+			}
+			if(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]!=NULL) //DEEPAK
+		        {
+                             CcspTraceWarning(("Debug RDKB-62906:else func:%s:%d pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]:%s",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
 			}
 		}
 		if(interface%2 == 0)
@@ -1988,6 +2008,7 @@ void lm_wrapper_get_dhcpv4_client()
                 {
                     if ( pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] )
                     {
+                        CcspTraceWarning(("Debug RDKB-62906: func:%s:%d free pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]:%s",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
                         AnscFreeMemory(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]);
                         pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] = NULL;
                     }
@@ -2096,6 +2117,7 @@ void lm_wrapper_get_dhcpv4_reserved()
             {
                 if ( pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] )
                 {
+                    CcspTraceWarning(("Debug RDKB-62906: func:%s:%d free pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]:%s",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
                     AnscFreeMemory(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]);
                     pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] = NULL;
                 }

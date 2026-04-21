@@ -661,11 +661,11 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
 			if(pHost->ipv4Active == TRUE)
 			{
 				  if(state) {
-					CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is MoCA, MacAddress is %s and HostName is %s appeared online \n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]));
+					CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is MoCA:%s, MacAddress is %s and HostName is %s appeared online \n", pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] ,pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]));
 					OnboardLog("RDKB_CONNECTED_CLIENTS: Client type is MoCA, MacAddress is %s and HostName is %s appeared online \n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]);
 					CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: IP Address : %s , address source : %s, HostName : %s \n",pHost->pStringParaValue[LM_HOST_IPAddressId],pHost->pStringParaValue[LM_HOST_AddressSource],pHost->pStringParaValue[LM_HOST_HostNameId]));
 				  } else {
-					CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: MoCA client with %s MacAddress and HostName is %s gone offline \n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]));
+					CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: MoCA client:%s with %s MacAddress and HostName is %s gone offline \n", pHost->pStringParaValue[LM_HOST_Layer1InterfaceId],pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]));
 					OnboardLog("RDKB_CONNECTED_CLIENTS: MoCA client with %s MacAddress and HostName is %s gone offline \n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]);
 
 				  }
@@ -1970,6 +1970,7 @@ static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
 
 static void _get_host_info(LM_host_t *pDestHost, PLmObjectHost pHost)
 {
+        CcspTraceWarning(("Debug: RDKB-62906:%s:%d,\n",__FUNCTION__,__LINE__));
         mac_string_to_array(pHost->pStringParaValue[LM_HOST_PhysAddressId], pDestHost->phyAddr);
         pDestHost->online = (unsigned char)pHost->bBoolParaValue[LM_HOST_ActiveId];
         pDestHost->activityChangeTime = pHost->activityChangeTime;
@@ -1977,6 +1978,10 @@ static void _get_host_info(LM_host_t *pDestHost, PLmObjectHost pHost)
         STRNCPY_NULL_CHK(pDestHost->hostName, pHost->pStringParaValue[LM_HOST_HostNameId], sizeof(pDestHost->hostName)-1);
         STRNCPY_NULL_CHK(pDestHost->l3IfName, pHost->pStringParaValue[LM_HOST_Layer3InterfaceId], sizeof(pDestHost->l3IfName)-1);
         STRNCPY_NULL_CHK(pDestHost->l1IfName, pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], sizeof(pDestHost->l1IfName)-1);
+	if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL)//DEEPAK
+	{
+        CcspTraceError(("Debug RDKB-62906:%s:%d: pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
+	}
         STRNCPY_NULL_CHK((char *)pDestHost->comments, pHost->pStringParaValue[LM_HOST_Comments], sizeof(pDestHost->comments)-1);
         STRNCPY_NULL_CHK(pDestHost->AssociatedDevice, pHost->pStringParaValue[LM_HOST_AssociatedDeviceId], sizeof(pDestHost->AssociatedDevice)-1);
         pDestHost->RSSI = pHost->iIntParaValue[LM_HOST_X_CISCO_COM_RSSIId];
@@ -2011,6 +2016,7 @@ static void _get_hosts_info_cfunc(int fd, void* recv_buf, int buf_size)
     for(i = 0; i < hosts->count; i++){
         pHost = lmHosts.hostArray[i];
         pDestHost = &(hosts->hosts[i]);
+        CcspTraceWarning(("Debug: RDKB-62906:%s:%d,calling _get_host_info\n",__FUNCTION__,__LINE__));
         _get_host_info(pDestHost, pHost);
     }
     pthread_mutex_unlock(&LmHostObjectMutex);
@@ -2038,6 +2044,7 @@ static void _get_host_by_mac_cfunc(int fd, void* recv_buf, int buf_size)
     pHost = Hosts_FindHostByPhysAddress(mac);
     if(pHost){
         result.result = LM_CMD_RESULT_OK;
+        CcspTraceWarning(("Debug: RDKB-62906:%s:%d calling _get_host_info,\n",__FUNCTION__,__LINE__));
         _get_host_info(&(result.data.host), pHost);
     }else{
         result.result = LM_CMD_RESULT_NOT_FOUND;
@@ -2237,6 +2244,17 @@ void XHosts_SyncWifi()
 			Xlm_wrapper_get_info(pHost);
 			Host_AddIPv4Address ( pHost, pHost->pStringParaValue[LM_HOST_IPAddressId]);
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)hosts[i].ssid);
+			
+                 	if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL && hosts[i].ssid !=NULL)//DEEPAK
+	                {
+                             CcspTraceError(("Debug RDKB-62906 :%s:%d: hosts[%d].ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,i ,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
+	                }
+			else (hosts[i].ssid ==NULL || hosts[i].ssid[0] == '\0')
+			{
+				CcspTraceError(("Debug RDKB-62906 :%s:%d: hosts[i].ssid might be NULL or empty ", __FUNCTION__, __LINE__));
+
+			}
+
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), (const char *)hosts[i].AssociatedDevice);
 			pHost->iIntParaValue[LM_HOST_X_CISCO_COM_RSSIId] = hosts[i].RSSI;
 			pHost->l1unReachableCnt = 1;
@@ -2436,7 +2454,12 @@ static void *Event_HandlerThread(void *threadid)
             {
 				memset(radio,0,sizeof(radio));	
                 convert_ssid_to_radio((char *)hosts.ssid, radio);
-				LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
+				LanManager_CheckCloneCopy(&(pHost->pStringPiaraValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
+				  if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL && mhosts.ssid !=NULL)//DEEPAK
+                         {
+                             CcspTraceError(("Debug RDKB-62906 :%s:%d: wifi mhosts.ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__ ,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
+                         }
+
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)hosts.ssid);
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), (const char *)hosts.AssociatedDevice);
                 pHost->iIntParaValue[LM_HOST_X_CISCO_COM_RSSIId] = hosts.RSSI;
@@ -2462,6 +2485,10 @@ static void *Event_HandlerThread(void *threadid)
                         DelAndShuffleAssoDevIndx(pHost);
                         LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
                         LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)hosts.ssid);
+                        if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL && mhosts.ssid !=NULL)//DEEPAK
+                         {
+                             CcspTraceError(("Debug RDKB-62906 :%s:%d: wifi mhosts.ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
+                         }
                         //LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), hosts.AssociatedDevice);
                         LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " "); // fix for RDKB-19836
                         LM_SET_ACTIVE_STATE_TIME(pHost, FALSE);
@@ -2517,6 +2544,7 @@ static void *Event_HandlerThread(void *threadid)
                 }
                 else
                 {
+                    CcspTraceError(("Debug RDKB-63938:%s:%d: :pHost in not added by phyaddress", __FUNCTION__, __LINE__));
                     pthread_mutex_unlock(&LmHostObjectMutex);
                     CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
                     continue;
@@ -2531,6 +2559,15 @@ static void *Event_HandlerThread(void *threadid)
             if(mhosts.Status)
             {
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)mhosts.ssid);
+		if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL && mhosts.ssid !=NULL)//DEEPAK
+                {
+                             CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
+                }
+                else (mhosts.ssid ==NULL || mhosts.ssid[0] == '\0')
+                {
+                                CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid might be NULL or empty ", __FUNCTION__, __LINE__));
+
+                }
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), "");
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), (const char *)mhosts.AssociatedDevice);
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Parent]), (const char *)mhosts.parentMac);
@@ -2550,6 +2587,15 @@ static void *Event_HandlerThread(void *threadid)
             else
             {
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)mhosts.ssid);
+		 if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL && mhosts.ssid !=NULL)//DEEPAK
+                {
+                             CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
+                }
+                else (mhosts.ssid ==NULL || mhosts.ssid[0] == '\0')
+                {
+                                CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid might be NULL or empty ", __FUNCTION__, __LINE__));
+
+                }
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), "");
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), (const char *)mhosts.AssociatedDevice);
 
@@ -3618,6 +3664,15 @@ void Wifi_ServerSyncHost (char *phyAddr, char *AssociatedDevice, char *ssid, int
 			convert_ssid_to_radio(ssid, radio);
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), ssid);
+			if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL && ssid !=NULL)//DEEPAK
+                        {
+                             CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
+                        }
+                        else (ssid ==NULL || ssid[0] == '\0')
+                        {
+                                CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA ssid might be NULL or empty ", __FUNCTION__, __LINE__));
+
+                        }
 			//if(strncmp(AssociatedDevice,"NULL",strlen(AssociatedDevice)) == 0)
 			//	LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " ");
 			//else
