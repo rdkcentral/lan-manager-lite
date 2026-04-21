@@ -863,7 +863,12 @@ Hosts_SetParamStringValue
     /* linkCount is got from ssidList to support empty aplist on disconnect */
     (void)StripBracketsAndSplit(apListStr,   apArray,   MAX_MLO_LINKS);
     int linkCount = StripBracketsAndSplit(ssidListStr, ssidArray, MAX_MLO_LINKS);
-    (void)StripBracketsAndSplit(rssiListStr, rssiStrArray, MAX_MLO_LINKS);
+    int rssiCount = StripBracketsAndSplit(rssiListStr, rssiStrArray, MAX_MLO_LINKS);
+
+    if (linkCount != rssiCount) {
+        CcspTraceWarning(("Hosts_SetParamStringValue: ssidCount(%d) != rssiCount(%d)\n", linkCount, rssiCount));
+        return FALSE;
+    }
 
     for (int j = 0; j < linkCount; j++) {
         if (rssiStrArray[j][0] == '\0')
@@ -2677,6 +2682,11 @@ Host_MloLink_GetParamStringValue
     {
         rc = 0;
         value = pLink->layer1Interface;
+    }
+    else if (strcmp(ParamName, "X_RDK-AssociatedDevice") == 0)
+    {
+        rc = 0;
+        value = pLink->associatedDevice;
     }
 
     return GetParamStringValue_common(pValue, pUlSize, value, rc, &LmHostObjectMutex);

@@ -233,6 +233,7 @@ _LmObjectMloLink
     int    instanceNum;        /* link index j */
     int    rssi;               /* MloLink.{j}.X_RDK-RSSI */
     char   *layer1Interface;   /* MloLink.{j}.X_RDK-Layer1Interface */
+    char  *associatedDevice;   /* MloLink.{j}.X_RDK-AssociatedDevice */
     struct _LmObjectMloLink *pNext;
 }
 LmObjectMloLink, *PLmObjectMloLink;

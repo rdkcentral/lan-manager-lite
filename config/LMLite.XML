@@ -317,6 +317,11 @@
                   <type>string</type>
                   <syntax>string</syntax>
                 </parameter>
+                <parameter>
+                  <name>X_RDK-AssociatedDevice</name>
+                  <type>string</type>
+                  <syntax>string</syntax>
+                </parameter>
               </parameters>
             </object>
             <object>
