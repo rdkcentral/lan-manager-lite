@@ -2485,7 +2485,10 @@ static void *Event_HandlerThread(void *threadid)
                         pLink->instanceNum     = pHost->numMloLinks + 1;
                         pLink->rssi            = hosts.rssiList[lnk];
                         pLink->layer1Interface = AnscCloneString((char *)hosts.ssidList[lnk]);
-                        pLink->associatedDevice = AnscCloneString((char *)hosts.apList[lnk]);
+                        if (strncmp((char *)hosts.apList[lnk], "NULL", strlen((char *)hosts.apList[lnk])) == 0)
+                            pLink->associatedDevice = AnscCloneString("");
+                        else
+                            pLink->associatedDevice = AnscCloneString((char *)hosts.apList[lnk]);
                         pLink->pNext           = NULL;
                         if (pHost->mloLinkArray == NULL)
                         {
@@ -3771,7 +3774,10 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
                         pLink->instanceNum   = pHost->numMloLinks + 1;
                         pLink->rssi          = rssiList[k];
                         pLink->layer1Interface = AnscCloneString(ssidList[k]);
-                        pLink->associatedDevice = AnscCloneString(apList[k]);
+                        if (strncmp(apList[k], "NULL", strlen(apList[k])) == 0)
+                            pLink->associatedDevice = AnscCloneString("");
+                        else
+                            pLink->associatedDevice = AnscCloneString(apList[k]);
                         pLink->pNext         = NULL;
                         if (pHost->mloLinkArray == NULL)
                         {
