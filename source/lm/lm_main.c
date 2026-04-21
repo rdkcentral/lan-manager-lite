@@ -127,7 +127,7 @@
 
 #define MAX_SIZE  4096 
 #define MAX_SIZE_DNSMASQ_Q    512
-#define MAX_SIZE_EVT    4096
+#define MAX_SIZE_EVT   3072 
 
 #define CHECK(x) \
     do { \
