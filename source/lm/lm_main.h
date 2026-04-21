@@ -118,7 +118,7 @@
 #define LM_HOST_X_CISCO_COM_OSType_iOS                      5
 #define LM_HOST_X_CISCO_COM_OSType_Android                  6
 
-#define MAX_MLO_LINKS    16
+#define MAX_MLO_LINKS   4 
 
 #define IP_V6 6
 #define IP_V4 4
