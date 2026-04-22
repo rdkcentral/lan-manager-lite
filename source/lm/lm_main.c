@@ -4440,9 +4440,14 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
             CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             if (ctx->ipv4 ) {
                 completed = true;
-            } else if (++curr->retry_count > IP_MAX_RETRIES) { // Increment the retry_count per host
-                CcspTraceWarning(("Retry limit exceeded for host, removing.\n"));
-                completed = true;
+            } else {
+                pthread_mutex_lock(&LmRetryNotifyHostListMutex);   /* CID 745538 */
+                bool retryExceeded = (++curr->retry_count > IP_MAX_RETRIES);
+                pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
+                if (retryExceeded) {
+                    CcspTraceWarning(("Retry limit exceeded for host, removing.\n"));
+                    completed = true;
+                }
             }
 
             if (completed){
