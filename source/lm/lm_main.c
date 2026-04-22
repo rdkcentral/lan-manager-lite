@@ -2472,8 +2472,8 @@ static void *Event_HandlerThread(void *threadid)
                 pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId] = TRUE;
 
                 /* legacy fields must remain empty for MLO clients */
-                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), "");
-                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), "");
+                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), " ");
+                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " ");
                 pHost->iIntParaValue[LM_HOST_X_CISCO_COM_RSSIId] = 0;
 
                 /* populate MloLink.{j} sub-table for each link */
@@ -3763,8 +3763,8 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
                 else 
                 {
                     /* MLO — legacy fields must remain empty */
-                    LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), "");
-                    LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), "");
+                    LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), " ");
+                    LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " ");
                     pHost->iIntParaValue[LM_HOST_X_CISCO_COM_RSSIId] = 0;
 
                     /* populate MloLink.{j} per-link sub-table */
