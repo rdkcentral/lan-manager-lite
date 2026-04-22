@@ -2249,7 +2249,7 @@ void XHosts_SyncWifi()
 	                {
                              CcspTraceError(("Debug RDKB-62906 :%s:%d: hosts[%d].ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,i ,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
 	                }
-			else (hosts[i].ssid[0] == '\0')
+			else if(hosts[i].ssid[0] == '\0')
 			{
 				CcspTraceError(("Debug RDKB-62906 :%s:%d: hosts[i].ssid might be NULL or empty ", __FUNCTION__, __LINE__));
 
@@ -2563,7 +2563,7 @@ static void *Event_HandlerThread(void *threadid)
                 {
                              CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
                 }
-                else ( mhosts.ssid[0] == '\0')
+                else if ( mhosts.ssid[0] == '\0')
                 {
                                 CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid might be NULL or empty ", __FUNCTION__, __LINE__));
 
@@ -2591,7 +2591,7 @@ static void *Event_HandlerThread(void *threadid)
                 {
                              CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
                 }
-                else ( mhosts.ssid[0] == '\0')
+                else if( mhosts.ssid[0] == '\0')
                 {
                                 CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid might be NULL or empty ", __FUNCTION__, __LINE__));
 
@@ -3668,7 +3668,7 @@ void Wifi_ServerSyncHost (char *phyAddr, char *AssociatedDevice, char *ssid, int
                         {
                              CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
                         }
-                        else ( ssid[0] == '\0')
+                        else if ( ssid[0] == '\0')
                         {
                                 CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA ssid might be NULL or empty ", __FUNCTION__, __LINE__));
 
