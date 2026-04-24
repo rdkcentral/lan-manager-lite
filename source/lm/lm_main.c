@@ -4461,6 +4461,12 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                         );
                 CcspTraceWarning(("Notification sent from %s, line:%d\n", __FUNCTION__, __LINE__));
 
+                /* CID 745538 LOCK_EVASION: Guard all ->next field reads and writes with
+                   LmRetryNotifyHostListMutex, consistent with re-attachment block
+                   where localTail->next is also modified under the same lock.
+                   free() calls are left outside the lock as they do not access
+                   list internals. */
+                pthread_mutex_lock(&LmRetryNotifyHostListMutex);
                 // Deletion logic
                 if (prev) {
                     prev->next = curr->next;
@@ -4472,6 +4478,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                 // Delete the node as the notification is sent for the node
                 RetryNotifyHostList *toDelete = curr;
                 curr = curr->next;
+                pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
 
                 if (toDelete->ctx) {
                     free(toDelete->ctx->ipv4);
@@ -4481,16 +4488,27 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                 }
                 free(toDelete);
             } else {
+                /* CID 745538 LOCK_EVASION */
+                pthread_mutex_lock(&LmRetryNotifyHostListMutex);
                 localTail = curr; /* track tail for O(1) re-attach */
                 prev = curr;
                 curr = curr->next; // Move to next host
+                pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
             }
         }
 
         /* FIX: Re-attach remaining retry nodes back to the shared list (O(1)) */
         pthread_mutex_lock(&LmRetryNotifyHostListMutex);
-        if (localHead && localTail) {
-            localTail->next = pNotifyListHead;
+        /* CID 745538 LOCK_EVASION: Decouple the two conditions so pNotifyListHead is
+           always updated under the mutex whenever localHead has remaining nodes.
+           Using `if (localHead && localTail)` creates an evasion path where
+           localHead is non-NULL (nodes exist) but pNotifyListHead is never
+           written, silently losing those nodes. Instead, guard the mutex-protected
+           write solely on localHead, and guard the tail-linkage separately. */
+        if (localHead != NULL) {
+            if (localTail != NULL) {
+                localTail->next = pNotifyListHead;
+            }
             pNotifyListHead = localHead;
         }
         // Instead of sleeping outside the mutex, use pthread_cond_timedwait to wait for new items or timeout
