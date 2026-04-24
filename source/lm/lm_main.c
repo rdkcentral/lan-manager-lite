@@ -125,9 +125,9 @@
 #define EVENT_QUEUE_NAME  "/Event_queue"
 #define DNSMASQ_NOTIFY_QUEUE_NAME  "/dnsmasq_eventqueue"
 
-#define MAX_SIZE  4096 
+#define MAX_SIZE    2048
 #define MAX_SIZE_DNSMASQ_Q    512
-#define MAX_SIZE_EVT   3072 
+#define MAX_SIZE_EVT    1024
 
 #define CHECK(x) \
     do { \
