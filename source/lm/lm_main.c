@@ -4499,16 +4499,8 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
 
         /* FIX: Re-attach remaining retry nodes back to the shared list (O(1)) */
         pthread_mutex_lock(&LmRetryNotifyHostListMutex);
-        /* CID 745538 LOCK_EVASION: Decouple the two conditions so pNotifyListHead is
-           always updated under the mutex whenever localHead has remaining nodes.
-           Using `if (localHead && localTail)` creates an evasion path where
-           localHead is non-NULL (nodes exist) but pNotifyListHead is never
-           written, silently losing those nodes. Instead, guard the mutex-protected
-           write solely on localHead, and guard the tail-linkage separately. */
-        if (localHead != NULL) {
-            if (localTail != NULL) {
-                localTail->next = pNotifyListHead;
-            }
+        if (localHead && localTail) {
+            localTail->next = pNotifyListHead;
             pNotifyListHead = localHead;
         }
         // Instead of sleeping outside the mutex, use pthread_cond_timedwait to wait for new items or timeout
