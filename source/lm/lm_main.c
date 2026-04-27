@@ -1970,6 +1970,10 @@ static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
 
 static void _get_host_info(LM_host_t *pDestHost, PLmObjectHost pHost)
 {
+    /*CID 340106 - String not null terminated - Fix is added here for
+    API lm_get_all_hosts which is from lmlite code lm_api.c - This code sends the data */
+        memset(pDestHost, 0, sizeof(LM_host_t));
+        
         mac_string_to_array(pHost->pStringParaValue[LM_HOST_PhysAddressId], pDestHost->phyAddr);
         pDestHost->online = (unsigned char)pHost->bBoolParaValue[LM_HOST_ActiveId];
         pDestHost->activityChangeTime = pHost->activityChangeTime;
