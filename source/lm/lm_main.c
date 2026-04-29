@@ -2560,7 +2560,7 @@ static void *Event_HandlerThread(void *threadid)
             mhosts.AssociatedDevice[LM_GEN_STR_SIZE - 1] = '\0';
             mhosts.parentMac[sizeof(mhosts.parentMac) - 1] = '\0';
             mhosts.deviceType[sizeof(mhosts.deviceType) - 1] = '\0';
-            CcspTraceError(("Deepak important: mhosts.ssid:%s  mhosts.parentMac:%s mhosts.deviceType:%s mhosts.Status):%d \n Debug RDKB-62906:%s:%d: :Freeing MOCA type HOST\n",(char *)mhosts.ssid,mhosts.parentMac,mhosts.deviceType, mhosts.Status), __FUNCTION__, __LINE__));
+            CcspTraceError(("Deepak important: mhosts.ssid:%s  mhosts.parentMac:%s mhosts.deviceType:%s mhosts.Status:%d \n Debug RDKB-62906:%s:%d: :Freeing MOCA type HOST\n",(char *)mhosts.ssid,mhosts.parentMac,mhosts.deviceType, mhosts.Status, __FUNCTION__, __LINE__));
             if(mhosts.Status)
             {
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)mhosts.ssid);
