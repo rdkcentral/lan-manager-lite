@@ -2247,11 +2247,11 @@ void XHosts_SyncWifi()
 			
                  	if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL && hosts[i].ssid !=NULL)//DEEPAK
 	                {
-                             CcspTraceError(("Debug RDKB-62906 :%s:%d: hosts[%d].ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,i ,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
+                             CcspTraceError(("Debug RDKB-62906 :%s:%d: hosts[%d].ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s \n", __FUNCTION__, __LINE__,i ,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
 	                }
 			else if(hosts[i].ssid[0] == '\0')
 			{
-				CcspTraceError(("Debug RDKB-62906 :%s:%d: hosts[i].ssid might be NULL or empty ", __FUNCTION__, __LINE__));
+				CcspTraceError(("Debug RDKB-62906 :%s:%d: hosts[i].ssid might be NULL or empty \n", __FUNCTION__, __LINE__));
 
 			}
 
@@ -2305,6 +2305,7 @@ static void *Event_HandlerThread(void *threadid)
         return NULL;
     }
 
+    CcspTraceError(("Deepak Debug RDKB-62906%s:%d Open message queue EVENT_QUEUE_NAME:%s success\n", __FUNCTION__, __LINE__,EVENT_QUEUE_NAME));
     do
     {
         ssize_t bytes_read;
@@ -2321,10 +2322,12 @@ static void *Event_HandlerThread(void *threadid)
         }
 
         buffer[bytes_read] = '\0';
+        CcspTraceError(("Deepak Debug RDKB-62906%s:%d Important Read BUFFER:%s \n\n", __FUNCTION__, __LINE__,buffer));
 
         memcpy(&EventMsg,buffer,sizeof(EventMsg));
         /* CID 339816 String not null terminated */
         EventMsg.Msg[MAX_SIZE_EVT-1] = '\0';
+        CcspTraceError(("Deepak Debug RDKB-62906%s:%d Important EventMsg.Msg:%s EventMsg.MsgType:%d\n\n", __FUNCTION__, __LINE__,EventMsg.Msg,EventMsg.MsgType));
         do_dhcpsync = FALSE;
         if(Hosts_stop_scan())
         {
@@ -2333,10 +2336,10 @@ static void *Event_HandlerThread(void *threadid)
 
         if(EventMsg.MsgType == MSG_TYPE_ETH)
         {
-            CcspTraceError(("Debug RDKB-63938:%s:%d:EventMsg.Msg:%s ", __FUNCTION__, __LINE__,EventMsg.Msg));
             memcpy(&EthHost,EventMsg.Msg,sizeof(EthHost));
             /* CID 339816 String not null terminated */
             EthHost.MacAddr[sizeof(EthHost.MacAddr) - 1] = '\0';
+            CcspTraceError(("Deepak Debug RDKB-62906:%s:%d:Important EventMsg.Msg:%s EthHost.MacAddr:%s\n", __FUNCTION__, __LINE__,EventMsg.Msg,EthHost.MacAddr));
 
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             pthread_mutex_lock(&LmHostObjectMutex);
@@ -2355,7 +2358,7 @@ static void *Event_HandlerThread(void *threadid)
                 {
                     if ( pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] )
                     {
-                         CcspTraceError(("Debug RDKB-63938:%s:%d: :Freeing Eth type HOST", __FUNCTION__, __LINE__));
+                         CcspTraceError(("Debug RDKB-62906:%s:%d: :Freeing Eth type HOST\n", __FUNCTION__, __LINE__));
                          AnscFreeMemory(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]);
                          pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] = NULL;
                     }
@@ -2371,7 +2374,7 @@ static void *Event_HandlerThread(void *threadid)
             if(EthHost.Active)
             {
                 CcspTraceDebug(("%s-%d LM Ethernet client is active \n",__FUNCTION__,__LINE__));
-                CcspTraceError(("Debug RDKB-63938:%s-%d LM Ethernet client is active \n",__FUNCTION__,__LINE__));
+                CcspTraceError(("Debug RDKB-62906:%s-%d LM Ethernet client is active \n",__FUNCTION__,__LINE__));
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), "Ethernet");
                 if ( ! pHost->pStringParaValue[LM_HOST_IPAddressId] )
                 {
@@ -2384,7 +2387,7 @@ static void *Event_HandlerThread(void *threadid)
             else
             {
                 CcspTraceDebug(("%s-%d LM Ethernet client is NOT active \n",__FUNCTION__,__LINE__));
-                CcspTraceError(("Debug RDKB-63938:%s-%d LM Ethernet client is NOT active \n",__FUNCTION__,__LINE__));
+                CcspTraceError(("Debug RDKB-62906:%s-%d LM Ethernet client is NOT active \n",__FUNCTION__,__LINE__));
                 LM_SET_ACTIVE_STATE_TIME(pHost, FALSE);
             }
            
@@ -2416,7 +2419,7 @@ static void *Event_HandlerThread(void *threadid)
             /* CID 339816 String not null terminated */
             hosts.phyAddr[sizeof(hosts.phyAddr) - 1] = '\0';
 
-            CcspTraceError(("Debug RDKB-63938:%s:%d:Msg Type WIFi EventMsg.Msg:%s ", __FUNCTION__, __LINE__,EventMsg.Msg));
+            CcspTraceError(("Debug RDKB-62906:%s:%d:Msg Type WIFi EventMsg.Msg:%s \n", __FUNCTION__, __LINE__,EventMsg.Msg));
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             pthread_mutex_lock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -2433,7 +2436,7 @@ static void *Event_HandlerThread(void *threadid)
                 {
                     if ( pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] )
                     {
-                        CcspTraceError(("Debug RDKB-63938:%s:%d: :Freeing WiFi type HOST", __FUNCTION__, __LINE__));
+                        CcspTraceError(("Debug RDKB-62906:%s:%d: :Freeing WiFi type HOST\n", __FUNCTION__, __LINE__));
                         AnscFreeMemory(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]);
                         pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] = NULL;
                     }
@@ -2455,9 +2458,9 @@ static void *Event_HandlerThread(void *threadid)
 				memset(radio,0,sizeof(radio));	
                 convert_ssid_to_radio((char *)hosts.ssid, radio);
 				LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
-				  if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL && mhosts.ssid !=NULL)//DEEPAK
+				  if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL && hosts.ssid !=NULL)//DEEPAK
                          {
-                             CcspTraceError(("Debug RDKB-62906 :%s:%d: wifi mhosts.ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__ ,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
+                             CcspTraceError(("Debug RDKB-62906 :%s:%d: wifi hosts.ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s \n", __FUNCTION__, __LINE__ ,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
                          }
 
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)hosts.ssid);
@@ -2479,15 +2482,15 @@ static void *Event_HandlerThread(void *threadid)
                 {
                     if(!strcmp(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], (const char *)hosts.ssid))
                     {
-                        CcspTraceError(("Debug RDKB-63938:%s-%d Array compared against WiFI  Host SET active Time \n",__FUNCTION__,__LINE__));
+                        CcspTraceError(("Debug RDKB-62906:%s-%d Array compared against WiFI  Host SET active Time \n",__FUNCTION__,__LINE__));
                         memset(radio,0,sizeof(radio));
                         convert_ssid_to_radio((char *)hosts.ssid, radio);
                         DelAndShuffleAssoDevIndx(pHost);
                         LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
                         LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)hosts.ssid);
-                        if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL && mhosts.ssid !=NULL)//DEEPAK
+                        if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL && hosts.ssid !=NULL)//DEEPAK
                          {
-                             CcspTraceError(("Debug RDKB-62906 :%s:%d: wifi mhosts.ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
+                             CcspTraceError(("Debug RDKB-62906 :%s:%d: wifi hosts.ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s \n", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
                          }
                         //LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), hosts.AssociatedDevice);
                         LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " "); // fix for RDKB-19836
@@ -2524,7 +2527,7 @@ static void *Event_HandlerThread(void *threadid)
 
             /* CID 339816 String not null terminated */
             mhosts.phyAddr[sizeof(mhosts.phyAddr) - 1] = '\0';
-            CcspTraceError(("Debug RDKB-63938:%s:%d:Msg Type MOCA EventMsg.Msg:%s ", __FUNCTION__, __LINE__,EventMsg.Msg));
+            CcspTraceError(("Deepak Important Debug RDKB-62906:%s:%d:Msg Type MOCA EventMsg.Msg:%s mhosts.phyAddr:%s\n", __FUNCTION__, __LINE__,EventMsg.Msg,mhosts.phyAddr));
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             pthread_mutex_lock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -2532,19 +2535,20 @@ static void *Event_HandlerThread(void *threadid)
             if ( !pHost )
             {
                 pHost = Hosts_AddHostByPhysAddress((char *)mhosts.phyAddr);
+                CcspTraceError(("Deepak important: not found mhosts.phyAddr:%s calling Hosts_AddHostByPhysAddress Debug RDKB-62906:%s:%d: :Freeing MOCA type HOST\n",(char *)mhosts.phyAddr, __FUNCTION__, __LINE__));
 
                 if ( pHost )
                 {
                     if ( pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] )
                     {
-                        CcspTraceError(("Debug RDKB-63938:%s:%d: :Freeing MOCA type HOST", __FUNCTION__, __LINE__));
+                        CcspTraceError(("Debug RDKB-62906:%s:%d: :Freeing MOCA type HOST\n", __FUNCTION__, __LINE__));
                         AnscFreeMemory(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]);
                         pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] = NULL;
                     }
                 }
                 else
                 {
-                    CcspTraceError(("Debug RDKB-63938:%s:%d: :pHost in not added by phyaddress", __FUNCTION__, __LINE__));
+                    CcspTraceError(("Debug RDKB-62906:%s:%d: :pHost in not added by phyaddress\n", __FUNCTION__, __LINE__));
                     pthread_mutex_unlock(&LmHostObjectMutex);
                     CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
                     continue;
@@ -2556,16 +2560,17 @@ static void *Event_HandlerThread(void *threadid)
             mhosts.AssociatedDevice[LM_GEN_STR_SIZE - 1] = '\0';
             mhosts.parentMac[sizeof(mhosts.parentMac) - 1] = '\0';
             mhosts.deviceType[sizeof(mhosts.deviceType) - 1] = '\0';
+            CcspTraceError(("Deepak important: mhosts.ssid:%s  mhosts.parentMac:%s mhosts.deviceType:%s mhosts.Status):%d \n Debug RDKB-62906:%s:%d: :Freeing MOCA type HOST\n",(char *)mhosts.ssid,mhosts.parentMac,mhosts.deviceType, mhosts.Status), __FUNCTION__, __LINE__));
             if(mhosts.Status)
             {
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)mhosts.ssid);
 		if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL && mhosts.ssid !=NULL)//DEEPAK
                 {
-                             CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
+                             CcspTraceError(("Deepak Important IF mhosts.Status ->if -> Debug RDKB-62906 :%s:%d: Copied MOCA mhosts.ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s \n", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
                 }
                 else if ( mhosts.ssid[0] == '\0')
                 {
-                                CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid might be NULL or empty ", __FUNCTION__, __LINE__));
+                                CcspTraceError(("Deepak Important if else IF Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid might be NULL or empty \n", __FUNCTION__, __LINE__));
 
                 }
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), "");
@@ -2589,11 +2594,11 @@ static void *Event_HandlerThread(void *threadid)
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)mhosts.ssid);
 		 if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL && mhosts.ssid !=NULL)//DEEPAK
                 {
-                             CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
+                             CcspTraceError(("Deepak in Else Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s \n", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
                 }
                 else if( mhosts.ssid[0] == '\0')
                 {
-                                CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid might be NULL or empty ", __FUNCTION__, __LINE__));
+                                CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA mhosts.ssid might be NULL or empty \n", __FUNCTION__, __LINE__));
 
                 }
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), "");
@@ -2646,7 +2651,7 @@ static void *Event_HandlerThread(void *threadid)
             }
             else
             {
-                CcspTraceError(("Debug RDKB-63938:%s-%d EventMsg.Msg is FALSE, calling Hosts_DisablePresenceDetectionTask \n",__FUNCTION__,__LINE__));
+                CcspTraceError(("Debug RDKB-62906:%s-%d EventMsg.Msg is FALSE, calling Hosts_DisablePresenceDetectionTask \n",__FUNCTION__,__LINE__));
                 Hosts_DisablePresenceDetectionTask();
             }
 #if defined (RDKB_EXTENDER_ENABLED)
@@ -3666,11 +3671,11 @@ void Wifi_ServerSyncHost (char *phyAddr, char *AssociatedDevice, char *ssid, int
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), ssid);
 			if (pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL && ssid !=NULL)//DEEPAK
                         {
-                             CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s ", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
+                             CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA ssid VALUE assigned to pHost->pStringParaValue[LM_HOST_Layer1InterfaceId :%s \n", __FUNCTION__, __LINE__,pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]));
                         }
                         else if ( ssid[0] == '\0')
                         {
-                                CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA ssid might be NULL or empty ", __FUNCTION__, __LINE__));
+                                CcspTraceError(("Debug RDKB-62906 :%s:%d: MOCA ssid might be NULL or empty \n", __FUNCTION__, __LINE__));
 
                         }
 			//if(strncmp(AssociatedDevice,"NULL",strlen(AssociatedDevice)) == 0)
@@ -3678,12 +3683,12 @@ void Wifi_ServerSyncHost (char *phyAddr, char *AssociatedDevice, char *ssid, int
 			//else
 			if (AssociatedDevice != NULL && AssociatedDevice[0] == '\0')
 			{
-				CcspTraceError(("Debug RDKB-63938:%s-%d AssociatedDevice is not NULL \n",__FUNCTION__,__LINE__));
+				CcspTraceError(("Debug RDKB-62906:%s-%d AssociatedDevice is not NULL \n",__FUNCTION__,__LINE__));
 				LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), AssociatedDevice);
 			}
 			else
 			{
-				CcspTraceError(("Debug RDKB-63938:%s-%d AssociatedDevice is  NULL setting LM_HOST_AssociatedDeviceId to \" \" \n",__FUNCTION__,__LINE__));
+				CcspTraceError(("Debug RDKB-62906:%s-%d AssociatedDevice is  NULL setting LM_HOST_AssociatedDeviceId to \" \" \n",__FUNCTION__,__LINE__));
 				LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " ");
 			}
 			pHost->iIntParaValue[LM_HOST_X_CISCO_COM_RSSIId] = RSSI;
@@ -4178,7 +4183,7 @@ int Hosts_DisablePresenceDetectionTask()
     // clear all param related to presence.
     Sendmsg_dnsmasq(FALSE);
     syscfg_set(NULL, "notify_presence_webpa", "false");
-    CcspTraceError(("Debug RDKB-63938:%s-%d  notify_presence_webpa set to FALSE \n",__FUNCTION__,__LINE__));
+    CcspTraceError(("Debug RDKB-62906:%s-%d  notify_presence_webpa set to FALSE \n",__FUNCTION__,__LINE__));
     //CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     //pthread_mutex_lock(&LmHostObjectMutex);
     //CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -4601,7 +4606,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
 
     if (notify_to_webpa)
     {
-        CcspTraceError(("Debug RDKB-63938:%s-%d notify_to_webpa == TRUE \n",__FUNCTION__,__LINE__));
+        CcspTraceError(("Debug RDKB-62906:%s-%d notify_to_webpa == TRUE \n",__FUNCTION__,__LINE__));
 
         if(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL)
         {
@@ -4637,7 +4642,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
 	    ctx->pHost = pHost;
 	}
 	pthread_mutex_unlock(&LmHostObjectMutex);
-        CcspTraceError(("Debug RDKB-63938:%s:%d: unlock LmHostObjectMutex", __FUNCTION__, __LINE__));
+        CcspTraceError(("Debug RDKB-62906:%s:%d: unlock LmHostObjectMutex\n", __FUNCTION__, __LINE__));
         strncpy(ctx->interface, interface, sizeof(ctx->interface) - 1);
         ctx->interface[sizeof(ctx->interface) - 1] = '\0'; // ensure null-termination
         ctx->status = status;
@@ -4694,7 +4699,7 @@ int Hosts_PresenceHandling(PLmObjectHost pHost, HostPresenceDetection presencest
     else
     {
         pthread_mutex_unlock(&LmHostObjectMutex);
-        CcspTraceError(("Debug RDKB-63938:%s:%d: Else unlock LmHostObjectMutex", __FUNCTION__, __LINE__));
+        CcspTraceError(("Debug RDKB-62906:%s:%d: Else unlock LmHostObjectMutex\n", __FUNCTION__, __LINE__));
     }
     return 0;
 }
