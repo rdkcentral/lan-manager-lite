@@ -809,19 +809,19 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
 			{
 				if(pHost->bNotify == FALSE)
 				{
-				   if(access("/tmp/.conn_cli_flag", F_OK) != 0)
 				   {
-					/* CID :257716 Resource leak */
-					int fd;
-					/* CID 257720 Time of check time of use */
-					if ((fd = open("/tmp/.conn_cli_flag", O_CREAT | O_EXCL | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH | O_CLOEXEC)) >= 0)
+				/* CID :257716 Resource leak, CID 257720 Time of check time of use */
+				int fd = open("/tmp/.conn_cli_flag", O_CREAT | O_EXCL | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH | O_CLOEXEC);
+				if (fd >= 0)
                                         {
                                             close(fd);
                                         }
-					get_uptime(&uptime);
-                  			CcspTraceWarning(("Client_Connect_complete:%d\n",uptime));	
-					OnboardLog("Client_Connect_complete:%d\n",uptime);
-					t2_event_d("btime_clientconn_split", uptime);
+				if (fd >= 0) {
+				get_uptime(&uptime);
+                  			CcspTraceWarning(("Client_Connect_complete:%d\n",uptime));
+				OnboardLog("Client_Connect_complete:%d\n",uptime);
+				t2_event_d("btime_clientconn_split", uptime);
+				}
 				   }
 					CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is %s, MacAddress is %s and HostName is %s Connected  \n",interface,pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]));
 					lmHosts.lastActivity++;
