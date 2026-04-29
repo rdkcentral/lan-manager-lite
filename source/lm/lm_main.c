@@ -2243,8 +2243,8 @@ void XHosts_SyncWifi()
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)hosts[i].ssid);
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), (const char *)hosts[i].AssociatedDevice);
 			pHost->iIntParaValue[LM_HOST_X_CISCO_COM_RSSIId] = hosts[i].RSSI;
-			pHost->l1unReachableCnt = 1;
 			pHost->bBoolParaValue[LM_HOST_ActiveId] = hosts[i].Status;
+			pHost->l1unReachableCnt = 1;
 			pHost->activityChangeTime = time((time_t*)NULL);
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Parent]), getFullDeviceMac());
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_DeviceType]), " ");
@@ -3144,7 +3144,13 @@ static void *ValidateHostRetry_Thread (void *arg)
     }
     while (1);
 
-    pthread_exit(NULL);
+    /* CID 559679 Structurally dead code (UNREACHABLE) */
+    /* Since thread runs indefinitely with while(1) loop, both 'pthread_exit()' and 'return NULL' */
+    /* is unreached, however return is prefered over function call as per most coding standards */
+    /* Uncomment it, when thread is modified to run definite number of times in future */
+    // pthread_exit(NULL);
+
+    return NULL;
 }
 
 static void *ValidateHost_Thread (void *arg)
@@ -3198,7 +3204,14 @@ static void *ValidateHost_Thread (void *arg)
             UpdateHostRetryValidateList(&ValidateHostMsg, ACTION_FLAG_ADD);
         }
     } while(1);
-    pthread_exit(NULL);
+
+    /* CID 559600 Structurally dead code (UNREACHABLE) */
+    /* Since thread runs indefinitely with while(1) loop, both 'pthread_exit()' and 'return NULL' */
+    /* is unreached, however return is prefered over function call as per most coding standards */
+    /* Uncomment it, when thread is modified to run definite number of times in future */
+    //pthread_exit(NULL);
+
+    return NULL;
 }
 
 static const char *compName = "LOG.RDK.LM";
