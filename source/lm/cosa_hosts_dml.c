@@ -931,6 +931,7 @@ CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > <macAddr=%s> <sta
     }
 
 
+	CcspTraceWarning(("Deepak %s:%d ENTERED Debug RDKB-62906 tracing MACADDRESS calling MoCA_Server_Sync_Function \n", __FUNCTION__,__LINE__ ));	
         MoCA_Server_Sync_Function( phyAddr, AssociatedDevice, ssid, parentMac, deviceType, iRSSI, iStatus );
 #endif /* USE_NOTIFY_COMPONENT */
         

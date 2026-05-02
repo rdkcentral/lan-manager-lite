@@ -2560,7 +2560,7 @@ static void *Event_HandlerThread(void *threadid)
             mhosts.AssociatedDevice[LM_GEN_STR_SIZE - 1] = '\0';
             mhosts.parentMac[sizeof(mhosts.parentMac) - 1] = '\0';
             mhosts.deviceType[sizeof(mhosts.deviceType) - 1] = '\0';
-            CcspTraceError(("Deepak important: mhosts.ssid:%s  mhosts.parentMac:%s mhosts.deviceType:%s mhosts.Status:%d \n Debug RDKB-62906:%s:%d: :Freeing MOCA type HOST\n",(char *)mhosts.ssid,mhosts.parentMac,mhosts.deviceType, mhosts.Status, __FUNCTION__, __LINE__));
+            CcspTraceError(("Deepak important: mhosts.ssid:%s  mhosts.parentMac:%s mhosts.deviceType:%s mhosts.Status:%d \n Debug RDKB-62906:%s:%d:\n",(char *)mhosts.ssid,mhosts.parentMac,mhosts.deviceType, mhosts.Status, __FUNCTION__, __LINE__));
             if(mhosts.Status)
             {
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)mhosts.ssid);
@@ -3923,11 +3923,13 @@ void MoCA_Server_Sync_Function( char *phyAddr, char *AssociatedDevice, char *ssi
 									Status));
 
 		LM_moca_cpe_t hosts = {0};
-                
+               
+	        CcspTraceWarning(("Deepak %s:%d ENTERED Debug RDKB-62906 tracing MACADDRESS calling mq_send \n", __FUNCTION__,__LINE__ ));	
                 /*CID:62979 Uninitialized scalar variable*/
                 memset (&hosts.parentMac, 0, sizeof(hosts.parentMac));
 		if(AssociatedDevice)
 		{
+	               CcspTraceWarning(("Deepak %s:%d ENTERED Debug RDKB-62906 tracing MACADDRESS calling mq_send AssociatedDevice:%s\n", __FUNCTION__,__LINE__,AssociatedDevice ));	
 			strncpy((char *)hosts.AssociatedDevice,AssociatedDevice,sizeof(hosts.AssociatedDevice)-1);
 			hosts.AssociatedDevice[sizeof(hosts.AssociatedDevice)-1] = '\0';
 		}
@@ -3937,6 +3939,7 @@ void MoCA_Server_Sync_Function( char *phyAddr, char *AssociatedDevice, char *ssi
 		{
 			strncpy((char *)hosts.ssid,ssid,sizeof(hosts.ssid)-1);
 			hosts.ssid[sizeof(hosts.ssid)-1] = '\0';
+	              CcspTraceWarning(("Deepak %s:%d ENTERED Debug RDKB-62906 tracing MACADDRESS calling mq_send hosts.ssid:%s\n", __FUNCTION__,__LINE__,hosts.ssid ));	
 		}
 		if(parentMac)
 		{
@@ -3947,6 +3950,7 @@ void MoCA_Server_Sync_Function( char *phyAddr, char *AssociatedDevice, char *ssi
 		{
 			strncpy((char *)hosts.deviceType,deviceType,sizeof(hosts.deviceType)-1);
 			hosts.deviceType[sizeof(hosts.deviceType)-1] = '\0';
+	        CcspTraceWarning(("Deepak %s:%d ENTERED Debug RDKB-62906 tracing MACADDRESS calling mq_send , hosts.deviceType:%s\n", __FUNCTION__,__LINE__,hosts.deviceType ));	
 		}
 
 		hosts.RSSI = RSSI;
@@ -3963,6 +3967,7 @@ void MoCA_Server_Sync_Function( char *phyAddr, char *AssociatedDevice, char *ssi
                 /*CID: 62979 Uninitialized scalar variable for Field hosts.parentMac*/
 		memcpy(EventMsg.Msg,&hosts,sizeof(hosts));
 		memcpy(buffer,&EventMsg,sizeof(EventMsg));
+	        CcspTraceWarning(("Deepak %s:%d ENTERED Debug RDKB-62906 tracing MACADDRESS calling mq_send FOR MSG_TYPE_MOCA with buffer:%s \n", __FUNCTION__,__LINE__,buffer ));	
 		CHECK(0 <= mq_send(mq, buffer, MAX_SIZE, 0));
 		CHECK((mqd_t)-1 != mq_close(mq));
 }
