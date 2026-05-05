@@ -890,13 +890,13 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                             //New Client addition
                             if (j == DscpTree->NumClients)
                             {
-                                memcpy(DscpTree->ClientList[j].Mac,
-                                       CliList->DSCP_Element[DscpTree->Dscp].Client[i].mac,
-                                       sizeof(CliList->DSCP_Element[DscpTree->Dscp].Client[i].mac));
-                                DscpTree->ClientList[j].RxBytes =
-                                          CliList->DSCP_Element[DscpTree->Dscp].Client[i].rxBytes;
-                                DscpTree->ClientList[j].TxBytes =
-                                          CliList->DSCP_Element[DscpTree->Dscp].Client[i].txBytes;
+                                memcpy_s(DscpTree->ClientList[j].Mac,
+                                         sizeof(DscpTree->ClientList[j].Mac),
+                                         CliList->DSCP_Element[DscpTree->Dscp].Client[i].mac,
+                                         sizeof(DscpTree->ClientList[j].Mac) - 1);
+                                DscpTree->ClientList[j].Mac[sizeof(DscpTree->ClientList[j].Mac) - 1] = '\0';
+                                DscpTree->ClientList[j].RxBytes = 0;
+                                DscpTree->ClientList[j].TxBytes = 0;
                                 DscpTree->ClientList[j].RxBytesTot =
                                           CliList->DSCP_Element[DscpTree->Dscp].Client[i].rxBytes;
                                 DscpTree->ClientList[j].TxBytesTot =
