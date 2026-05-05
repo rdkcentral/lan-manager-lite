@@ -283,9 +283,47 @@
               <type>boolean</type>
               <syntax>bool</syntax>
             </parameter>
+            <parameter>
+              <name>X_RDK-MldClient</name>
+              <type>boolean</type>
+              <syntax>bool</syntax>
+            </parameter>
+            <parameter>
+              <name>X_RDK-MloLinkNumberofEntries</name>
+              <type>unsignedInt</type>
+              <syntax>uint32</syntax>
+          </parameter>
 
           </parameters>
           <objects>
+              <object>
+              <name>MloLink</name>
+              <objectType>staticTable</objectType>
+              <maxInstance>16</maxInstance>
+              <functions>
+                <func_GetEntryCount>Host_MloLink_GetEntryCount</func_GetEntryCount>
+                <func_GetEntry>Host_MloLink_GetEntry</func_GetEntry>
+                <func_GetParamIntValue>Host_MloLink_GetParamIntValue</func_GetParamIntValue>
+                <func_GetParamStringValue>Host_MloLink_GetParamStringValue</func_GetParamStringValue>
+              </functions>
+              <parameters>
+                <parameter>
+                  <name>X_RDK-RSSI</name>
+                  <type>int</type>
+                  <syntax>int</syntax>
+                </parameter>
+                <parameter>
+                  <name>X_RDK-Layer1Interface</name>
+                  <type>string</type>
+                  <syntax>string</syntax>
+                </parameter>
+                <parameter>
+                  <name>X_RDK-AssociatedDevice</name>
+                  <type>string</type>
+                  <syntax>string</syntax>
+                </parameter>
+              </parameters>
+            </object>
             <object>
               <name>IPv4Address</name>
               <objectType>staticTable</objectType>

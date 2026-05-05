@@ -117,6 +117,11 @@ typedef struct {
     	int RSSI;
 #ifdef USE_NOTIFY_COMPONENT
 	int Status;
+    int mloEnable;     /* 1 = MLO, 0 = non-MLO */
+ 	int mloLinkCount;  /* actual number of links */
+ 	unsigned char apList[MAX_MLO_LINKS][LM_GEN_STR_SIZE];  /* per-link AP DM path */
+	unsigned char ssidList[MAX_MLO_LINKS][LM_GEN_STR_SIZE];   /* per-link SSID DM path */
+    int rssiList[MAX_MLO_LINKS]; /* per-link RSSI */
 }__attribute__((packed, aligned(1))) LM_wifi_wsta_t;
 
 typedef struct{
