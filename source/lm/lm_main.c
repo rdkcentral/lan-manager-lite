@@ -2513,6 +2513,7 @@ static void *Event_HandlerThread(void *threadid)
                 if (hosts.mloLinkCount > 0)
                 {
                     memset(radio, 0, sizeof(radio));
+                    hosts.ssidList[0][LM_GEN_STR_SIZE - 1] = '\0';
                     convert_ssid_to_radio((char *)hosts.ssidList[0], radio);
                     LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
                 }
@@ -2545,6 +2546,8 @@ static void *Event_HandlerThread(void *threadid)
                     if (hosts.mloLinkCount > 0)
                     {
                         memset(radio, 0, sizeof(radio));
+                        hosts.ssidList[0][LM_GEN_STR_SIZE - 1] = '\0';
+                        hosts.apList[0][LM_GEN_STR_SIZE - 1] = '\0';
                         convert_ssid_to_radio((char *)hosts.ssidList[0], radio);
                         LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
                         LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)hosts.ssidList[0]);
@@ -2568,6 +2571,7 @@ static void *Event_HandlerThread(void *threadid)
                         if(!strcmp(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], (const char *)hosts.ssidList[0]))
                         {
                             memset(radio, 0, sizeof(radio));
+                            hosts.ssidList[0][LM_GEN_STR_SIZE - 1] = '\0';
                             convert_ssid_to_radio((char *)hosts.ssidList[0], radio);
                             DelAndShuffleAssoDevIndx(pHost);
                             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
