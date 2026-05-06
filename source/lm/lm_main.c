@@ -2457,7 +2457,7 @@ static void *Event_HandlerThread(void *threadid)
 
             /* CID 339816  String not NULL terminated */
             /* null-terminate per-link arrays for safety */
-            for (lnk = 0; lnk < hosts.mloLinkCount; lnk++)
+            for (lnk = 0; lnk < MAX_MLO_LINKS; lnk++)
             {
                 hosts.apList[lnk][LM_GEN_STR_SIZE - 1]   = '\0';
                 hosts.ssidList[lnk][LM_GEN_STR_SIZE - 1] = '\0';
@@ -3718,14 +3718,11 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
     /* XHS check — scan all links for .3 or .4 SSID */
     for (int k = 0; k < linkCount; k++)
     {
-        if (ssidList[k] != NULL)
+        Xpos2[k] = strstr(ssidList[k], ".3");
+        Xpos5[k] = strstr(ssidList[k], ".4");
+        if ((NULL != Xpos2[k]) || (NULL != Xpos5[k]))
         {
-            Xpos2[k] = strstr(ssidList[k], ".3");
-            Xpos5[k] = strstr(ssidList[k], ".4");
-            if ((NULL != Xpos2[k]) || (NULL != Xpos5[k]))
-            {
-                isXhs = 1;
-            }
+            isXhs = 1;
         }
     } 
     if (isXhs)
@@ -3872,16 +3869,10 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
 
         for (int j = 0; j < linkCount; j++)
         {
-            if (apList[j] != NULL)
-            {
-                strncpy((char *)hosts.apList[j], apList[j], sizeof(hosts.apList[j])-1);
-                hosts.apList[j][sizeof(hosts.apList[j])-1] = '\0';
-            }
-            if (ssidList[j] != NULL)
-            {
-                strncpy((char *)hosts.ssidList[j], ssidList[j], sizeof(hosts.ssidList[j])-1);
-                hosts.ssidList[j][sizeof(hosts.ssidList[j])-1] = '\0';
-            }
+            strncpy((char *)hosts.apList[j], apList[j], sizeof(hosts.apList[j])-1);
+            hosts.apList[j][sizeof(hosts.apList[j])-1] = '\0';
+            strncpy((char *)hosts.ssidList[j], ssidList[j], sizeof(hosts.ssidList[j])-1);
+            hosts.ssidList[j][sizeof(hosts.ssidList[j])-1] = '\0';
             hosts.rssiList[j] = rssiList[j];
         }
 		EventQData EventMsg;
@@ -3926,16 +3917,10 @@ void Wifi_Server_Sync_Function( char *phyAddr, char apList[][LM_GEN_STR_SIZE], c
     }
     for (int j = 0; j < linkCount; j++)
     {
-        if (apList[j] != NULL)
-        {
-            strncpy(ValidateHostMsg.apList[j],   apList[j],   sizeof(ValidateHostMsg.apList[j])-1);
-            ValidateHostMsg.apList[j][sizeof(ValidateHostMsg.apList[j])-1] = '\0';
-        }
-        if (ssidList[j] != NULL)
-        {
-            strncpy(ValidateHostMsg.ssidList[j], ssidList[j], sizeof(ValidateHostMsg.ssidList[j])-1);
-            ValidateHostMsg.ssidList[j][sizeof(ValidateHostMsg.ssidList[j])-1] = '\0';
-        }
+        strncpy(ValidateHostMsg.apList[j],   apList[j],   sizeof(ValidateHostMsg.apList[j])-1);
+        ValidateHostMsg.apList[j][sizeof(ValidateHostMsg.apList[j])-1] = '\0';
+        strncpy(ValidateHostMsg.ssidList[j], ssidList[j], sizeof(ValidateHostMsg.ssidList[j])-1);
+        ValidateHostMsg.ssidList[j][sizeof(ValidateHostMsg.ssidList[j])-1] = '\0';
         ValidateHostMsg.rssiList[j] = rssiList[j];
     }
 
