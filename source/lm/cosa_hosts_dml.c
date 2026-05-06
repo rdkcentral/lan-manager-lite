@@ -851,7 +851,7 @@ Hosts_SetParamStringValue
     if (IsNumberString(MloEnable)) {
         iMloEnable = atoi(MloEnable);
 	} else {
-		CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inapproriate MLO_Enable value in ParamString  \n",__FUNCTION__,__LINE__));
+		CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inappropriate MLO_Enable value in ParamString  \n",__FUNCTION__,__LINE__));
 		return FALSE;
 	}
     if (!(iMloEnable >= 0 && iMloEnable <= 1)){

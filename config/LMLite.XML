@@ -299,7 +299,7 @@
               <object>
               <name>MloLink</name>
               <objectType>staticTable</objectType>
-              <maxInstance>16</maxInstance>
+              <maxInstance>4</maxInstance>
               <functions>
                 <func_GetEntryCount>Host_MloLink_GetEntryCount</func_GetEntryCount>
                 <func_GetEntry>Host_MloLink_GetEntry</func_GetEntry>
