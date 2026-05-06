@@ -85,7 +85,7 @@ int lm_send_rev(void *cmd, int size, void *buff, int buff_size)
 
     ret = write(fd, cmd, size);
     CHK_GOTO_TAG((ret <= 0), RET);
-    
+
     ret = recv(fd, buff, buff_size, MSG_WAITALL);
     CHK_GOTO_TAG((ret <= 0), RET);
     r_val = LM_RET_SUCCESS ;
