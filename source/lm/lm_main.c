@@ -1970,6 +1970,10 @@ static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
 
 static void _get_host_info(LM_host_t *pDestHost, PLmObjectHost pHost)
 {
+    /*CID 340106 - String not null terminated - Fix is added here for
+    API lm_get_all_hosts which is from lmlite code lm_api.c - This code sends the data */
+        memset(pDestHost, 0, sizeof(LM_host_t));
+        
         mac_string_to_array(pHost->pStringParaValue[LM_HOST_PhysAddressId], pDestHost->phyAddr);
         pDestHost->online = (unsigned char)pHost->bBoolParaValue[LM_HOST_ActiveId];
         pDestHost->activityChangeTime = pHost->activityChangeTime;
@@ -4461,6 +4465,12 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                         );
                 CcspTraceWarning(("Notification sent from %s, line:%d\n", __FUNCTION__, __LINE__));
 
+                /* CID 745538 LOCK_EVASION: Guard all ->next field reads and writes with
+                   LmRetryNotifyHostListMutex, consistent with re-attachment block
+                   where localTail->next is also modified under the same lock.
+                   free() calls are left outside the lock as they do not access
+                   list internals. */
+                pthread_mutex_lock(&LmRetryNotifyHostListMutex);
                 // Deletion logic
                 if (prev) {
                     prev->next = curr->next;
@@ -4472,6 +4482,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                 // Delete the node as the notification is sent for the node
                 RetryNotifyHostList *toDelete = curr;
                 curr = curr->next;
+                pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
 
                 if (toDelete->ctx) {
                     free(toDelete->ctx->ipv4);
@@ -4481,9 +4492,12 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                 }
                 free(toDelete);
             } else {
+                /* CID 745538 LOCK_EVASION */
+                pthread_mutex_lock(&LmRetryNotifyHostListMutex);
                 localTail = curr; /* track tail for O(1) re-attach */
                 prev = curr;
                 curr = curr->next; // Move to next host
+                pthread_mutex_unlock(&LmRetryNotifyHostListMutex);
             }
         }
 
