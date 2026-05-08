@@ -812,20 +812,31 @@ Hosts_SetParamStringValue
         char rssiStrArray[MAX_MLO_LINKS][LM_GEN_STR_SIZE] = {{0}};
 
         count_tok = DelimiterCount(pString);
-        if (count_tok != 5) {
+        if (count_tok == 4) {
+            /* Legacy format: mac,AP,SSID,RSSI,status */
+            phyAddr      = strtok_r(pString, ",", &st);
+            apListStr    = strtok_r(NULL, ",", &st);
+            ssidListStr  = strtok_r(NULL, ",", &st);
+            rssiListStr  = strtok_r(NULL, ",", &st);
+            Status       = strtok_r(NULL, ",", &st);
+            MloEnable    = NULL;
+            iMloEnable   = 0;
+        }
+        else if (count_tok == 5) {
+            /* MLO format: mac,[APs],[SSIDs],[RSSIs],status,mlo_enable */
+            phyAddr      = strtok_r(pString, ",", &st);
+            apListStr    = strtok_r(NULL, ",", &st);
+            ssidListStr  = strtok_r(NULL, ",", &st);
+            rssiListStr  = strtok_r(NULL, ",", &st);
+            Status       = strtok_r(NULL, ",", &st);
+            MloEnable    = strtok_r(NULL, ",", &st);
+        }
+        else {
             CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Missing required tokens in ParamString  \n",__FUNCTION__,__LINE__));
             return FALSE;
         }
 
-        /* save update to backup */
-		phyAddr 		 = strtok_r(pString, ",", &st);
-        apListStr        = strtok_r(NULL,    ",", &st);
-        ssidListStr      = strtok_r(NULL,    ",", &st);
-        rssiListStr      = strtok_r(NULL,    ",", &st);
-		Status 			 = strtok_r(NULL, ",", &st);
-		MloEnable        = strtok_r(NULL, ",", &st);
-
-        if ((phyAddr == NULL) || (apListStr == NULL) || (ssidListStr == NULL) || (rssiListStr == NULL) || (Status == NULL) || (MloEnable == NULL)) {
+        if ((phyAddr == NULL) || (apListStr == NULL) || (ssidListStr == NULL) || (rssiListStr == NULL) || (Status == NULL) || (count_tok == 5 && MloEnable == NULL)) {
             CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > One or more tokens are missing in ParamString  \n",__FUNCTION__,__LINE__));
          return FALSE;
         }
@@ -848,40 +859,55 @@ Hosts_SetParamStringValue
         CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > STATUS value in ParamString should be 0 or 1 \n",__FUNCTION__,__LINE__));
         return FALSE;
     }
-    if (IsNumberString(MloEnable)) {
-        iMloEnable = atoi(MloEnable);
-	} else {
-		CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inappropriate MLO_Enable value in ParamString  \n",__FUNCTION__,__LINE__));
-		return FALSE;
+	if (MloEnable != NULL) {
+		if (IsNumberString(MloEnable)) {
+			iMloEnable = atoi(MloEnable);
+		} else {
+			CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inappropriate MLO_Enable value in ParamString  \n",__FUNCTION__,__LINE__));
+			return FALSE;
+		}
+		if (!(iMloEnable >= 0 && iMloEnable <= 1)){
+			CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > MloEnable value in ParamString should be 0 or 1 \n",__FUNCTION__,__LINE__));
+			return FALSE;
+		}
 	}
-    if (!(iMloEnable >= 0 && iMloEnable <= 1)){
-        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > MloEnable value in ParamString should be 0 or 1 \n",__FUNCTION__,__LINE__));
-        return FALSE;
-    }
+    /* Parse lists — for legacy format these are plain scalars (no brackets) */
+    int linkCount;
+    if (count_tok == 4) {
+            strncpy(apArray[0], apListStr, LM_GEN_STR_SIZE - 1);
+            apArray[0][LM_GEN_STR_SIZE - 1] = '\0';
+            strncpy(ssidArray[0], ssidListStr, LM_GEN_STR_SIZE - 1);
+            ssidArray[0][LM_GEN_STR_SIZE - 1] = '\0';
+            if (!IsNumberString(rssiListStr)) {
+                CcspTraceWarning(("...Inappropriate RSSI value...\n"));
+                return FALSE;
+            }
+            iRssiArray[0] = atoi(rssiListStr);
+            linkCount = 1;
+	} else {
+		/* Split the three ';'-delimited bracket lists */
+		/* linkCount is got from ssidList to support empty aplist on disconnect */
+		(void)StripBracketsAndSplit(apListStr,   apArray,   MAX_MLO_LINKS);
+		int linkCount = StripBracketsAndSplit(ssidListStr, ssidArray, MAX_MLO_LINKS);
+		int rssiCount = StripBracketsAndSplit(rssiListStr, rssiStrArray, MAX_MLO_LINKS);
 
-    /* Split the three ';'-delimited bracket lists */
-    /* linkCount is got from ssidList to support empty aplist on disconnect */
-    (void)StripBracketsAndSplit(apListStr,   apArray,   MAX_MLO_LINKS);
-    int linkCount = StripBracketsAndSplit(ssidListStr, ssidArray, MAX_MLO_LINKS);
-    int rssiCount = StripBracketsAndSplit(rssiListStr, rssiStrArray, MAX_MLO_LINKS);
+		if (linkCount != rssiCount) {
+			CcspTraceWarning(("Hosts_SetParamStringValue: ssidCount(%d) != rssiCount(%d)\n", linkCount, rssiCount));
+			return FALSE;
+		}
 
-    if (linkCount != rssiCount) {
-        CcspTraceWarning(("Hosts_SetParamStringValue: ssidCount(%d) != rssiCount(%d)\n", linkCount, rssiCount));
-        return FALSE;
-    }
-
-    for (int j = 0; j < linkCount; j++) {
-        if (rssiStrArray[j][0] == '\0')
-            break;
-        if (!IsNumberString(rssiStrArray[j])) {
-            CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inapproriate RSSI value in ParamString  \n",__FUNCTION__,__LINE__));
-            return FALSE;
-        }
-        iRssiArray[j] = atoi(rssiStrArray[j]);
-    }
-
+		for (int j = 0; j < linkCount; j++) {
+			if (rssiStrArray[j][0] == '\0')
+				break;
+			if (!IsNumberString(rssiStrArray[j])) {
+				CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inapproriate RSSI value in ParamString  \n",__FUNCTION__,__LINE__));
+				return FALSE;
+			}
+			iRssiArray[j] = atoi(rssiStrArray[j]);
+		}
+	}
     Wifi_Server_Sync_Function(phyAddr, apArray, ssidArray,
-                                      iRssiArray, iStatus, iMloEnable, linkCount);
+                              iRssiArray, iStatus, iMloEnable, linkCount);
 #endif /* USE_NOTIFY_COMPONENT */
 		
         return TRUE;
