@@ -847,7 +847,7 @@ Hosts_SetParamStringValue
           return FALSE;
           }
 
-        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > <phyAddr=%s> <Status=%s> <MloEnable=%s>\n",__FUNCTION__,__LINE__, phyAddr,Status,MloEnable));
+        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > <phyAddr=%s> <Status=%s> <MloEnable=%s>\n",__FUNCTION__,__LINE__, phyAddr, Status, MloEnable ? MloEnable : "N/A"));
 
      if (IsNumberString(Status)) {
          iStatus = atoi(Status);
@@ -888,7 +888,7 @@ Hosts_SetParamStringValue
 		/* Split the three ';'-delimited bracket lists */
 		/* linkCount is got from ssidList to support empty aplist on disconnect */
 		(void)StripBracketsAndSplit(apListStr,   apArray,   MAX_MLO_LINKS);
-		int linkCount = StripBracketsAndSplit(ssidListStr, ssidArray, MAX_MLO_LINKS);
+		linkCount = StripBracketsAndSplit(ssidListStr, ssidArray, MAX_MLO_LINKS);
 		int rssiCount = StripBracketsAndSplit(rssiListStr, rssiStrArray, MAX_MLO_LINKS);
 
 		if (linkCount != rssiCount) {
