@@ -2475,7 +2475,7 @@ static void *Event_HandlerThread(void *threadid)
                 /* ===== AC2: MLO Client ===== */
                 pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId] = TRUE;
 
-                /* legacy fields must remain empty for MLO clients */
+                /* legacy fields must remain blank (" ") for MLO clients */
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), " ");
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " ");
                 pHost->iIntParaValue[LM_HOST_X_CISCO_COM_RSSIId] = 0;

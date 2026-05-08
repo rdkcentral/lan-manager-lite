@@ -852,7 +852,7 @@ Hosts_SetParamStringValue
      if (IsNumberString(Status)) {
          iStatus = atoi(Status);
      }else {
-        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inapproriate STATUS value in ParamString  \n",__FUNCTION__,__LINE__));
+        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inappropriate STATUS value in ParamString  \n",__FUNCTION__,__LINE__));
         return FALSE;
     }
     if (!(iStatus >= 0 && iStatus <= 1)){
@@ -900,7 +900,7 @@ Hosts_SetParamStringValue
 			if (rssiStrArray[j][0] == '\0')
 				break;
 			if (!IsNumberString(rssiStrArray[j])) {
-				CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inapproriate RSSI value in ParamString  \n",__FUNCTION__,__LINE__));
+				CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inappropriate RSSI value in ParamString  \n",__FUNCTION__,__LINE__));
 				return FALSE;
 			}
 			iRssiArray[j] = atoi(rssiStrArray[j]);
@@ -1002,14 +1002,14 @@ CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > <macAddr=%s> <sta
   if (IsNumberString(RSSI)) {
          iRSSI = atoi(RSSI);
      } else {
-        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inapproriate RSSI value in ParamString  \n",__FUNCTION__,__LINE__));
+        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inappropriate RSSI value in ParamString  \n",__FUNCTION__,__LINE__));
          return FALSE;
      }
 
      if (IsNumberString(Status)) {
          iStatus = atoi(Status);
      }else {
-        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inapproriate STATUS value in ParamString  \n",__FUNCTION__,__LINE__));
+        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inappropriate STATUS value in ParamString  \n",__FUNCTION__,__LINE__));
         return FALSE;
     }
 
