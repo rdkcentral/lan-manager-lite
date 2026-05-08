@@ -879,7 +879,7 @@ Hosts_SetParamStringValue
             strncpy(ssidArray[0], ssidListStr, LM_GEN_STR_SIZE - 1);
             ssidArray[0][LM_GEN_STR_SIZE - 1] = '\0';
             if (!IsNumberString(rssiListStr)) {
-                CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inappropriate RSSI value in ParamString, invalid token: %s \n",__FUNCTION__,__LINE__, rssiListStr));
+                CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inapproriate RSSI value in ParamString  \n",__FUNCTION__,__LINE__));
                 return FALSE;
             }
             iRssiArray[0] = atoi(rssiListStr);
