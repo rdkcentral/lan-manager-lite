@@ -39,6 +39,7 @@
 #include "webpa_interface.h"
 #include "safec_lib_common.h"
 #include "secure_wrapper.h"
+#include "lm_rbus_api.h"
 
 static pthread_mutex_t ndsMutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t ndsCond = PTHREAD_COND_INITIALIZER;
@@ -408,6 +409,78 @@ static int _syscmd(FILE *f, char *retBuf, int retBufSize)
     return 0;
 }
 #endif
+#define MAX_PARAM_SIZE     256
+#define MAX_VALUE_SIZE     128
+#define MAX_BANDS_BUFFER   128
+static char* GetRbusString(const char* param)
+{
+    char* value = NULL;
+
+    if (!param)
+        return NULL;
+
+    if (rbus_getStr(handle, param, &value) != RBUS_ERROR_SUCCESS)
+    {
+        return NULL;
+    }
+
+    return value;
+}
+
+static void AppendBand(char* dst, size_t dstSize, const char* band)
+{
+    if (!dst || !band)
+        return;
+
+    if (strlen(dst) > 0)
+    {
+        strncat(dst, ",", dstSize - strlen(dst) - 1);
+    }
+
+    strncat(dst, band, dstSize - strlen(dst) - 1);
+}
+
+char* GetMLOBandsForHost(PLmObjectHost host)
+{
+    char* mlo_bands = NULL;
+    char lowerLayerParam[MAX_PARAM_SIZE];
+    char operBandParam[MAX_PARAM_SIZE];
+    char bands[MAX_BANDS_BUFFER] = {0};
+    
+    char* ssidLowerLayer = NULL;
+    char* operatingBand = NULL;
+    PLmObjectMloLink link = NULL;
+    link = host->mloLinkArray;
+    while (link)
+    {
+        if (link->layer1Interface)
+        {
+            snprintf(lowerLayerParam,sizeof(lowerLayerParam),"%s.LowerLayers",link->layer1Interface);
+            ssidLowerLayer = GetRbusString(lowerLayerParam);
+            if(ssidLowerLayer)
+            {
+                snprintf(operBandParam,sizeof(operBandParam),"%s.OperatingFrequencyBand",ssidLowerLayer);
+                operatingBand = GetRbusString(operBandParam);
+                if (operatingBand)
+                {
+                    AppendBand(bands,sizeof(bands),operatingBand);
+                    free(operatingBand);
+                    operatingBand = NULL;
+                }
+
+                free(ssidLowerLayer);
+                ssidLowerLayer = NULL;
+            }
+        }
+        link = link->pNext;
+    }
+
+    if (bands[0] == '\0')
+        return NULL;
+
+    mlo_bands = strdup(bands);
+    return mlo_bands;
+}
 
 char* NDS_GetIpAddress(PLmObjectHost host)
 {
@@ -571,6 +644,30 @@ void add_to_list(PLmObjectHost host, struct networkdevicestatusdata **head)
 
         CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, IPAddress[%s] \n",ptr->ipaddress ));
 
+        if(host->numMloLinks > 0)
+        {
+            ptr->mlo_used = true;
+            if(host->numMloLinks > 1)
+            {
+                ptr->mlo_mode = strdup("multi");
+                CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, Host has multiple MLO links [%d] \n",host->numMloLinks ));
+            }
+            else
+            {
+                ptr->mlo_mode = strdup("single");
+                CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, Host has single MLO link \n"));
+            }
+
+            ptr->mlo_bands = GetMLOBandsForHost(host);
+            CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, MLO Bands [%s] \n",ptr->mlo_bands ? ptr->mlo_bands : "NULL" ));
+        }
+        else
+        {
+            ptr->mlo_used = false;
+            ptr->mlo_bands = NULL;
+            ptr->mlo_mode = NULL;
+        }
+
 
         if (*head == NULL)
         {
@@ -637,6 +734,16 @@ void delete_list(struct networkdevicestatusdata **head)
         currnode->hostname = NULL;
         free(currnode->ipaddress);
         currnode->ipaddress = NULL;
+        if(currnode->mlo_bands)
+        {
+            free(currnode->mlo_bands);
+            currnode->mlo_bands = NULL;
+        }
+        if(currnode->mlo_mode)
+        {
+            free(currnode->mlo_mode);
+            currnode->mlo_mode = NULL;
+        }
         free(currnode);
         currnode=NULL;
         currnode = next;
