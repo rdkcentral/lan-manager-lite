@@ -813,19 +813,15 @@ int sendIpv4ArpMessage(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient
                 target = allocate_strmem (40);
                 src_ip = allocate_strmem (INET_ADDRSTRLEN);
 
-                syscfg_get( NULL, "lan_ifname", buf, sizeof(buf));        
+                syscfg_get( NULL, "lan_ifname", buf, sizeof(buf));
                 // Interface to send packet through.
                 rc = strcpy_s(interface, 40, buf);
                 ERR_CHK(rc);
 
-                // int cnt = 0;
-                // for(cnt = 0; cnt < nPresenceDev;cnt++)
-                // {
-                // Submit request for a socket descriptor to look up interface.               
+                // Submit request for a socket descriptor to look up interface.
                 if ((sd = socket (AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0) {
                     perror ("socket() failed to get socket descriptor for using ioctl() ");
                     CcspTraceError (("%s:%d, socket() failed to get socket descriptor for using ioctl()\n",__FUNCTION__,__LINE__));
-                    //exit (EXIT_FAILURE);
                     goto freeResources;
                 }
 
@@ -835,7 +831,6 @@ int sendIpv4ArpMessage(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient
                 if (ioctl (sd, SIOCGIFHWADDR, &ifr) < 0) {
                     perror ("ioctl() failed to get source MAC address ");
                     CcspTraceError(("%s:%d, ioctl() failed to get source MAC address\n",__FUNCTION__,__LINE__));
-                    //return (EXIT_FAILURE);
                 }
                 close (sd);
 
@@ -855,10 +850,8 @@ int sendIpv4ArpMessage(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient
                 if ((device.sll_ifindex = if_nametoindex (interface)) == 0) {
                     perror ("if_nametoindex() failed to obtain interface index ");
                     CcspTraceError (("%s:%d, if_nametoindex() failed to obtain interface index\n",__FUNCTION__,__LINE__));
-                    //exit (EXIT_FAILURE);
                     goto freeResources;
                 }
-                //printf ("Index for interface %s is %i\n", interface, device.sll_ifindex);
 
                 // Set destination MAC address: broadcast address
                 memset (dst_mac, 0xff, 6 * sizeof (uint8_t));
@@ -869,7 +862,6 @@ int sendIpv4ArpMessage(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient
                 ERR_CHK(rc);
 
                 // Destination URL or IPv4 address (must be a link-local node): you need to fill this out
-                //strcpy (target, "10.0.0.126");
                 rc = strcpy_s(target, 40,obj->ipv4);
                 ERR_CHK(rc);
 
@@ -884,7 +876,6 @@ int sendIpv4ArpMessage(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient
                 if ((status = inet_pton (AF_INET, src_ip, &arphdr.sender_ip)) != 1) {
                     fprintf (stderr, "inet_pton() failed for source IP address.\nError message: %d - %s", status, strerror(errno));
                     CcspTraceError(("%s:%d, inet_pton() failed for source IP address.\nError message: %d - %s\n",__FUNCTION__,__LINE__,status,strerror(errno)));
-                    //exit (EXIT_FAILURE);
                     goto freeResources;
                 }
 
@@ -892,7 +883,6 @@ int sendIpv4ArpMessage(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient
                 if ((status = getaddrinfo (target, NULL, &hints, &res)) != 0) {
                     fprintf (stderr, "getaddrinfo() failed: %s\n", gai_strerror (status));
                     CcspTraceError(("%s:%d, getaddrinfo() failed: %s\n",__FUNCTION__,__LINE__,gai_strerror (status)));
-                    //exit (EXIT_FAILURE);
                     goto freeResources;
                 }
                 ipv4 = (struct sockaddr_in *) res->ai_addr;
@@ -956,7 +946,6 @@ int sendIpv4ArpMessage(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient
                 if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
                     perror ("socket() failed ");
                     CcspTraceError(("%s:%d, socket() failed\n",__FUNCTION__,__LINE__));
-                    //exit (EXIT_FAILURE);
                     goto freeResources;
                 }
 
@@ -964,12 +953,10 @@ int sendIpv4ArpMessage(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient
                 if ((bytes = sendto (sd, ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device))) <= 0) {
                     perror ("sendto() failed");
                     CcspTraceError(("%s:%d, sendto() failed\n",__FUNCTION__,__LINE__));
-                    //exit (EXIT_FAILURE);
                 }
 
                 // Close socket descriptor.
                 close (sd);
-                // }
                 // Free allocated memory.
     freeResources:
                 free (src_mac);
@@ -1022,6 +1009,14 @@ void *Send_arp_ipv4_thread (void *args)
                 sendIpv4ArpMessage(pobject,TRUE, bSendProbe); // send message to Active client
                 ActiveClientsecs = 0;
                 bSendProbe = FALSE;
+                pthread_mutex_unlock(&PresenceDetectionMutex);
+                usleep(5000);
+                pthread_mutex_lock(&PresenceDetectionMutex);
+                if (pobject->taskState == STATE_DETECTION_TASK_STOP)
+                {
+                    pthread_mutex_unlock(&PresenceDetectionMutex);
+                    break;
+                }
             }
         }
         else
@@ -1034,6 +1029,14 @@ void *Send_arp_ipv4_thread (void *args)
             {
                 sendIpv4ArpMessage(pobject,FALSE, FALSE); // send message to InActive client
                 InActiveClientsecs = 0;
+                pthread_mutex_unlock(&PresenceDetectionMutex);
+                usleep(5000);
+                pthread_mutex_lock(&PresenceDetectionMutex);
+                if (pobject->taskState == STATE_DETECTION_TASK_STOP)
+                {
+                    pthread_mutex_unlock(&PresenceDetectionMutex);
+                    break;
+                }
             }
         }
         else
