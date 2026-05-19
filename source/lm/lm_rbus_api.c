@@ -48,35 +48,31 @@ pthread_mutex_t g_mloRfcMutex = PTHREAD_MUTEX_INITIALIZER;
 static bool g_MLORfcEnabled = false;
 
 //Initiate Rbus
-rbusError_t lmliteRbusInit(const char *pComponentName)
+rbusError_t lmliteRbusInit(char const* pRbusComponentName)
 {
-	int ret = RBUS_ERROR_SUCCESS;
-    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, rbus_open for component %s\n", pComponentName));
-	ret = rbus_open(&rbus_handle, pComponentName);
-	if(ret != RBUS_ERROR_SUCCESS)
-	{
-		CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, LMLiteRbusInit failed with error code %d\n", ret));
-		return ret;
-	}
-	CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLiteRbusInit is success. ret is %d\n", ret));
-	return ret;
+    rbusError_t ret = RBUS_ERROR_SUCCESS;
+    CcspTraceInfo(("rbus_open for component %s\n", pRbusComponentName));
+    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, rbus_open for component %s\n", pRbusComponentName));
+    ret = rbus_open(&rbus_handle, pRbusComponentName);
+    if(ret != RBUS_ERROR_SUCCESS)
+    {
+        CcspTraceError(("LMLiteRbusInit failed with error code %d\n", ret));
+        return ret;
+    }
+    CcspTraceInfo(("LMLiteRbusInit is success. ret is %d\n", ret));
+    return ret;
 }
 
 //Checking the Rbus active status
-bool checkRbusEnabled()
+bool checkRbusEnabled(void)
 {
-    int isRbus = RBUS_ERROR_SUCCESS;
-    
+    bool isRbus = false;
     if(RBUS_ENABLED == rbus_checkStatus())
-	{
-		isRbus = true;
-	}
-	else
-	{
-		isRbus = false;
-	}
-	CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite RBUS mode active status = %s\n", isRbus ? "true":"false"));
-	return isRbus;
+    {
+        isRbus = true;
+    }
+    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite RBUS mode active status = %s\n", isRbus ? "true":"false"));
+    return isRbus;
 }
 
 rbusHandle_t get_rbus_handle(void)
@@ -87,17 +83,16 @@ rbusHandle_t get_rbus_handle(void)
 /**
  * To persist TR181 parameter values in PSM DB.
  */
-int rbus_StoreValueIntoPsmDB(char *paramName, char *value)
+int rbus_StoreValueIntoPsmDB(char const* paramName, char const* value)
 {
-    rbusHandle_t rbus_handle = get_rbus_handle();
     rbusObject_t inParams;
     rbusObject_t outParams;
     rbusValue_t setvalue;
-    int rc = RBUS_ERROR_SUCCESS;
+    rbusError_t rc = RBUS_ERROR_SUCCESS;
 
     if(!rbus_handle)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: failed as rbus_handle is empty\n", __FUNCTION__));
+        CcspTraceError(("%s: failed as rbus_handle is empty\n", __FUNCTION__));
         return 1;
     }
 
@@ -111,7 +106,7 @@ int rbus_StoreValueIntoPsmDB(char *paramName, char *value)
     rbusObject_Release(inParams);
     if(rc != RBUS_ERROR_SUCCESS)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: SetPSMRecordValue failed with err %d: %s\n", __FUNCTION__, rc, rbusError_ToString(rc)));
+        CcspTraceError(("%s: SetPSMRecordValue failed with err %d: %s\n", __FUNCTION__, rc, rbusError_ToString(rc)));
     }
     else
     {
@@ -125,17 +120,16 @@ int rbus_StoreValueIntoPsmDB(char *paramName, char *value)
 /**
  * To fetch TR181 parameter values from PSM DB.
  */
-int rbus_GetValueFromPsmDB( char* paramName, char** paramValue)
+int rbus_GetValueFromPsmDB(char const* paramName, char** paramValue)
 {
-    rbusHandle_t rbus_handle = get_rbus_handle();
     rbusObject_t inParams;
     rbusObject_t outParams;
     rbusValue_t setvalue;
-    int rc = RBUS_ERROR_SUCCESS;
+    rbusError_t rc = RBUS_ERROR_SUCCESS;
 
     if(!rbus_handle)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: failed as rbus_handle is empty\n", __FUNCTION__));
+        CcspTraceError(("%s: failed as rbus_handle is empty\n", __FUNCTION__));
         return 1;
     }
 
@@ -149,20 +143,26 @@ int rbus_GetValueFromPsmDB( char* paramName, char** paramValue)
     rbusObject_Release(inParams);
     if(rc != RBUS_ERROR_SUCCESS)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: GetPSMRecordValue failed with err %d: %s\n", __FUNCTION__, rc, rbusError_ToString(rc)));
+        CcspTraceError(("%s: GetPSMRecordValue failed with err %d: %s\n", __FUNCTION__, rc, rbusError_ToString(rc)));
     }
     else
     {
         CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s: GetPSMRecordValue is success\n", __FUNCTION__));
         rbusProperty_t prop = NULL;
         rbusValue_t value = NULL;
-        const char *str_value = NULL;
+        char *str_value = NULL;
         prop = rbusObject_GetProperties(outParams);
         while(prop)
         {
             value = rbusProperty_GetValue(prop);
             if(value)
             {
+                /* Free previous str_value before overwriting to avoid resource leak*/
+                if(str_value)
+                {
+                    free(str_value);
+                    str_value = NULL;
+                }
                 str_value = rbusValue_ToString(value,NULL,0);
                 if(str_value)
                 {
@@ -175,9 +175,11 @@ int rbus_GetValueFromPsmDB( char* paramName, char** paramValue)
         if(str_value != NULL)
         {
             *paramValue = strdup(str_value);
+            free(str_value);
+            str_value = NULL;
             if(*paramValue == NULL)
             {
-                CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: strdup failed for parameter value\n", __FUNCTION__));
+                CcspTraceError(("%s: strdup failed for parameter value\n", __FUNCTION__));
                 rbusObject_Release(outParams);
                 return 1;
             }
@@ -185,6 +187,8 @@ int rbus_GetValueFromPsmDB( char* paramName, char** paramValue)
             rbusObject_Release(outParams);
             return 0;
         }
+        /* No property value found: release outParams to avoid resource leak*/
+        rbusObject_Release(outParams);
     }
     return 1;
 }
@@ -195,21 +199,15 @@ int rbus_GetValueFromPsmDB( char* paramName, char** paramValue)
 int set_lmLiteMLORfcEnable(bool bValue)
 {
     // Update PSM DB Value
-    rbusError_t retPsmSet = RBUS_ERROR_SUCCESS;
+    int retPsmSet = 0;
     char *buf = NULL;
 
-    buf = bValue ? strdup("true") : strdup("false");
-    if (buf == NULL)
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: strdup failed\n", __FUNCTION__));
-        return 1;
-    }
+    buf = bValue ? "true" : "false";
 
     retPsmSet = rbus_StoreValueIntoPsmDB(LMLITE_MLO_RFC_PARAM, buf);
-    if (retPsmSet != RBUS_ERROR_SUCCESS)
+    if (retPsmSet != 0)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: PSM set failed ret %d for parameter %s and value %s\n", __FUNCTION__, retPsmSet, LMLITE_MLO_RFC_PARAM, buf));
-        free(buf);
+        CcspTraceError((" %s: PSM set failed ret %d for parameter %s and value %s\n", __FUNCTION__, retPsmSet, LMLITE_MLO_RFC_PARAM, buf));
         return 1;
     }
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s: PSM set success for parameter %s and value %s\n", __FUNCTION__, LMLITE_MLO_RFC_PARAM, buf));
@@ -220,13 +218,12 @@ int set_lmLiteMLORfcEnable(bool bValue)
     pthread_mutex_unlock(&g_mloRfcMutex);
     if(bValue == true)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s: lmLite MLO RFC is enabled\n", __FUNCTION__));
+        CcspTraceInfo(("lmLite MLO RFC is enabled\n"));
     }
     else
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s: lmLite MLO RFC is disabled\n", __FUNCTION__));
+        CcspTraceInfo(("lmLite MLO RFC is disabled\n"));
     }
-    free(buf);
     return 0;
 }
 
@@ -253,7 +250,7 @@ static rbusError_t lmLiteMLO_RfcSetHandler(rbusHandle_t handle, rbusProperty_t p
     propertyName = rbusProperty_GetName(prop);
     if (propertyName == NULL)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: Unable to handle set request for property\n", __FUNCTION__));
+        CcspTraceError(("%s: Unable to handle set request for property\n", __FUNCTION__));
         return RBUS_ERROR_INVALID_INPUT;
     }
 
@@ -261,7 +258,7 @@ static rbusError_t lmLiteMLO_RfcSetHandler(rbusHandle_t handle, rbusProperty_t p
 
     if (strcmp(propertyName, LMLITE_MLO_RFC_PARAM) != 0)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: Unexpected parameter %s\n", __FUNCTION__, propertyName));
+        CcspTraceError(("%s: Unexpected parameter %s\n", __FUNCTION__, propertyName));
         return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
     }
     
@@ -271,14 +268,14 @@ static rbusError_t lmLiteMLO_RfcSetHandler(rbusHandle_t handle, rbusProperty_t p
     paramValue_t = rbusProperty_GetValue(prop);
     if (paramValue_t == NULL)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: value is NULL\n", __FUNCTION__));
+        CcspTraceError(("%s: value is NULL\n", __FUNCTION__));
         return RBUS_ERROR_INVALID_INPUT;
     }
 
     type = rbusValue_GetType(paramValue_t);
     if (type != RBUS_BOOLEAN)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: Unexpected value type %d\n", __FUNCTION__, type));
+        CcspTraceError(("%s: Unexpected value type %d\n", __FUNCTION__, type));
         return RBUS_ERROR_INVALID_INPUT;
     }
 
@@ -286,12 +283,11 @@ static rbusError_t lmLiteMLO_RfcSetHandler(rbusHandle_t handle, rbusProperty_t p
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s: Setting MLO RFC to %s\n", __FUNCTION__, paramVal ? "true" : "false"));
 
     if (set_lmLiteMLORfcEnable(paramVal) != 0) {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: set_lmLiteMLORfcEnable failed\n", __FUNCTION__));
+        CcspTraceError(("%s: set_lmLiteMLORfcEnable failed\n", __FUNCTION__));
         return RBUS_ERROR_BUS_ERROR;
     }
 
-    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s: MLO RFC set successfully to %s\n", 
-                        __FUNCTION__, paramVal ? "true" : "false"));
+    CcspTraceInfo(("MLO RFC set successfully to %s\n", paramVal ? "true" : "false"));
     return RBUS_ERROR_SUCCESS;
 }
 
@@ -307,7 +303,7 @@ static rbusError_t lmLiteMLO_RfcGetHandler(rbusHandle_t handle, rbusProperty_t p
     propertyName = rbusProperty_GetName(property);
     if (propertyName == NULL)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: Unable to handle get request for property\n", __FUNCTION__));
+        CcspTraceError(("%s: Unable to handle get request for property\n", __FUNCTION__));
         return RBUS_ERROR_INVALID_INPUT;
     }
 
@@ -315,11 +311,11 @@ static rbusError_t lmLiteMLO_RfcGetHandler(rbusHandle_t handle, rbusProperty_t p
 
     if (strcmp(propertyName, LMLITE_MLO_RFC_PARAM) != 0)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: Unexpected parameter %s\n", __FUNCTION__, propertyName));
+        CcspTraceError(("%s: Unexpected parameter %s\n", __FUNCTION__, propertyName));
         return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
     }
 
-    rbusError_t retPsmGet = RBUS_ERROR_SUCCESS;
+    int retPsmGet = 0;
     rbusValue_t value;
     bool mloRfcEnabled = false;
 
@@ -327,7 +323,7 @@ static rbusError_t lmLiteMLO_RfcGetHandler(rbusHandle_t handle, rbusProperty_t p
 
     /* Get value from PSM DB */
     retPsmGet = rbus_GetValueFromPsmDB(LMLITE_MLO_RFC_PARAM, &tmpchar);
-    if (retPsmGet == RBUS_ERROR_SUCCESS)
+    if (retPsmGet == 0)
     {
       if (tmpchar != NULL)
       {
@@ -374,29 +370,28 @@ static rbusError_t lmLiteMLO_RfcGetHandler(rbusHandle_t handle, rbusProperty_t p
  * @brief Initialize and register MLO RFC RBUS data elements
  * @return 0 for success, -1 for failure
  */
-int regLMLiteDataModel()
+int regLMLiteDataModel(void)
 {
     rbusError_t ret = RBUS_ERROR_SUCCESS;
-    rbusHandle_t handle = get_rbus_handle();
 
-
-    if (handle == NULL)
+    if (rbus_handle == NULL)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: rbus handle is NULL\n", __FUNCTION__));
+        CcspTraceError((" %s: rbus handle is NULL\n", __FUNCTION__));
         return -1;
     }
 
-    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s: Registering MLO RFC parameter %s\n", __FUNCTION__, LMLITE_MLO_RFC_PARAM));
+    CcspTraceInfo(("Registering MLO RFC parameter %s\n", LMLITE_MLO_RFC_PARAM));
+    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, Registering MLO RFC parameter %s \n", LMLITE_MLO_RFC_PARAM));
 
     rbusDataElement_t dataElements[1] = {
       {LMLITE_MLO_RFC_PARAM, RBUS_ELEMENT_TYPE_PROPERTY, {lmLiteMLO_RfcGetHandler, lmLiteMLO_RfcSetHandler, NULL, NULL, NULL, NULL}}
     };
 
-    ret = rbus_regDataElements(handle, 1, dataElements);
+    ret = rbus_regDataElements(rbus_handle, 1, dataElements);
 
     if (ret != RBUS_ERROR_SUCCESS)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_ERROR, %s: rbus_regDataElements failed with error %d\n", __FUNCTION__, ret));
+        CcspTraceError((" %s: rbus_regDataElements failed with error %d\n", __FUNCTION__, ret));
         return -1;
     }
     return 0;
@@ -406,13 +401,27 @@ char* GetRbusString(const char* param)
 {
     char* value = NULL;
 
+    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s param=%s\n", __FUNCTION__, param ? param : "NULL"));
+
     if (!param)
+    {
+        CcspTraceError(("LMLite %s param is NULL\n", __FUNCTION__));
         return NULL;
+    }
+
+    if (rbus_handle == NULL)
+    {
+        CcspTraceError((" %s: rbus handle is NULL\n", __FUNCTION__));
+        return NULL;
+    }
 
     if (rbus_getStr(rbus_handle, param, &value) != RBUS_ERROR_SUCCESS)
     {
+        CcspTraceError(("LMLite %s rbus_getStr failed for param=%s\n", __FUNCTION__, param));
         return NULL;
     }
+
+    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s value=%s\n", __FUNCTION__, value ? value : "NULL"));
 
     return value;
 }

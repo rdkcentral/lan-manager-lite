@@ -3389,8 +3389,39 @@ void LM_main (void)
     CcspTraceWarning(("LMLite:rdk initialzed!\n"));
 
 if(checkRbusEnabled()) {
-        CcspTraceDebug(("RBUS mode. lmliteRbusInit\n"));
-	lmliteRbusInit(LMLITE_COMPONENT_NAME);  // Initiating the Rbus 
+        CcspTraceInfo(("RBUS mode. lmliteRbusInit\n"));
+	lmliteRbusInit(LMLITE_COMPONENT_NAME);  // Initiating the Rbus
+    if(regLMLiteDataModel() == 0)
+    {
+        CcspTraceInfo((" %s: lmLite Data Model registered successfully\n", __FUNCTION__));
+    }
+    else
+    {
+        CcspTraceError((" %s: lmLite Data Model registration failed\n", __FUNCTION__));
+    }
+    /* Load initial value from PSM */
+    rbusError_t ret = RBUS_ERROR_SUCCESS;
+    char *tmpchar = NULL;
+    ret = rbus_GetValueFromPsmDB(LMLITE_MLO_RFC_PARAM, &tmpchar);
+    if (ret == RBUS_ERROR_SUCCESS && tmpchar != NULL)
+    {
+        if ((strcmp(tmpchar, "true") == 0) || (strcmp(tmpchar, "TRUE") == 0))
+        {
+            set_lmLiteMLORfcEnable(true);
+        }
+        else
+        {
+            set_lmLiteMLORfcEnable(false);
+        }
+        free(tmpchar);
+        CcspTraceInfo((" %s: Loaded MLO RFC value from PSM = %d\n", __FUNCTION__, get_lmLiteMLORfcEnable()));
+    }
+    else
+    {
+        /* Default to false if PSM value doesn't exist */
+        set_lmLiteMLORfcEnable(false);
+        CcspTraceWarning((" %s: MLO RFC PSM value not found, defaulting to false\n", __FUNCTION__));
+    }
 #ifdef WAN_FAILOVER_SUPPORTED
     set_rbus_handle();
 	get_WanManager_ActiveInterface();  
@@ -3410,37 +3441,6 @@ if(checkRbusEnabled()) {
 #endif
     CcspTraceInfo(("%s : WanTraffic Count Support ENABLED\n",__FUNCTION__));
     WTC_Init();
-    if(regLMLiteDataModel() == 0)
-    {
-        WTC_LOG_INFO(" %s: lmLite Data Model registered successfully\n", __FUNCTION__);
-    }
-    else
-    {
-        WTC_LOG_ERROR(" %s: lmLite Data Model registration failed\n", __FUNCTION__);
-    }
-    /* Load initial value from PSM */
-    rbusError_t ret = RBUS_ERROR_SUCCESS;
-    char *tmpchar = NULL;
-    ret = rbus_GetValueFromPsmDB(LMLITE_MLO_RFC_PARAM, &tmpchar);
-    if (ret == RBUS_ERROR_SUCCESS && tmpchar != NULL)
-    {
-        if ((strcmp(tmpchar, "true") == 0) || (strcmp(tmpchar, "TRUE") == 0))
-        {
-            set_lmLiteMLORfcEnable(true);
-        }
-        else
-        {
-            set_lmLiteMLORfcEnable(false);
-        }
-        free(tmpchar);
-        WTC_LOG_WARNING(" %s: Loaded MLO RFC value from PSM = %d\n", __FUNCTION__, get_lmLiteMLORfcEnable());
-    }
-    else
-    {
-        /* Default to false if PSM value doesn't exist */
-        set_lmLiteMLORfcEnable(false);
-        WTC_LOG_WARNING(" %s: MLO RFC PSM value not found, defaulting to false\n", __FUNCTION__);
-    }
 #if defined (RDKB_EXTENDER_ENABLED)
     }
 #endif
