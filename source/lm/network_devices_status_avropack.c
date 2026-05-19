@@ -79,7 +79,7 @@ extern pthread_mutex_t LmHostObjectMutex;
 extern int getTimeOffsetFromUtc();
 #endif
 
-bool MLORfcEnable = false;
+static bool MLORfcEnable = false;
 
 // local data, load it with real data if necessary
 char ReportSource[] = "LMLite";
@@ -171,13 +171,17 @@ avro_writer_t prepare_writer_status()
     /* open schema file */
     if( MLORfcEnable == true )
     {
-      CcspTraceInfo(("MLO RFC enabled, opening avro file: %s\n",NETWORK_DEVICE_STATUS_MLO_AVRO_FILENAME));
+      CcspTraceInfo(("opening avro file: %s\n",NETWORK_DEVICE_STATUS_MLO_AVRO_FILENAME));
       fp = fopen ( NETWORK_DEVICE_STATUS_MLO_AVRO_FILENAME , "rb" );
-      if ( !fp ) perror( NETWORK_DEVICE_STATUS_MLO_AVRO_FILENAME " doesn't exist."), exit(1);
+      if ( !fp )
+      {
+        CcspTraceError(("Failed to open MLO avro schema file %s\n", NETWORK_DEVICE_STATUS_MLO_AVRO_FILENAME));
+        perror( NETWORK_DEVICE_STATUS_MLO_AVRO_FILENAME " doesn't exist."), exit(1);
+      }
     }
     else 
     {
-      CcspTraceInfo(("MLO RFC disabled, opening avro file: %s\n",NETWORK_DEVICE_STATUS_AVRO_FILENAME));
+      CcspTraceInfo(("opening avro file: %s\n",NETWORK_DEVICE_STATUS_AVRO_FILENAME));
     fp = fopen ( NETWORK_DEVICE_STATUS_AVRO_FILENAME , "rb" );
     if ( !fp ) perror( NETWORK_DEVICE_STATUS_AVRO_FILENAME " doesn't exist."), exit(1);
     }
@@ -252,6 +256,7 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
 {
   int i = 0, k = 0;
   int numElements = 0;
+  int MLODevices = 0;
   struct networkdevicestatusdata* ptr = head;
   avro_writer_t writer;
   char * serviceName = "lmlite";
@@ -402,11 +407,6 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
     avro_value_set_null(&optional);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, cpe_parent\tType: %d\n", avro_value_get_type(&optional)));
     if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
-
-    if(MLORfcEnable == true)
-    {
-      // MLO report
-    }
   }
   else
   {
@@ -631,6 +631,51 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
       CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, \tipaddress\tType: %d\n", avro_value_get_type(&optional)));
       if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
 
+      if(MLORfcEnable == true)
+      {
+        if(ptr->mlo_used == true)
+          MLODevices++;
+
+        avro_value_get_by_name(&dr, "mlo_used", &drField, NULL);
+        if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
+        avro_value_set_branch(&drField, 1, &optional);
+        avro_value_set_boolean(&optional, ptr->mlo_used);
+        CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, \tmlo_used:%s\tType: %d\n", ptr->mlo_used ? "true" : "false", avro_value_get_type(&optional)));
+        if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
+
+        avro_value_get_by_name(&dr, "mlo_bands", &drField, NULL);
+        if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
+        avro_value_set_branch(&drField, 1, &optional);
+        if( ptr->mlo_bands == NULL )
+        {
+          avro_value_set_null(&optional);
+          CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, \tmlo_bands is NULL, set to null in avro\tType: %d\n", avro_value_get_type(&optional)));
+        }
+        else
+        {
+          avro_value_set_string(&optional, ptr->mlo_bands);
+          CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, \tmlo_bands:%s\tType: %d\n", ptr->mlo_bands, avro_value_get_type(&optional)));
+        }
+        if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
+
+        avro_value_get_by_name(&dr, "mlo_mode", &drField, NULL);
+        if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
+        avro_value_set_branch(&drField, 1, &optional);
+        if( ptr->mlo_mode == NULL )
+        {
+          avro_value_set_null(&optional);
+          CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, \tmlo_mode is NULL, set to null in avro\tType: %d\n", avro_value_get_type(&optional)));
+        }
+        else
+        {
+          avro_value_set_string(&optional, ptr->mlo_mode);
+          CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, \tmlo_mode:%s\tType: %d\n", ptr->mlo_mode, avro_value_get_type(&optional)));
+        }
+        if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
+
+      }
+
+
       i++;
     }
 
@@ -665,7 +710,8 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
   avro_writer_free(writer);
   //free(buffer);
 
-
+  if(MLORfcEnable == true)
+    CcspTraceInfo(("Number of NON MLO devices = %d, Number of MLO devices = %d, Total number of associated devices data packed for sending = %d \n", numElements-MLODevices, MLODevices, numElements));
 
 /*  if ( consoleDebugEnable )
   {
