@@ -412,21 +412,6 @@ static int _syscmd(FILE *f, char *retBuf, int retBufSize)
 #define MAX_PARAM_SIZE     256
 #define MAX_VALUE_SIZE     128
 #define MAX_BANDS_BUFFER   128
-static char* GetRbusString(const char* param)
-{
-    char* value = NULL;
-
-    if (!param)
-        return NULL;
-
-    if (rbus_getStr(handle, param, &value) != RBUS_ERROR_SUCCESS)
-    {
-        return NULL;
-    }
-
-    return value;
-}
-
 static void AppendBand(char* dst, size_t dstSize, const char* band)
 {
     if (!dst || !band)
@@ -446,10 +431,19 @@ char* GetMLOBandsForHost(PLmObjectHost host)
     char lowerLayerParam[MAX_PARAM_SIZE];
     char operBandParam[MAX_PARAM_SIZE];
     char bands[MAX_BANDS_BUFFER] = {0};
+
+    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s ENTER\n", __FUNCTION__ ));
     
     char* ssidLowerLayer = NULL;
     char* operatingBand = NULL;
     PLmObjectMloLink link = NULL;
+
+    if (!host)
+    {
+        CcspTraceError(("LMLite %s NULL host\n", __FUNCTION__ ));
+        return NULL;
+    }
+
     link = host->mloLinkArray;
     while (link)
     {
@@ -459,10 +453,11 @@ char* GetMLOBandsForHost(PLmObjectHost host)
             ssidLowerLayer = GetRbusString(lowerLayerParam);
             if(ssidLowerLayer)
             {
-                snprintf(operBandParam,sizeof(operBandParam),"%s.OperatingFrequencyBand",ssidLowerLayer);
+                snprintf(operBandParam,sizeof(operBandParam),"%sOperatingFrequencyBand",ssidLowerLayer);
                 operatingBand = GetRbusString(operBandParam);
                 if (operatingBand)
                 {
+                    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s band=%s\n", __FUNCTION__, operatingBand ));
                     AppendBand(bands,sizeof(bands),operatingBand);
                     free(operatingBand);
                     operatingBand = NULL;
@@ -476,9 +471,13 @@ char* GetMLOBandsForHost(PLmObjectHost host)
     }
 
     if (bands[0] == '\0')
+    {
+        CcspTraceError(("LMLite %s EXIT: no bands found\n", __FUNCTION__ ));
         return NULL;
+    }
 
     mlo_bands = strdup(bands);
+    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s EXIT: mlo_bands=%s\n", __FUNCTION__, mlo_bands ? mlo_bands : "NULL" ));
     return mlo_bands;
 }
 
@@ -602,11 +601,43 @@ void add_to_list(PLmObjectHost host, struct networkdevicestatusdata **head)
     {
         ptr->device_mac = strdup(host->pStringParaValue[LM_HOST_PhysAddressId]);
         CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, DeviceMAC[%s] \n",ptr->device_mac ));
+        ptr->mlo_used = host->bBoolParaValue[LM_HOST_X_RDK_MldClientId];
+        if(ptr->mlo_used == true)
+        {
+            if(host->numMloLinks > 1)
+            {
+                ptr->mlo_mode = strdup("multi");
+                CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, Host has multiple MLO links [%d] \n",host->numMloLinks ));
+            }
+            else
+            {
+                ptr->mlo_mode = strdup("single");
+                CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, Host has single MLO link \n"));
+            }
 
+            ptr->mlo_bands = GetMLOBandsForHost(host);
+            CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, MLO Bands [%s] \n",ptr->mlo_bands ? ptr->mlo_bands : "NULL" ));
+
+            if(host->mloLinkArray && host->mloLinkArray->layer1Interface != NULL)
+            {
+                ptr->interface_name = strdup(host->mloLinkArray->layer1Interface);
+                CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, InterfaceName from MLO Link [%s] \n",ptr->interface_name ));
+            }
+            else
+            {
+                ptr->interface_name = strdup("Unknown");
+                CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, InterfaceName is NULL in MLO Link, set to Unknown \n"));
+            }
+        }
+        else
+        {
+            ptr->mlo_bands = NULL;
+            ptr->mlo_mode = NULL;
         if(host->pStringParaValue[LM_HOST_Layer1InterfaceId])
                 ptr->interface_name = strdup(host->pStringParaValue[LM_HOST_Layer1InterfaceId]);
         else
                 ptr->interface_name = strdup("Unknown");
+        }
 
         CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, InterfaceName[%s] \n",ptr->interface_name ));
         ptr->is_active = host->bBoolParaValue[LM_HOST_ActiveId];
@@ -643,31 +674,6 @@ void add_to_list(PLmObjectHost host, struct networkdevicestatusdata **head)
         ptr->ipaddress = NDS_GetIpAddress(host);;
 
         CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, IPAddress[%s] \n",ptr->ipaddress ));
-
-        if(host->numMloLinks > 0)
-        {
-            ptr->mlo_used = true;
-            if(host->numMloLinks > 1)
-            {
-                ptr->mlo_mode = strdup("multi");
-                CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, Host has multiple MLO links [%d] \n",host->numMloLinks ));
-            }
-            else
-            {
-                ptr->mlo_mode = strdup("single");
-                CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, Host has single MLO link \n"));
-            }
-
-            ptr->mlo_bands = GetMLOBandsForHost(host);
-            CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, MLO Bands [%s] \n",ptr->mlo_bands ? ptr->mlo_bands : "NULL" ));
-        }
-        else
-        {
-            ptr->mlo_used = false;
-            ptr->mlo_bands = NULL;
-            ptr->mlo_mode = NULL;
-        }
-
 
         if (*head == NULL)
         {

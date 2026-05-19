@@ -40,9 +40,9 @@
 #include <stdbool.h>
 
 #define LMLITE_COMPONENT_NAME "lmlite"
-bool checkRbusEnabled();
-rbusError_t lmliteRbusInit(const char *pComponentName);
-rbusHandle_t get_rbus_handle(void);
+bool checkRbusEnabled(void);
+rbusError_t lmliteRbusInit(char const* pRbusComponentName);
+
 #define LMLITE_MLO_RFC_PARAM "Device.DeviceInfo.X_RDKCENTRAL-COM_Report.NetworkDevicesStatus.MloRfcEnable"
 
 /**
@@ -61,13 +61,17 @@ int set_lmLiteMLORfcEnable(bool bValue);
  * To persist TR181 parameter values in PSM DB.
  * @return status 0 for success or 1 for failure
  */
-int rbus_StoreValueIntoPsmDB(char *paramName, char *value);
+int rbus_StoreValueIntoPsmDB(char const* paramName, char const* value);
 
 /**
  * To fetch TR181 parameter values from PSM DB.
+ * @param[in] paramName   Fully qualified TR181 parameter name. Must not be NULL.
+ * @param[out] paramValue Heap-allocated string containing the parameter value on
+ *                        success. The caller is responsible for
+ *                        freeing the returned pointer.
  * @return status 0 for success or 1 for failure
  */
-int rbus_GetValueFromPsmDB( char* paramName, char** paramValue);
+int rbus_GetValueFromPsmDB(char const* paramName, char** paramValue);
 
 /**
  * @brief Gets the rbus_handle for lmLite.
@@ -82,5 +86,13 @@ rbusHandle_t get_rbus_handle(void);
  */
 int regLMLiteDataModel(void);
 
-char* GetRbusString(const char* param);
+/**
+ * @brief Get the string value of an RBUS parameter.
+ *
+ * @param[in] param  Fully qualified TR181 parameter name. Must not be NULL.
+ * @return           Heap-allocated string containing the parameter value on
+ *                   success, or NULL on failure. The caller is responsible for
+ *                   freeing the returned pointer.
+ */
+char* GetRbusString(char const* param);
 #endif

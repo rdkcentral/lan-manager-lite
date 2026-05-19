@@ -21,6 +21,7 @@
 #define NETWORK_DEVICES_STATUS_AVROPACK_H
 
 #include <sys/time.h>
+#include <stdbool.h>
 
 #if (defined SIMULATION)
 #define NETWORK_DEVICE_STATUS_AVRO_FILENAME			"NetworkDevicesStatus.avsc"
