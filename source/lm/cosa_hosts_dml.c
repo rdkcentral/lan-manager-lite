@@ -701,6 +701,36 @@ static int IsProperMac(const char* mac) //Adding input validation to address SEC
     return (i == 12 && s == 5);
 }
 
+static int StripBracketsAndSplit(char *input, char outArray[][LM_GEN_STR_SIZE], int maxEntries)
+{
+    char *token;
+    char *saveptr;
+    int   count = 0;
+
+    if (!input)
+    {
+        return 0;
+    }
+    if (*input == '[')
+    {
+        input++;
+    }
+    char *end = strrchr(input, ']');
+    if (end) {
+        *end = '\0';
+    }
+
+    token = strtok_r(input, ";", &saveptr);
+    while (token && count < maxEntries)
+    {
+        strncpy(outArray[count], token, LM_GEN_STR_SIZE - 1);
+        outArray[count][LM_GEN_STR_SIZE - 1] = '\0';
+        count++;
+        token = strtok_r(NULL, ";", &saveptr);
+    }
+    return count;
+}
+
 /**********************************************************************  
 
     caller:     owner of this object 
@@ -767,29 +797,46 @@ Hosts_SetParamStringValue
             return FALSE;
 #ifdef USE_NOTIFY_COMPONENT
 		char *st,
-			 *ssid, 
-			 *AssociatedDevice, 
 			 *phyAddr, 
-			 *RSSI, 
-			 *Status;
-		int  iRSSI,
-			 iStatus,
+             *apListStr,
+             *ssidListStr,
+             *rssiListStr,
+			 *Status,
+             *MloEnable;
+		int  iStatus,
+             iMloEnable,
              count_tok;
-			 
+        int iRssiArray[MAX_MLO_LINKS] = {0};
+        char apArray  [MAX_MLO_LINKS][LM_GEN_STR_SIZE] = {{0}};
+        char ssidArray[MAX_MLO_LINKS][LM_GEN_STR_SIZE] = {{0}};
+        char rssiStrArray[MAX_MLO_LINKS][LM_GEN_STR_SIZE] = {{0}};
+
         count_tok = DelimiterCount(pString);
-        if (count_tok != 4) {
+        if (count_tok == 4) {
+            /* Legacy format: mac,AP,SSID,RSSI,status */
+            phyAddr      = strtok_r(pString, ",", &st);
+            apListStr    = strtok_r(NULL, ",", &st);
+            ssidListStr  = strtok_r(NULL, ",", &st);
+            rssiListStr  = strtok_r(NULL, ",", &st);
+            Status       = strtok_r(NULL, ",", &st);
+            MloEnable    = NULL;
+            iMloEnable   = 0;
+        }
+        else if (count_tok == 5) {
+            /* MLO format: mac,[APs],[SSIDs],[RSSIs],status,mlo_enable */
+            phyAddr      = strtok_r(pString, ",", &st);
+            apListStr    = strtok_r(NULL, ",", &st);
+            ssidListStr  = strtok_r(NULL, ",", &st);
+            rssiListStr  = strtok_r(NULL, ",", &st);
+            Status       = strtok_r(NULL, ",", &st);
+            MloEnable    = strtok_r(NULL, ",", &st);
+        }
+        else {
             CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Missing required tokens in ParamString  \n",__FUNCTION__,__LINE__));
             return FALSE;
         }
 
-        /* save update to backup */
-		phyAddr 		 = strtok_r(pString, ",", &st);
-		AssociatedDevice = strtok_r(NULL, ",", &st);
-		ssid 			 = strtok_r(NULL, ",", &st);
-		RSSI 			 = strtok_r(NULL, ",", &st);
-		Status 			 = strtok_r(NULL, ",", &st);
-
-        if ((phyAddr == NULL) || (AssociatedDevice == NULL) || (ssid == NULL) || (RSSI == NULL) || (Status == NULL)) {
+        if ((phyAddr == NULL) || (apListStr == NULL) || (ssidListStr == NULL) || (rssiListStr == NULL) || (Status == NULL) || (count_tok == 5 && MloEnable == NULL)) {
             CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > One or more tokens are missing in ParamString  \n",__FUNCTION__,__LINE__));
          return FALSE;
         }
@@ -800,26 +847,67 @@ Hosts_SetParamStringValue
           return FALSE;
           }
 
-        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > <phyAddr=%s> <AssociatedDevice=%s> <ssid=%s> <RSSI=%s> <Status=%s>\n",__FUNCTION__,__LINE__, phyAddr,AssociatedDevice,ssid,RSSI,Status));
-  if (IsNumberString(RSSI)) {
-         iRSSI = atoi(RSSI);
-     } else {
-        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inapproriate RSSI value in ParamString  \n",__FUNCTION__,__LINE__));
-         return FALSE;
-     }
+        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > <phyAddr=%s> <Status=%s> <MloEnable=%s>\n",__FUNCTION__,__LINE__, phyAddr, Status, MloEnable ? MloEnable : "N/A"));
 
      if (IsNumberString(Status)) {
          iStatus = atoi(Status);
      }else {
-        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inapproriate STATUS value in ParamString  \n",__FUNCTION__,__LINE__));
+        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inappropriate STATUS value in ParamString  \n",__FUNCTION__,__LINE__));
         return FALSE;
     }
     if (!(iStatus >= 0 && iStatus <= 1)){
         CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > STATUS value in ParamString should be 0 or 1 \n",__FUNCTION__,__LINE__));
         return FALSE;
     }
+	if (MloEnable != NULL) {
+		if (IsNumberString(MloEnable)) {
+			iMloEnable = atoi(MloEnable);
+		} else {
+			CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inappropriate MLO_Enable value in ParamString  \n",__FUNCTION__,__LINE__));
+			return FALSE;
+		}
+		if (!(iMloEnable >= 0 && iMloEnable <= 1)){
+			CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > MloEnable value in ParamString should be 0 or 1 \n",__FUNCTION__,__LINE__));
+			return FALSE;
+		}
+	}
+    /* Parse lists — for legacy format these are plain scalars (no brackets) */
+    int linkCount;
+    if (count_tok == 4) {
+            strncpy(apArray[0], apListStr, LM_GEN_STR_SIZE - 1);
+            apArray[0][LM_GEN_STR_SIZE - 1] = '\0';
+            strncpy(ssidArray[0], ssidListStr, LM_GEN_STR_SIZE - 1);
+            ssidArray[0][LM_GEN_STR_SIZE - 1] = '\0';
+            if (!IsNumberString(rssiListStr)) {
+                CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inapproriate RSSI value in ParamString  \n",__FUNCTION__,__LINE__));
+                return FALSE;
+            }
+            iRssiArray[0] = atoi(rssiListStr);
+            linkCount = 1;
+	} else {
+		/* Split the three ';'-delimited bracket lists */
+		/* linkCount is got from ssidList to support empty aplist on disconnect */
+		(void)StripBracketsAndSplit(apListStr,   apArray,   MAX_MLO_LINKS);
+		linkCount = StripBracketsAndSplit(ssidListStr, ssidArray, MAX_MLO_LINKS);
+		int rssiCount = StripBracketsAndSplit(rssiListStr, rssiStrArray, MAX_MLO_LINKS);
 
-		Wifi_Server_Sync_Function( phyAddr, AssociatedDevice, ssid, iRSSI, iStatus );
+		if (linkCount != rssiCount) {
+			CcspTraceWarning(("Hosts_SetParamStringValue: ssidCount(%d) != rssiCount(%d)\n", linkCount, rssiCount));
+			return FALSE;
+		}
+
+		for (int j = 0; j < linkCount; j++) {
+			if (rssiStrArray[j][0] == '\0')
+				break;
+			if (!IsNumberString(rssiStrArray[j])) {
+				CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inappropriate RSSI value in ParamString  \n",__FUNCTION__,__LINE__));
+				return FALSE;
+			}
+			iRssiArray[j] = atoi(rssiStrArray[j]);
+		}
+	}
+    Wifi_Server_Sync_Function(phyAddr, apArray, ssidArray,
+                              iRssiArray, iStatus, iMloEnable, linkCount);
 #endif /* USE_NOTIFY_COMPONENT */
 		
         return TRUE;
@@ -914,14 +1002,14 @@ CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > <macAddr=%s> <sta
   if (IsNumberString(RSSI)) {
          iRSSI = atoi(RSSI);
      } else {
-        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inapproriate RSSI value in ParamString  \n",__FUNCTION__,__LINE__));
+        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inappropriate RSSI value in ParamString  \n",__FUNCTION__,__LINE__));
          return FALSE;
      }
 
      if (IsNumberString(Status)) {
          iStatus = atoi(Status);
      }else {
-        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inapproriate STATUS value in ParamString  \n",__FUNCTION__,__LINE__));
+        CcspTraceWarning((" \n Hosts_SetParamStringValue : < %s : %d > Inappropriate STATUS value in ParamString  \n",__FUNCTION__,__LINE__));
         return FALSE;
     }
 
@@ -2523,5 +2611,110 @@ Host_IPv6Address_GetParamStringValue
     }
 
     return GetParamStringValue_common (pValue, pUlSize, value, rc, &LmHostObjectMutex);
+}
+
+/***********************************************************************
+ APIs for Object:  Hosts.Host.{i}.MloLink.{j}.
+***********************************************************************/
+
+ULONG
+Host_MloLink_GetEntryCount
+    (
+        ANSC_HANDLE                 hInsContext
+    )
+{
+    ULONG count = 0;
+    CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+    pthread_mutex_lock(&LmHostObjectMutex);
+    CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+    PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+    count = (ULONG)pHost->numMloLinks;
+    pthread_mutex_unlock(&LmHostObjectMutex);
+    CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+    return count;
+}
+
+ANSC_HANDLE
+Host_MloLink_GetEntry
+    (
+        ANSC_HANDLE                 hInsContext,
+        ULONG                       nIndex,
+        ULONG*                      pInsNumber
+    )
+{
+    PLmObjectMloLink pLink = NULL;
+    ULONG idx = 0;
+    CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+    pthread_mutex_lock(&LmHostObjectMutex);
+    CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+    PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+
+    for (pLink = pHost->mloLinkArray; pLink != NULL; pLink = pLink->pNext)
+    {
+        if (idx == nIndex)
+        {
+            *pInsNumber = pLink->instanceNum;
+            break;
+        }
+        idx++;
+    }
+    pthread_mutex_unlock(&LmHostObjectMutex);
+    CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+    return (ANSC_HANDLE)pLink;
+}
+
+BOOL
+Host_MloLink_GetParamIntValue
+    (
+        ANSC_HANDLE                 hInsContext,
+        char*                       ParamName,
+        int*                        pInt
+    )
+{
+    PLmObjectMloLink pLink = (PLmObjectMloLink) hInsContext;
+
+    if (strcmp(ParamName, "X_RDK-RSSI") == 0)
+    {
+        CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+        pthread_mutex_lock(&LmHostObjectMutex);
+        CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+        *pInt = pLink->rssi;
+        pthread_mutex_unlock(&LmHostObjectMutex);
+        CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+ULONG
+Host_MloLink_GetParamStringValue
+    (
+        ANSC_HANDLE                 hInsContext,
+        char*                       ParamName,
+        char*                       pValue,
+        ULONG*                      pUlSize
+    )
+{
+    PLmObjectMloLink pLink = (PLmObjectMloLink) hInsContext;
+    char *value = NULL;
+    int rc = -1;
+
+    CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+    pthread_mutex_lock(&LmHostObjectMutex);
+    CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+
+    if (strcmp(ParamName, "X_RDK-Layer1Interface") == 0)
+    {
+        rc = 0;
+        value = pLink->layer1Interface;
+    }
+    else if (strcmp(ParamName, "X_RDK-AssociatedDevice") == 0)
+    {
+        rc = 0;
+        value = pLink->associatedDevice;
+    }
+
+    return GetParamStringValue_common(pValue, pUlSize, value, rc, &LmHostObjectMutex);
 }
 

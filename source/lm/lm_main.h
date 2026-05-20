@@ -73,7 +73,8 @@
 #define LM_HOST_ActiveId                        0
 #define LM_HOST_PresenceNotificationEnabledId   1
 #define LM_HOST_PresenceActiveId                2
-#define LM_HOST_NumBoolPara                     3
+#define LM_HOST_X_RDK_MldClientId               3
+#define LM_HOST_NumBoolPara                     4
 
 #define LM_HOST_X_CISCO_COM_ActiveTimeId        0
 #define LM_HOST_X_CISCO_COM_InactiveTimeId      1
@@ -86,7 +87,8 @@
 #define LM_HOST_X_CISCO_COM_OSType              3
 #define LM_HOST_X_COMCAST_COM_LastChange        4
 #define LM_HOST_X_RDK_PresenceActiveLastChange  5
-#define LM_HOST_NumUlongPara                    6
+#define LM_HOST_X_RDK_MloLinkNumberofEntriesId  6
+#define LM_HOST_NumUlongPara                    7
 
 //Unknown(1),Airport Base Station(2),AirTunes(3),AppleTV(4),Apple Device(5),Workstation(6),Network Storage(7),Set-Top Box(8),Router(9),Media Player(10), Printer(11)
 #define LM_HOST_X_CISCO_COM_DeviceType_Unkown               1
@@ -115,6 +117,8 @@
 #define LM_HOST_X_CISCO_COM_OSType_Linux                    4
 #define LM_HOST_X_CISCO_COM_OSType_iOS                      5
 #define LM_HOST_X_CISCO_COM_OSType_Android                  6
+
+#define MAX_MLO_LINKS   4 
 
 #define IP_V6 6
 #define IP_V4 4
@@ -219,6 +223,21 @@ _LmObjectHostIPAddress
 }
 LmObjectHostIPAddress,  *PLmObjectHostIPAddress;
 
+/* per-link MLO sub-table entry
+ * Device.Hosts.Host.{i}.MloLink.{j}.X_RDK-RSSI
+ * Device.Hosts.Host.{i}.MloLink.{j}.X_RDK-Layer1Interface
+ */
+typedef struct
+_LmObjectMloLink
+{
+    int    instanceNum;        /* link index j */
+    int    rssi;               /* MloLink.{j}.X_RDK-RSSI */
+    char   *layer1Interface;   /* MloLink.{j}.X_RDK-Layer1Interface */
+    char  *associatedDevice;   /* MloLink.{j}.X_RDK-AssociatedDevice */
+    struct _LmObjectMloLink *pNext;
+}
+LmObjectMloLink, *PLmObjectMloLink;
+
 typedef  struct
 _LmObjectHost
 {
@@ -256,6 +275,9 @@ _LmObjectHost
 	char backupHostname[64];
 	BOOL bClientReady;
 
+     /* MLO per-link sub-table */
+    PLmObjectMloLink mloLinkArray;  /* MloLink.{j} linked list */
+    int              numMloLinks;   /* same as X_RDK-MloLinkNumberofEntries */
 }
 LmObjectHost,  *PLmObjectHost;
 
@@ -309,7 +331,7 @@ int LMDmlHostsSetHostComment (char *pMac, char *pComment);
 
 char* FindParentIPInExtenderList(char* mac_address);
 char* FindMACByIPAddress(char * ip_address);
-void Wifi_Server_Sync_Function( char *phyAddr, char *AssociatedDevice, char *ssid, int RSSI, int Status );
+void Wifi_Server_Sync_Function( char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ssidList[][LM_GEN_STR_SIZE], int rssiList[], int Status, int mloEnable, int linkCount);
 void convert_ssid_to_radio(char *ssid, char *radio);
 PLmObjectHostIPAddress LM_FindIPv4BaseFromLink( PLmObjectHost pHost, char * ipAddress );
 BOOL Hosts_GetPresenceNotificationEnableStatus(char *Mac);
