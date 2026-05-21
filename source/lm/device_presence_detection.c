@@ -813,7 +813,7 @@ int sendIpv4ArpMessage(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient
                 target = allocate_strmem (40);
                 src_ip = allocate_strmem (INET_ADDRSTRLEN);
 
-                syscfg_get( NULL, "lan_ifname", buf, sizeof(buf));
+                syscfg_get( NULL, "lan_ifname", buf, sizeof(buf))
                 // Interface to send packet through.
                 rc = strcpy_s(interface, 40, buf);
                 ERR_CHK(rc);
