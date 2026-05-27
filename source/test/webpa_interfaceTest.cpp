@@ -28,6 +28,7 @@ extern "C"
 #include "../lm/webpa_interface.h"
 #include "../lm/network_devices_traffic_avropack.h"
 #include <rbus/rbus.h>  
+#include  "../lm/lm_rbus_api.h"
 }
 
 extern rbusMock * g_rbusMock;
@@ -47,12 +48,12 @@ TEST_F(CcspLMLiteTestFixture, checkRbusEnabledFailure) {
 
 TEST_F(CcspLMLiteTestFixture, lmliteRbusInitSuccess) {
     EXPECT_CALL(*g_rbusMock, rbus_open(_, _)).WillOnce(::testing::Return(RBUS_ERROR_SUCCESS));
-    ASSERT_EQ(lmliteRbusInit("_"), LMLITE_SUCCESS);
+    ASSERT_EQ(lmliteRbusInit("_"), RBUS_ERROR_SUCCESS);
 }
 
 TEST_F(CcspLMLiteTestFixture, lmliteRbusInitFailure) {
     EXPECT_CALL(*g_rbusMock, rbus_open(_, _)).WillOnce(::testing::Return(RBUS_ERROR_BUS_ERROR));
-    ASSERT_EQ(lmliteRbusInit("_"), LMLITE_FAILURE);
+    ASSERT_EQ(lmliteRbusInit("_"), RBUS_ERROR_BUS_ERROR);
 }
 
 TEST_F(CcspLMLiteTestFixture, rdk_logger_module_fetchSuccess) {

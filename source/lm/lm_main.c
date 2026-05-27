@@ -77,6 +77,7 @@
 #ifdef WAN_TRAFFIC_COUNT_SUPPORT
 #include "cosa_wantraffic_api.h"
 #endif
+#include "lm_rbus_api.h"
 #include "webpa_interface.h"
 #include "lm_wrapper.h"
 #include "lm_api.h"
@@ -3387,14 +3388,55 @@ void LM_main (void)
 #endif
     CcspTraceWarning(("LMLite:rdk initialzed!\n"));
 
+if(checkRbusEnabled()) {
+        CcspTraceInfo(("RBUS mode. lmliteRbusInit\n"));
+    rbusError_t rbusRet;
+	rbusRet = lmliteRbusInit(LMLITE_COMPONENT_NAME);  // Initiating the Rbus
+    if(rbusRet == RBUS_ERROR_SUCCESS)
+    {
+        CcspTraceInfo((" %s: lmliteRbusInit success\n", __FUNCTION__));
+        if(regLMLiteDataModel() == 0)
+        {
+            CcspTraceInfo((" %s: lmLite Data Model registered successfully\n", __FUNCTION__));
+            /* Load initial value from PSM */
+            int ret = 0;
+            char *tmpchar = NULL;
+            ret = rbus_GetValueFromPsmDB(LMLITE_MLO_RFC_PARAM, &tmpchar);
+            if (ret == 0 && tmpchar != NULL)
+            {
+                if ((strcmp(tmpchar, "true") == 0) || (strcmp(tmpchar, "TRUE") == 0))
+                {
+                    set_lmLiteMLORfcEnable(true);
+                }
+                else
+                {
+                    set_lmLiteMLORfcEnable(false);
+                }
+                free(tmpchar);
+                CcspTraceInfo((" %s: Loaded MLO RFC value from PSM = %d\n", __FUNCTION__, get_lmLiteMLORfcEnable()));
+            }
+            else
+            {
+                /* Default to false if PSM value doesn't exist */
+                set_lmLiteMLORfcEnable(false);
+                CcspTraceWarning((" %s: MLO RFC PSM value not found, defaulting to false\n", __FUNCTION__));
+            }
+        }
+        else
+        {
+            CcspTraceError((" %s: lmLite Data Model registration failed\n", __FUNCTION__));
+        }
+    }
+    else
+    {
+        CcspTraceError((" %s: lmliteRbusInit failed with error code %d\n", __FUNCTION__, rbusRet));
+    }
 #ifdef WAN_FAILOVER_SUPPORTED
-    if(checkRbusEnabled()) {
-        CcspTraceDebug(("RBUS mode. lmliteRbusInit\n"));
-	lmliteRbusInit(LMLITE_COMPONENT_NAME);  // Initiating the Rbus 
+    set_rbus_handle();
 	get_WanManager_ActiveInterface();  
 	subscribeTo_InterfaceActiveStatus_Event();  
-    }	     
 #endif
+}
     initparodusTask();
 
 #ifdef WAN_TRAFFIC_COUNT_SUPPORT
