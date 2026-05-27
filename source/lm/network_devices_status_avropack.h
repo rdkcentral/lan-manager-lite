@@ -21,11 +21,14 @@
 #define NETWORK_DEVICES_STATUS_AVROPACK_H
 
 #include <sys/time.h>
+#include <stdbool.h>
 
 #if (defined SIMULATION)
 #define NETWORK_DEVICE_STATUS_AVRO_FILENAME			"NetworkDevicesStatus.avsc"
+#define NETWORK_DEVICE_STATUS_MLO_AVRO_FILENAME			"NetworkDevicesStatusMLO.avsc"
 #else
 #define NETWORK_DEVICE_STATUS_AVRO_FILENAME			"/usr/ccsp/lm/NetworkDevicesStatus.avsc"
+#define NETWORK_DEVICE_STATUS_MLO_AVRO_FILENAME			"/usr/ccsp/lm/NetworkDevicesStatusMLO.avsc"
 #endif
 #define CHK_AVRO_ERR (( NULL != avro_strerror() ) && ( strlen(avro_strerror()) > 0) )
 
@@ -39,6 +42,9 @@ char* parent;
 char* device_type;
 char* hostname;
 char* ipaddress;
+bool mlo_used;
+char* mlo_bands;
+char* mlo_mode;
 struct networkdevicestatusdata *next;
 };
 

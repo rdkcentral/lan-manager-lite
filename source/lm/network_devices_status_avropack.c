@@ -38,6 +38,8 @@
 #include "mlt_malloc.h"
 #endif
 
+#include "lm_rbus_api.h"
+
 #define MAGIC_NUMBER      0x85
 #define MAGIC_NUMBER_SIZE 1
 #define SCHEMA_ID_LENGTH  32
@@ -45,11 +47,15 @@
 
 //      "schemaTypeUUID" : "3053b4ab-d3f9-4cc9-8c3e-f0bde4a2e6ca",
 //      "schemaMD5Hash" :  "da29287d0199d6279cf934ce884426af",
-
+//      "schemaMD5MLOHash" : "fc82b239cdbc6a7dcecbf0a60b49cdd9",
 uint8_t HASH[16] = {0xda, 0x29, 0x28, 0x7d, 0x01, 0x99, 0xd6, 0x27,
                     0x9c, 0xf9, 0x34, 0xce, 0x88, 0x44, 0x26, 0xaf
                    };
 
+uint8_t MLO_HASH[16] = {0xfc, 0x82, 0xb2, 0x39, 0xcd, 0xbc, 0x6a, 0x7d,
+                    0xce, 0xcb, 0xf0, 0xa6, 0x0b, 0x49, 0xcd, 0xd9
+                   };
+                   
 uint8_t UUID[16] = {0x30, 0x53, 0xb4, 0xab, 0xd3, 0xf9, 0x4c, 0xc9,
                     0x8c, 0x3e, 0xf0, 0xbd, 0xe4, 0xa2, 0xe6, 0xca
                    };
@@ -60,6 +66,7 @@ static char CpemacStr[ 32 ] = {0}; //CID 559876 Buffer not null terminated
 BOOL schema_file_parsed = FALSE;
 char *ndsschemabuffer = NULL;
 char *nds_schemaidbuffer = "3053b4ab-d3f9-4cc9-8c3e-f0bde4a2e6ca/da29287d0199d6279cf934ce884426af";
+char *nds_MLOschemaidbuffer = "3053b4ab-d3f9-4cc9-8c3e-f0bde4a2e6ca/fc82b239cdbc6a7dcecbf0a60b49cdd9";
 static size_t AvroSerializedSize;
 static size_t OneAvroSerializedSize;
 static char AvroSerializedBuf[ WRITER_BUF_SIZE ];
@@ -71,6 +78,8 @@ extern pthread_mutex_t LmHostObjectMutex;
 #ifndef UTC_ENABLE
 extern int getTimeOffsetFromUtc();
 #endif
+
+static bool MLORfcEnable = false;
 
 // local data, load it with real data if necessary
 char ReportSource[] = "LMLite";
@@ -96,14 +105,24 @@ return len;
 
 char* GetNDStatusSchemaIDBuffer()
 {
+  if(MLORfcEnable == true)
+    return nds_MLOschemaidbuffer;
+  else
   return nds_schemaidbuffer;
 }
 
 int GetNDStatusSchemaIDBufferSize()
 {
 int len = 0;
+if(MLORfcEnable == true)
+{
+    len = strlen(nds_MLOschemaidbuffer);
+}
+else
+{
 if(nds_schemaidbuffer)
         len = strlen(nds_schemaidbuffer);
+}
 
 return len;
 }
@@ -134,12 +153,38 @@ avro_writer_t prepare_writer_status()
 
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, Avro prepares to serialize data\n"));
 
+  static bool previous_isMLORfcEnabled = false;
+  if(MLORfcEnable != previous_isMLORfcEnabled)
+  {
+    CcspTraceInfo(("LMLite %s: MLORfcEnable changed from %s to %s, resetting schema_file_parsed to FALSE\n",
+                           __FUNCTION__,
+                           previous_isMLORfcEnabled ? "true" : "false",
+                           MLORfcEnable ? "true" : "false"));
+    previous_isMLORfcEnabled = MLORfcEnable;
+    nds_avro_cleanup(); // reset to re-parse correct schema file based on MLO RFC feature state
+  }
+
+
   if ( schema_file_parsed == FALSE )
   {
     FILE *fp;
     /* open schema file */
+    if( MLORfcEnable == true )
+    {
+      CcspTraceInfo(("opening avro file: %s\n",NETWORK_DEVICE_STATUS_MLO_AVRO_FILENAME));
+      fp = fopen ( NETWORK_DEVICE_STATUS_MLO_AVRO_FILENAME , "rb" );
+      if ( !fp )
+      {
+        CcspTraceError(("Failed to open MLO avro schema file %s\n", NETWORK_DEVICE_STATUS_MLO_AVRO_FILENAME));
+        perror( NETWORK_DEVICE_STATUS_MLO_AVRO_FILENAME " doesn't exist."), exit(1);
+      }
+    }
+    else 
+    {
+      CcspTraceInfo(("opening avro file: %s\n",NETWORK_DEVICE_STATUS_AVRO_FILENAME));
     fp = fopen ( NETWORK_DEVICE_STATUS_AVRO_FILENAME , "rb" );
     if ( !fp ) perror( NETWORK_DEVICE_STATUS_AVRO_FILENAME " doesn't exist."), exit(1);
+    }
 
     /* seek through file and get file size*/
     fseek( fp , 0L , SEEK_END);
@@ -188,7 +233,14 @@ avro_writer_t prepare_writer_status()
 
   memcpy( &AvroSerializedBuf[ MAGIC_NUMBER_SIZE ], UUID, sizeof(UUID));
 
+if(MLORfcEnable == true)
+{
+  memcpy( &AvroSerializedBuf[ MAGIC_NUMBER_SIZE + sizeof(UUID) ], MLO_HASH, sizeof(MLO_HASH));
+}
+else
+{
   memcpy( &AvroSerializedBuf[ MAGIC_NUMBER_SIZE + sizeof(UUID) ], HASH, sizeof(HASH));
+}
 
   writer = avro_writer_memory( (char*)&AvroSerializedBuf[MAGIC_NUMBER_SIZE + SCHEMA_ID_LENGTH],
                                sizeof(AvroSerializedBuf) - MAGIC_NUMBER_SIZE - SCHEMA_ID_LENGTH );
@@ -204,6 +256,7 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
 {
   int i = 0, k = 0;
   int numElements = 0;
+  int MLODevices = 0;
   struct networkdevicestatusdata* ptr = head;
   avro_writer_t writer;
   char * serviceName = "lmlite";
@@ -221,6 +274,8 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, numElements = %d\n", numElements ));
 
   OneAvroSerializedSize = 0;
+
+  MLORfcEnable = get_lmLiteMLORfcEnable();
 
   /* goes thru total number of elements in link list */
   writer = prepare_writer_status();
@@ -576,6 +631,51 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
       CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, \tipaddress\tType: %d\n", avro_value_get_type(&optional)));
       if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
 
+      if(MLORfcEnable == true)
+      {
+        if(ptr->mlo_used == true)
+          MLODevices++;
+
+        avro_value_get_by_name(&dr, "mlo_used", &drField, NULL);
+        if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
+        avro_value_set_branch(&drField, 1, &optional);
+        avro_value_set_boolean(&optional, ptr->mlo_used);
+        CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, \tmlo_used:%s\tType: %d\n", ptr->mlo_used ? "true" : "false", avro_value_get_type(&optional)));
+        if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
+
+        avro_value_get_by_name(&dr, "mlo_bands", &drField, NULL);
+        if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
+        avro_value_set_branch(&drField, 1, &optional);
+        if( ptr->mlo_bands == NULL )
+        {
+          avro_value_set_null(&optional);
+          CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, \tmlo_bands is NULL, set to null in avro\tType: %d\n", avro_value_get_type(&optional)));
+        }
+        else
+        {
+          avro_value_set_string(&optional, ptr->mlo_bands);
+          CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, \tmlo_bands:%s\tType: %d\n", ptr->mlo_bands, avro_value_get_type(&optional)));
+        }
+        if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
+
+        avro_value_get_by_name(&dr, "mlo_mode", &drField, NULL);
+        if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
+        avro_value_set_branch(&drField, 1, &optional);
+        if( ptr->mlo_mode == NULL )
+        {
+          avro_value_set_null(&optional);
+          CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, \tmlo_mode is NULL, set to null in avro\tType: %d\n", avro_value_get_type(&optional)));
+        }
+        else
+        {
+          avro_value_set_string(&optional, ptr->mlo_mode);
+          CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, \tmlo_mode:%s\tType: %d\n", ptr->mlo_mode, avro_value_get_type(&optional)));
+        }
+        if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
+
+      }
+
+
       i++;
     }
 
@@ -610,7 +710,8 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
   avro_writer_free(writer);
   //free(buffer);
 
-
+  if(MLORfcEnable == true)
+    CcspTraceInfo(("Number of NON MLO devices = %d, Number of MLO devices = %d, Total number of associated devices data packed for sending = %d \n", numElements-MLODevices, MLODevices, numElements));
 
 /*  if ( consoleDebugEnable )
   {

@@ -31,6 +31,7 @@ libCcspLM_la_SOURCES = cosa_hosts_dml.c \
                        lm_main.c \
                        lm_wrapper.c \
                        lm_util.c \
+                       lm_rbus_api.c \
                        network_devices_status_avropack.c  \
                        webpa_interface.c \
                        webpa_pd_with_seshat.c \
