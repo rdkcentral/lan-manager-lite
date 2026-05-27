@@ -711,6 +711,37 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
 
         if(pHost->ipv4Active == TRUE) {
             if (state) {
+                CcspTraceWarning(("<%s> Debug trace for XB10-2559 \n",__FUNCTION__));
+#if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
+                char device_mode[32] = {0};
+                char dhcp_server_enabled[32] = {0};
+
+                CcspTraceWarning(("<%s> _ONESTACK_PRODUCT_REQ_ \n",__FUNCTION__));
+#if defined (_ONESTACK_PRODUCT_REQ_)
+                if(!syscfg_get( NULL, "devicemode", device_mode, sizeof(device_mode)))
+                {
+                    CcspTraceWarning(("<%s> devicemode: %s\n",_FUNCTION__, device_mode));
+                    if(strncmp(device_mode, "business", strlen("business")) == 0)
+                    {
+#endif
+                        if(!syscfg_get( NULL, "dhcp_server_enabled", dhcp_server_enabled, sizeof(dhcp_server_enabled)))
+                        {
+                            CcspTraceWarning(("<%s> dhcp_server_enabled: %s\n",_FUNCTION__, dhcp_server_enabled));
+                            if(strncmp(dhcp_server_enabled, "0", strlen("0")) == 0)
+                            {
+                                CcspTraceWarning(("<%s> IPv4 Address removing from host table \n",__FUNCTION__));
+                                AnscFreeMemory(pHost->pStringParaValue[LM_HOST_IPAddressId]);
+                                pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
+                                Host_FreeIPAddress(pHost, 4);
+                                pHost->ipv4Active = FALSE;
+                            }
+                        }
+#if defined (_ONESTACK_PRODUCT_REQ_)
+                    }
+                }
+#endif
+                if(pHost->ipv4Active == TRUE) {
+#endif
                 if(0 == FindHostInLeases(pHost->pStringParaValue[LM_HOST_IPAddressId], DNS_LEASE)){
                     char lan_ip_address[32] = {0};
                     char lan_net_mask[32] = {0};
@@ -727,6 +758,9 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
                 else {
                     CcspTraceWarning(("<%s> IPAddress not found in lease file : IPAddress = %s, MAC Addr = %s \n",__FUNCTION__, pHost->pStringParaValue[LM_HOST_IPAddressId], pHost->pStringParaValue[LM_HOST_PhysAddressId]));
                 }
+#if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
+                }
+#endif
             }
         }
         pHost->bBoolParaValue[LM_HOST_ActiveId] = state;
