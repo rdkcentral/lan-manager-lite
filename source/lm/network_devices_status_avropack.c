@@ -673,6 +673,7 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
         }
         if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
 
+         CcspTraceInfo(("mac_address=%s interface_name=%s mlo_used=%s mlo_bands=%s mlo_mode=%s\n", ptr->device_mac, ptr->interface_name, ptr->mlo_used ? "true" : "false", ptr->mlo_bands ? ptr->mlo_bands : "NULL", ptr->mlo_mode ? ptr->mlo_mode : "NULL"));
       }
 
 
