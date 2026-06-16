@@ -652,35 +652,11 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
 				OnboardLog("RDKB_CONNECTED_CLIENTS: Wifi client with %s MacAddress and %s HostName gone offline\n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]);
 				t2_event_d("WIFI_INFO_clientdisconnect", 1);
                 CcspTraceWarning(("<%s> Debug trace for XB10-2559 \n",__FUNCTION__));
-#if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
-                char device_mode[32] = {0};
-                char dhcp_server_enabled[32] = {0};
-
-                CcspTraceWarning(("<%s> _ONESTACK_PRODUCT_REQ_ \n",__FUNCTION__));
-#if defined (_ONESTACK_PRODUCT_REQ_)
-                if(!syscfg_get( NULL, "devicemode", device_mode, sizeof(device_mode)))
-                {
-                    CcspTraceWarning(("<%s> devicemode: %s\n",__FUNCTION__, device_mode));
-                    if(strncmp(device_mode, "business", strlen("business")) == 0)
-                    {
-#endif
-                        if(!syscfg_get( NULL, "dhcp_server_enabled", dhcp_server_enabled, sizeof(dhcp_server_enabled)))
-                        {
-                            CcspTraceWarning(("<%s> dhcp_server_enabled: %s\n",__FUNCTION__, dhcp_server_enabled));
-                            if(strncmp(dhcp_server_enabled, "0", strlen("0")) == 0)
-                            {
-                                CcspTraceWarning(("<%s> IPv4 Address removing from host table \n",__FUNCTION__));
-                                AnscFreeMemory(pHost->pStringParaValue[LM_HOST_IPAddressId]);
-                                pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
-                                Host_FreeIPAddress(pHost, 4);
-                                pHost->ipv4Active = FALSE;
-                            }
-                        }
-#if defined (_ONESTACK_PRODUCT_REQ_)
-                    }
-                }
-#endif
-#endif
+                CcspTraceWarning(("<%s> IPv4 Address removing from host table \n",__FUNCTION__));
+                AnscFreeMemory(pHost->pStringParaValue[LM_HOST_IPAddressId]);
+                pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
+                Host_FreeIPAddress(pHost, 4);
+                pHost->ipv4Active = FALSE;
 				}
 #ifndef USE_NOTIFY_COMPONENT
 				remove_Mac_to_band_mapping(pHost->pStringParaValue[LM_HOST_PhysAddressId]);
