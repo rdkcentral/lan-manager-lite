@@ -1788,7 +1788,7 @@ int getIPAddress(char *physAddress,char *IPAddress)
         if (output[0] != '\0')
         {
             memcpy(IPAddress,output,sizeof(output));
-            AnscTraceWarning(("client is either reachable or delay: MAC %s IP %s\n", physAddress, IPAddress));
+            AnscTraceDebug(("client is either reachable or delay: MAC %s IP %s\n", physAddress, IPAddress));
             pclose(fp);
             fp = NULL;
             return 0;
@@ -1813,7 +1813,7 @@ int getIPAddress(char *physAddress,char *IPAddress)
         if (output[0] != '\0')
         {
              memcpy(IPAddress,output,sizeof(output));
-             AnscTraceWarning(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));
+             AnscTraceDebug(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));
              pclose(fp);
              fp = NULL;
              return 0;
