@@ -2990,7 +2990,7 @@ static BOOL ValidateHost (char *mac)
     FILE *fp;
     int ret =0;
 
-#ifdef CORE_NET_LIB
+#if 0 /* RDKB-65870: Bypass CORE_NET_LIB (libnl) to isolate memory leak */
     char *mac_filter = NULL;
     char *if_filter = NULL;
     int af_filter = 0;
