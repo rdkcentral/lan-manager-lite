@@ -1433,10 +1433,13 @@ int lm_wrapper_get_arp_entries (char netName[LM_NETWORK_NAME_SIZE], int *pCount,
             continue;
         }
 
-        hosts = (LM_host_entry_t *) realloc(hosts, sizeof(LM_host_entry_t) * (index+1));
+        LM_host_entry_t *tmp = (LM_host_entry_t *) realloc(hosts, sizeof(LM_host_entry_t) * (index+1));
 
-        if ( hosts == NULL )
+        if ( tmp == NULL )
         {
+            /* realloc failed: the original 'hosts' block is still valid and must
+               be freed here, otherwise it is leaked. */
+            free(hosts);
             fclose(fp);
             unlink(ARP_CACHE_FILE);
             *pCount = 0;
@@ -1444,6 +1447,7 @@ int lm_wrapper_get_arp_entries (char netName[LM_NETWORK_NAME_SIZE], int *pCount,
             pthread_mutex_unlock(&GetARPEntryMutex);
             return -1;
         }
+        hosts = tmp;
 
         /*
         Sample:

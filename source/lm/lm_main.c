@@ -1482,7 +1482,18 @@ static void Host_FreeIPAddress(PLmObjectHost pHost, int version)
     *num = 0;
     while(pIpAddrList != NULL)
     {
-        AnscFreeMemory(pIpAddrList->pStringParaValue[LM_HOST_IPAddress_IPAddressId]);
+        int j;
+        /* Free every allocated string slot (IPAddressId, IPAddressSourceId, ...)
+         * to avoid leaking the ones set outside of Add_Update_IPvXAddress
+         * (e.g. IPAddressSourceId set by Host_SetIPAddress). */
+        for(j = 0; j < LM_HOST_IPAddress_NumStringPara; j++)
+        {
+            if(pIpAddrList->pStringParaValue[j])
+            {
+                AnscFreeMemory(pIpAddrList->pStringParaValue[j]);
+                pIpAddrList->pStringParaValue[j] = NULL;
+            }
+        }
         pCur = pIpAddrList;
         pIpAddrList = pIpAddrList->pNext;
         AnscFreeMemory(pCur); /*RDKB-7348, CID-33198, free current list*/
