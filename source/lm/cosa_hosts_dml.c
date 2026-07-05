@@ -1621,9 +1621,9 @@ Host_GetParamStringValue
                 memcpy(pValue, pHost->pStringParaValue[LM_HOST_IPAddressId], strlen(pHost->pStringParaValue[LM_HOST_IPAddressId])+1);
                 //  AnscTraceWarning(("[primary] client : MAC %s IP %s\n", pHost->pStringParaValue[LM_HOST_PhysAddressId], pValue));
             }
-            else if (pHost->pStringParaValue[LM_HOST_IPAddressId])
+            else if (pValue[0] != '\0')
             {
-                AnscCopyString(pHost->pStringParaValue[LM_HOST_IPAddressId],pValue) ;
+                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]), pValue);
             }
             pthread_mutex_unlock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));

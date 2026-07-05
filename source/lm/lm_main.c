@@ -1466,7 +1466,7 @@ PLmObjectHost Hosts_AddHostByPhysAddress(char *physAddress)
 
 static void Host_FreeIPAddress(PLmObjectHost pHost, int version)
 {
-    int *num;
+    int i, *num;
     PLmObjectHostIPAddress pIpAddrList, pCur, *ppHeader;
 
     if(version == 4){
@@ -1482,7 +1482,14 @@ static void Host_FreeIPAddress(PLmObjectHost pHost, int version)
     *num = 0;
     while(pIpAddrList != NULL)
     {
-        AnscFreeMemory(pIpAddrList->pStringParaValue[LM_HOST_IPAddress_IPAddressId]);
+        for (i = 0; i < LM_HOST_IPAddress_NumStringPara; i++)
+        {
+            if (pIpAddrList->pStringParaValue[i])
+            {
+                AnscFreeMemory(pIpAddrList->pStringParaValue[i]);
+                pIpAddrList->pStringParaValue[i] = NULL;
+            }
+        }
         pCur = pIpAddrList;
         pIpAddrList = pIpAddrList->pNext;
         AnscFreeMemory(pCur); /*RDKB-7348, CID-33198, free current list*/
