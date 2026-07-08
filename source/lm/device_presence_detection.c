@@ -721,7 +721,7 @@ void sendProbeRequest (int iIpVersion, char * pIpAddress, char * pIface)
         close(iSocketFd);
         return;
     }
-    CcspTraceInfo(("%s:%d, Probe request sent for IP:%s on interface:%s\n",__FUNCTION__,__LINE__,pIpAddress,pIface));
+    CcspTraceDebug(("%s:%d, Probe request sent for IP:%s on interface:%s\n",__FUNCTION__,__LINE__,pIpAddress,pIface));
     close(iSocketFd);
     return;
 }
