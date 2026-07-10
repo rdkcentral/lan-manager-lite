@@ -149,7 +149,7 @@ static ULONG GetParamStringValue_common (char *pValue, ULONG *pUlSize, char *val
             value = "";
         }
 
-        len = strlen (value);
+        len = strnlen(value, *pUlSize); 
         if (len >= *pUlSize)
         {
             *pUlSize = len + 1;
