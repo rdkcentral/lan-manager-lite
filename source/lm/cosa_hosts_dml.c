@@ -167,6 +167,39 @@ static ULONG GetParamStringValue_common (char *pValue, ULONG *pUlSize, char *val
     return (ULONG) rc;
 }
 
+/*
+   Generic exit processing for XXX_GetParamStringValue() functions.
+   If rc is 0 then return value string (or an empty string if value is NULL)
+   with appropriate size limit checks. Otherwise just return the value in rc
+   (which is expected to be -1).
+*/
+/*
+   Returns TRUE if pHost still points to a live entry in the Hosts table.
+   Must be called with LmHostObjectMutex held. This guards against stale
+   instance handles (use-after-free): the CCSP framework caches the row
+   handle returned by Host_GetEntry after the mutex is released, so the
+   entry may have been removed/reallocated before the Get*Value call runs.
+*/
+
+static BOOL IsValidHostHandle(PLmObjectHost pHost)
+{
+    int i;
+
+    if (pHost == NULL)
+    {
+        return FALSE;
+    }
+
+    for (i = 0; i < lmHosts.numHost; i++)
+    {
+        if (lmHosts.hostArray[i] == pHost)
+        {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
 
 /**********************************************************************  
 
@@ -1577,6 +1610,16 @@ Host_GetParamStringValue
     CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     pthread_mutex_lock (&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+
+    /* Guard against a stale/freed instance handle before dereferencing it. */
+    if (!IsValidHostHandle (pHost))
+    {
+        CcspTraceWarning(("%s:%d, stale Host handle %p for '%s', ignoring\n",
+                          __FUNCTION__, __LINE__, (void *)pHost, ParamName));
+        pthread_mutex_unlock (&LmHostObjectMutex);
+        CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+        return (ULONG) -1;
+    }
 
     /*
        Note that there two different ways to get Layer3Interface:
