@@ -150,7 +150,6 @@ static ULONG GetParamStringValue_common (char *pValue, ULONG *pUlSize, char *val
         }
 
         len = strnlen(value, *pUlSize); 
-        if (len >= *pUlSize)
         {
             *pUlSize = len + 1;
             rc = 1;
@@ -1312,6 +1311,12 @@ Host_GetParamBoolValue
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             pthread_mutex_lock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+            if (!IsValidHostHandle(pHost))
+            {
+                CcspTraceWarning(("%s:%d, stale Host handle %p for '%s', ignoring\n",__FUNCTION__,__LINE__,(void *)pHost,ParamName));
+                pthread_mutex_unlock(&LmHostObjectMutex);
+                return FALSE;
+            }
             *pBool = pHost->bBoolParaValue[i];
             pthread_mutex_unlock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -1324,6 +1329,12 @@ Host_GetParamBoolValue
         CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
         pthread_mutex_lock(&LmHostObjectMutex);
         CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+        if (!IsValidHostHandle(pHost))
+        {
+            CcspTraceWarning(("%s:%d, stale Host handle %p for '%s', ignoring\n",__FUNCTION__,__LINE__,(void *)pHost,ParamName));
+            pthread_mutex_unlock(&LmHostObjectMutex);
+            return FALSE;
+        }
         *pBool = pHost->bTrueStaticIPClient;
         pthread_mutex_unlock(&LmHostObjectMutex);
         CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -1379,6 +1390,12 @@ Host_GetParamIntValue
         CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
         pthread_mutex_lock(&LmHostObjectMutex);
         CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+        if (!IsValidHostHandle(pHost))
+        {
+            CcspTraceWarning(("%s:%d, stale Host handle %p for '%s', ignoring\n",__FUNCTION__,__LINE__,(void *)pHost,ParamName));
+            pthread_mutex_unlock(&LmHostObjectMutex);
+            return FALSE;
+        }
         if(pHost->bBoolParaValue[LM_HOST_ActiveId]){
 	    time_t currentTime = time(NULL);
             if(currentTime > pHost->activityChangeTime){
@@ -1402,6 +1419,12 @@ Host_GetParamIntValue
         CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
         pthread_mutex_lock(&LmHostObjectMutex);
         CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+        if (!IsValidHostHandle(pHost))
+        {
+            CcspTraceWarning(("%s:%d, stale Host handle %p for '%s', ignoring\n",__FUNCTION__,__LINE__,(void *)pHost,ParamName));
+            pthread_mutex_unlock(&LmHostObjectMutex);
+            return FALSE;
+        }
         if(!pHost->bBoolParaValue[LM_HOST_ActiveId]){
             time_t currentTime = time(NULL);
             if(currentTime > pHost->activityChangeTime){
@@ -1425,6 +1448,12 @@ Host_GetParamIntValue
         CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
         pthread_mutex_lock(&LmHostObjectMutex);
         CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+        if (!IsValidHostHandle(pHost))
+        {
+            CcspTraceWarning(("%s:%d, stale Host handle %p for '%s', ignoring\n",__FUNCTION__,__LINE__,(void *)pHost,ParamName));
+            pthread_mutex_unlock(&LmHostObjectMutex);
+            return FALSE;
+        }
         *pInt = pHost->iIntParaValue[LM_HOST_X_CISCO_COM_RSSIId];
         pthread_mutex_unlock(&LmHostObjectMutex);
         CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -1438,6 +1467,12 @@ Host_GetParamIntValue
         CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
         pthread_mutex_lock(&LmHostObjectMutex);
         CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+        if (!IsValidHostHandle(pHost))
+        {
+            CcspTraceWarning(("%s:%d, stale Host handle %p for '%s', ignoring\n",__FUNCTION__,__LINE__,(void *)pHost,ParamName));
+            pthread_mutex_unlock(&LmHostObjectMutex);
+            return FALSE;
+        }
         currentTime = time(NULL);
         if(pHost->LeaseTime == 0xffffffff){
             *pInt = -1;
@@ -1507,6 +1542,12 @@ Host_GetParamUlongValue
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             pthread_mutex_lock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+            if (!IsValidHostHandle(pHost))
+            {
+                CcspTraceWarning(("%s:%d, stale Host handle %p for '%s', ignoring\n",__FUNCTION__,__LINE__,(void *)pHost,ParamName));
+                pthread_mutex_unlock(&LmHostObjectMutex);
+                return FALSE;
+            }
             currentTime = time(NULL);
             if(currentTime > pHost->activityChangeTime){
                 *puLong = currentTime - pHost->activityChangeTime;
@@ -1522,6 +1563,12 @@ Host_GetParamUlongValue
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             pthread_mutex_lock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+            if (!IsValidHostHandle(pHost))
+            {
+                CcspTraceWarning(("%s:%d, stale Host handle %p for '%s', ignoring\n",__FUNCTION__,__LINE__,(void *)pHost,ParamName));
+                pthread_mutex_unlock(&LmHostObjectMutex);
+                return FALSE;
+            }
             *puLong = pHost->ulUlongParaValue[i];
             pthread_mutex_unlock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -1862,6 +1909,13 @@ Host_SetParamStringValue
         pthread_mutex_lock(&LmHostObjectMutex);
         CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 
+        if (!IsValidHostHandle(pHost))
+        {
+            CcspTraceWarning(("%s:%d, stale Host handle %p for '%s', ignoring\n",__FUNCTION__,__LINE__,(void *)pHost,ParamName));
+            pthread_mutex_unlock(&LmHostObjectMutex);
+            return FALSE;
+        }
+
         /* save update to backup */
 #if defined(_HUB4_PRODUCT_REQ_)
         /* to avoid failure scenario check the parameter value is empty or not, if it is empty reset the existing value
@@ -1888,6 +1942,12 @@ Host_SetParamStringValue
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 			pthread_mutex_lock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+			if (!IsValidHostHandle(pHost))
+			{
+				CcspTraceWarning(("%s:%d, stale Host handle %p for '%s', ignoring\n",__FUNCTION__,__LINE__,(void *)pHost,ParamName));
+				pthread_mutex_unlock(&LmHostObjectMutex);
+				return FALSE;
+			}
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AddressSource]) , pString);
 			pthread_mutex_unlock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -1898,6 +1958,12 @@ Host_SetParamStringValue
             CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 			pthread_mutex_lock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+			if (!IsValidHostHandle(pHost))
+			{
+				CcspTraceWarning(("%s:%d, stale Host handle %p for '%s', ignoring\n",__FUNCTION__,__LINE__,(void *)pHost,ParamName));
+				pthread_mutex_unlock(&LmHostObjectMutex);
+				return FALSE;
+			}
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AddressSource]) , "Reserved");
 			pthread_mutex_unlock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -1986,8 +2052,37 @@ Host_Commit
     )
 {
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;
-    
-    LMDmlHostsSetHostComment(pHost->pStringParaValue[LM_HOST_PhysAddressId], pHost->pStringParaValue[LM_HOST_Comments]);
+    char mac[64] = {0};
+    char comment[LM_COMMENTS_LEN] = {0};
+
+    CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+    pthread_mutex_lock(&LmHostObjectMutex);
+    CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+
+    /* Guard against a stale/freed instance handle before dereferencing it. */
+    if (!IsValidHostHandle(pHost))
+    {
+        CcspTraceWarning(("%s:%d, stale Host handle %p, ignoring\n",__FUNCTION__,__LINE__,(void *)pHost));
+        pthread_mutex_unlock(&LmHostObjectMutex);
+        CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+        return 0;
+    }
+
+    /* Copy the values out while holding the lock. LMDmlHostsSetHostComment ->
+       _set_comment_ acquires LmHostObjectMutex, so it must be called unlocked. */
+    if (pHost->pStringParaValue[LM_HOST_PhysAddressId])
+    {
+        strncpy(mac, pHost->pStringParaValue[LM_HOST_PhysAddressId], sizeof(mac) - 1);
+    }
+    if (pHost->pStringParaValue[LM_HOST_Comments])
+    {
+        strncpy(comment, pHost->pStringParaValue[LM_HOST_Comments], sizeof(comment) - 1);
+    }
+
+    pthread_mutex_unlock(&LmHostObjectMutex);
+    CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+
+    LMDmlHostsSetHostComment(mac, comment);
 
     return 0;
 }
@@ -2074,6 +2169,12 @@ Host_IPv4Address_GetEntryCount
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;    
     //printf("IPv4Address_GetEntryCount %d\n", pHost->numIPv4Addr);
+    if (!IsValidHostHandle(pHost))
+    {
+        CcspTraceWarning(("%s:%d, stale Host handle %p, ignoring\n",__FUNCTION__,__LINE__,(void *)pHost));
+        pthread_mutex_unlock(&LmHostObjectMutex);
+        return count;
+    }
 	count = pHost->numIPv4Addr;
 	pthread_mutex_unlock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -2124,6 +2225,12 @@ Host_IPv4Address_GetEntry
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;    
     //printf("IPv4Address_GetEntry %p, %ld\n", pHost, nIndex);
+    if (!IsValidHostHandle(pHost))
+    {
+        CcspTraceWarning(("%s:%d, stale Host handle %p, ignoring\n",__FUNCTION__,__LINE__,(void *)pHost));
+        pthread_mutex_unlock(&LmHostObjectMutex);
+        return (ANSC_HANDLE)IPArr;
+    }
 	IPArr = LM_GetIPArr_FromIndex(pHost, nIndex, IP_V4);
 	if(IPArr)
 		*pInsNumber  = nIndex + 1;
@@ -2389,6 +2496,12 @@ Host_IPv6Address_GetEntryCount
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;    
     //printf("IPv6Address_GetEntryCount %d\n", pHost->numIPv6Addr);
+    if (!IsValidHostHandle(pHost))
+    {
+        CcspTraceWarning(("%s:%d, stale Host handle %p, ignoring\n",__FUNCTION__,__LINE__,(void *)pHost));
+        pthread_mutex_unlock(&LmHostObjectMutex);
+        return count;
+    }
 	count = pHost->numIPv6Addr;
 	pthread_mutex_unlock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -2439,6 +2552,12 @@ Host_IPv6Address_GetEntry
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;    
     //printf("IPv6Address_GetEntry %p, %ld\n", pHost, nIndex);
+    if (!IsValidHostHandle(pHost))
+    {
+        CcspTraceWarning(("%s:%d, stale Host handle %p, ignoring\n",__FUNCTION__,__LINE__,(void *)pHost));
+        pthread_mutex_unlock(&LmHostObjectMutex);
+        return (ANSC_HANDLE)IPArr;
+    }
 	IPArr = LM_GetIPArr_FromIndex(pHost, nIndex, IP_V6);
 	if(IPArr)
 		*pInsNumber  = nIndex + 1;
@@ -2671,6 +2790,12 @@ Host_MloLink_GetEntryCount
     pthread_mutex_lock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+    if (!IsValidHostHandle(pHost))
+    {
+        CcspTraceWarning(("%s:%d, stale Host handle %p, ignoring\n",__FUNCTION__,__LINE__,(void *)pHost));
+        pthread_mutex_unlock(&LmHostObjectMutex);
+        return count;
+    }
     count = (ULONG)pHost->numMloLinks;
     pthread_mutex_unlock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -2691,6 +2816,13 @@ Host_MloLink_GetEntry
     pthread_mutex_lock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+
+    if (!IsValidHostHandle(pHost))
+    {
+        CcspTraceWarning(("%s:%d, stale Host handle %p, ignoring\n",__FUNCTION__,__LINE__,(void *)pHost));
+        pthread_mutex_unlock(&LmHostObjectMutex);
+        return (ANSC_HANDLE)pLink;
+    }
 
     for (pLink = pHost->mloLinkArray; pLink != NULL; pLink = pLink->pNext)
     {
