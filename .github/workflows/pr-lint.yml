@@ -1,0 +1,9 @@
+name: PR Format Check
+
+on:
+  pull_request_target:
+    types: [opened, edited]
+
+jobs:
+  lint:
+    uses: rdkcentral/build_tools_workflows/.github/workflows/pr-lint.yml@develop
