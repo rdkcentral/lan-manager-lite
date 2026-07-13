@@ -9,6 +9,10 @@ permissions:
   issues: write
   pull-requests: write
 
+concurrency:
+  group: pr-format-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     uses: rdkcentral/build_tools_workflows/.github/workflows/pr-lint.yml@develop
