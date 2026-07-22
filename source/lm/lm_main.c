@@ -95,6 +95,10 @@
 #define OnboardLog(...)
 #endif
 
+#if defined(_ONESTACK_PRODUCT_REQ_)
+#include "devicemode.h"
+#endif
+
 #include <telemetry_busmessage_sender.h>
 #define TELEMETRY_MAX_BUFFER 256
 
@@ -618,10 +622,12 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
 	memset(addressSource,0,sizeof(addressSource));
 	memset(IPAddress,0,sizeof(IPAddress));
 	memset(interface,0,sizeof(interface));
+    CcspTraceDebug(("%s:%d, Before:LM_HOST_IPAddressId:%s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
     if ( ! pHost->pStringParaValue[LM_HOST_IPAddressId] )
     {
         getIPAddress(pHost->pStringParaValue[LM_HOST_PhysAddressId], IPAddress);
         LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]) , IPAddress);
+        CcspTraceDebug(("%s:%d, After:LM_HOST_IPAddressId:%s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
     }
 /*
 		getAddressSource(pHost->pStringParaValue[LM_HOST_PhysAddressId], addressSource);
@@ -711,6 +717,7 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
 
         if(pHost->ipv4Active == TRUE) {
             if (state) {
+                CcspTraceDebug(("%s:%d, InLease:LM_HOST_IPAddressId:%s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
                 if(0 == FindHostInLeases(pHost->pStringParaValue[LM_HOST_IPAddressId], DNS_LEASE)){
                     char lan_ip_address[32] = {0};
                     char lan_net_mask[32] = {0};
@@ -728,6 +735,30 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
                     CcspTraceWarning(("<%s> IPAddress not found in lease file : IPAddress = %s, MAC Addr = %s \n",__FUNCTION__, pHost->pStringParaValue[LM_HOST_IPAddressId], pHost->pStringParaValue[LM_HOST_PhysAddressId]));
                 }
             }
+#if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
+            else
+            {
+                char dhcp_server_enabled[32] = {0};
+#if defined (_ONESTACK_PRODUCT_REQ_)
+                if (is_devicemode_business())
+                {
+#endif
+                    if(!syscfg_get( NULL, "dhcp_server_enabled", dhcp_server_enabled, sizeof(dhcp_server_enabled)))
+                    {
+                        if(strncmp(dhcp_server_enabled, "0", strlen("0")) == 0)
+                        {
+                            free(pHost->pStringParaValue[LM_HOST_IPAddressId]);
+                            pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
+                            Host_FreeIPAddress(pHost, 4);
+                            pHost->ipv4Active = FALSE;
+                            CcspTraceWarning(("<%s> IPv4 Address removing from host table \n",__FUNCTION__));
+                        }
+                    }
+#if defined (_ONESTACK_PRODUCT_REQ_)
+                }
+#endif
+            }
+#endif
         }
         pHost->bBoolParaValue[LM_HOST_ActiveId] = state;
         pHost->activityChangeTime = time((time_t*)NULL);
@@ -1482,6 +1513,7 @@ static void Host_FreeIPAddress(PLmObjectHost pHost, int version)
     *num = 0;
     while(pIpAddrList != NULL)
     {
+        CcspTraceDebug(("%s:%d, Free:In-ipv4:LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, pIpAddrList->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
         AnscFreeMemory(pIpAddrList->pStringParaValue[LM_HOST_IPAddress_IPAddressId]);
         pCur = pIpAddrList;
         pIpAddrList = pIpAddrList->pNext;
@@ -1522,6 +1554,7 @@ static PLmObjectHostIPAddress Add_Update_IPv4Address (PLmObjectHost pHost, char 
 	pPre = NULL;
 
    for(pCur = pIpAddrList; pCur != NULL; pPre = pCur, pCur = pCur->pNext){
+        CcspTraceDebug(("%s:%d, Before:In-ipv4:%s, LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, ipAddress, pCur->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
         if (strcasecmp(pCur->pStringParaValue[LM_HOST_IPAddress_IPAddressId], ipAddress) == 0){
 			break;
         }
@@ -1536,6 +1569,7 @@ static PLmObjectHostIPAddress Add_Update_IPv4Address (PLmObjectHost pHost, char 
         *ppHeader = pCur;
         (*num)++;
 	pCur->instanceNum = *num;
+        CcspTraceDebug(("%s:%d, New:In-ipv4:%s, LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, ipAddress, pCur->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
    }
    else{
      	if(pCur != pIpAddrList)
@@ -1544,6 +1578,7 @@ static PLmObjectHostIPAddress Add_Update_IPv4Address (PLmObjectHost pHost, char 
           pCur->pNext = pIpAddrList;
           *ppHeader = pCur;
         }
+        CcspTraceDebug(("%s:%d, After:In-ipv4:%s, LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, ipAddress, pCur->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
     }
     return pCur;
 }
@@ -1571,6 +1606,7 @@ static PLmObjectHostIPAddress Add_Update_IPv6Address (PLmObjectHost pHost, char 
 			}
 			else
 			{
+                CcspTraceDebug(("%s:%d, Before:In-ipv6:LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, temp->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
 				//temp->pStringParaValue[LM_HOST_IPAddress_IPAddressId] = AnscCloneString("EMPTY");
 				temp->pStringParaValue[LM_HOST_IPAddress_IPAddressId] = AnscCloneString(" "); // fix for RDKB-19836
 				(*num)++;
@@ -1579,6 +1615,7 @@ static PLmObjectHostIPAddress Add_Update_IPv6Address (PLmObjectHost pHost, char 
 				pIpAddrList=temp;
 				*ppHeader=temp;
 				prev=temp;
+                CcspTraceDebug(("%s:%d, After:In-ipv6:LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, temp->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
 			}
 		}
 	}
@@ -1597,6 +1634,7 @@ static PLmObjectHostIPAddress Add_Update_IPv6Address (PLmObjectHost pHost, char 
 	{
 		pCur=pIpAddrList;
 	}
+    CcspTraceDebug(("%s:%d, Final:In-ipv6:LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, temp->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
 	LanManager_CheckCloneCopy(&(pCur->pStringParaValue[LM_HOST_IPAddress_IPAddressId]), ipAddress);
 	return pCur;
 }
@@ -1698,8 +1736,10 @@ PLmObjectHostIPAddress Host_AddIPAddress (PLmObjectHost pHost, char *ipAddress, 
 
     if(version == 4)
 	{
+        CcspTraceDebug(("%s:%d, Before:In-ipv4:%s, LM_HOST_IPAddressId: %s \n",__FUNCTION__,__LINE__, ipAddress, pHost->pStringParaValue[LM_HOST_IPAddressId]));
 		pCur = Add_Update_IPv4Address(pHost,ipAddress);
 		LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]) , ipAddress);
+        CcspTraceDebug(("%s:%d, After:In-ipv4:%s, LM_HOST_IPAddressId: %s \n",__FUNCTION__,__LINE__, ipAddress, pHost->pStringParaValue[LM_HOST_IPAddressId]));
     }
 	else
 	{
@@ -1977,6 +2017,7 @@ static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
     LM_ip_addr_t *pIp;
     for(i=0, pIpSrc = pHost->ipv4AddrArray; pIpSrc != NULL && i < LM_MAX_IP_AMOUNT;i++, pIpSrc = pIpSrc->pNext){
         pIp = &(pDestHost->ipv4AddrList[i]);
+        CcspTraceDebug(("%s:%d, In-ipv4:LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
         if(inet_pton(AF_INET, pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId],pIp->addr) != 1)
         {
          CcspTraceWarning(("Invalid IP Address %s\n",pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
@@ -1993,6 +2034,7 @@ static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
     
     for(i = 0, pIpSrc = pHost->ipv6AddrArray;pIpSrc != NULL && i < LM_MAX_IP_AMOUNT;i++, pIpSrc = pIpSrc->pNext){
         pIp = &(pDestHost->ipv6AddrList[i]);
+        CcspTraceDebug(("%s:%d, In-ipv6:LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
         inet_pton(AF_INET6, pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId],pIp->addr);
         pIp->addrSource = _get_addr_source(pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressSourceId]); 
         //Not support yet
@@ -2271,6 +2313,7 @@ void XHosts_SyncWifi()
 		    }
 	    }
 			Xlm_wrapper_get_info(pHost);
+            CcspTraceDebug(("%s:%d, LM_HOST_IPAddressId:%s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
 			Host_AddIPv4Address ( pHost, pHost->pStringParaValue[LM_HOST_IPAddressId]);
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)hosts[i].ssid);
 			LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), (const char *)hosts[i].AssociatedDevice);
@@ -2524,6 +2567,7 @@ static void *Event_HandlerThread(void *threadid)
                 if (hosts.Status)
                 {
                     pHost->l1unReachableCnt = 1;
+                    CcspTraceDebug(("%s:%d, LM_HOST_IPAddressId:%s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
                     if ( ! pHost->pStringParaValue[LM_HOST_IPAddressId] )
                     {
                         CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is WiFi MLO, MacAddress is %s IPAddr is not updated in ARP\n",pHost->pStringParaValue[LM_HOST_PhysAddressId]));
@@ -2556,6 +2600,7 @@ static void *Event_HandlerThread(void *threadid)
                         pHost->iIntParaValue[LM_HOST_X_CISCO_COM_RSSIId] = hosts.rssiList[0];
                     }
                     pHost->l1unReachableCnt = 1;
+                    CcspTraceDebug(("%s:%d, LM_HOST_IPAddressId:%s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
                     if ( ! pHost->pStringParaValue[LM_HOST_IPAddressId] )
                     {
                         CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is WiFi, MacAddress is %s IPAddr is not updated in ARP\n",pHost->pStringParaValue[LM_HOST_PhysAddressId]));
@@ -2596,6 +2641,7 @@ static void *Event_HandlerThread(void *threadid)
                 pthread_mutex_lock(&LmHostObjectMutex);
                 CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
                 pHost = Hosts_FindHostByPhysAddress((char *)hosts.phyAddr);
+                CcspTraceDebug(("%s:%d, LM_HOST_IPAddressId:%s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
                 if (pHost && pHost->pStringParaValue[LM_HOST_PhysAddressId] && pHost->pStringParaValue[LM_HOST_IPAddressId])
                 {
                     CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is WiFi, MacAddress is %s IP from DNSMASQ is %s \n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_IPAddressId])); 
@@ -4250,6 +4296,7 @@ PLmObjectHostIPAddress LM_FindIPv4BaseFromLink( PLmObjectHost pHost, char * ipAd
 
 	  for( pCur = pIpAddrList; pCur != NULL; pCur = pCur->pNext )
 	  {
+        CcspTraceDebug(("%s:%d, In-ipv4:%s, LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, ipAddress, pCur->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
 		if (strcasecmp(pCur->pStringParaValue[LM_HOST_IPAddress_IPAddressId], ipAddress) == 0)
 		{
 			return pCur;
@@ -4486,6 +4533,7 @@ int Hosts_UpdateDeviceIntoPresenceDetection(PLmObjectHost pHost, BOOL isIpAddres
                 }
             }
         }
+        CcspTraceDebug(("%s:%d, LM_HOST_IPAddressId:%s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
         if ((status.ipv4Active) && (pHost->pStringParaValue[LM_HOST_IPAddressId]))
         {
             rc = strcpy_s (status.ipv4, sizeof(status.ipv4),pHost->pStringParaValue[LM_HOST_IPAddressId]);
@@ -4631,6 +4679,7 @@ static void *UpdateAndSendHostIPAddress_Thread(void *arg)
                 continue;
             }
 
+            CcspTraceDebug(("%s:%d, LM_HOST_IPAddressId:%s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
             if (pHost->pStringParaValue[LM_HOST_IPAddressId]) {
                 ctx->ipv4 = strdup(pHost->pStringParaValue[LM_HOST_IPAddressId]);
             } else {

@@ -66,3 +66,7 @@ endif
 if CORE_NET_LIB_FEATURE_SUPPORT
     libCcspLM_la_LDFLAGS += -lnet
 endif
+
+if ONESTACK_PRODUCT_REQ
+    libCcspLM_la_LDFLAGS += -ldevicemode
+endif

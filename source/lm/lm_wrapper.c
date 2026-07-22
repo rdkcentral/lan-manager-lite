@@ -1470,6 +1470,7 @@ int lm_wrapper_get_arp_entries (char netName[LM_NETWORK_NAME_SIZE], int *pCount,
         {
             hosts[index].status = LM_NEIGHBOR_STATE_STALE;
         }
+        CcspTraceDebug(("%s %d: %s %s %s %d\n", __FUNCTION__, __LINE__, hosts[index].phyAddr,hosts[index].ipAddr,hosts[index].ifName,hosts[index].status));
         PRINTD("%s:%s %s %s %d\n", __FUNCTION__,
                 hosts[index].phyAddr,
                 hosts[index].ipAddr,
@@ -2028,6 +2029,7 @@ void lm_wrapper_get_dhcpv4_client()
             char ipAddress[50] = {0};
             getIPAddress((char *)dhcpHost.phyAddr, ipAddress);
 
+            CcspTraceDebug(("%s:%d, Calling Host_AddIPv4Address:%s \n",__FUNCTION__,__LINE__, (char *)ipAddress));
             pIP = Host_AddIPv4Address
             (
                 pHost,
@@ -2106,6 +2108,7 @@ void lm_wrapper_get_dhcpv4_reserved()
 
         if ( pHost )
         {
+            CcspTraceDebug(("%s:%d, %s %s %s \n",__FUNCTION__,__LINE__, dhcpHost.phyAddr, dhcpHost.ipAddr, dhcpHost.hostName));
             PRINTD("%s: %s %s %s\n", __FUNCTION__, dhcpHost.phyAddr, dhcpHost.ipAddr, dhcpHost.hostName);
 			if (strcasecmp(pHost->pStringParaValue[LM_HOST_PhysAddressId], pHost->pStringParaValue[LM_HOST_HostNameId]) != 0){
 				rc = strcpy_s(pHost->backupHostname, sizeof(pHost->backupHostname),pHost->pStringParaValue[LM_HOST_HostNameId]); // hostanme change id.
@@ -2146,6 +2149,7 @@ void lm_wrapper_get_dhcpv4_reserved()
 					}
 				}
             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AddressSource]), "Static");
+            CcspTraceDebug(("%s:%d, Calling Host_AddIPv4Address:%s \n",__FUNCTION__,__LINE__, (char *)dhcpHost.ipAddr));
             pIP = Host_AddIPv4Address
                 (
                     pHost,
