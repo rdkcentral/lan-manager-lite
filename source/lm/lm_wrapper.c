@@ -118,23 +118,6 @@ static mac_band_record *Mac_to_band_mapping[HASHSIZE] = { NULL };
 
 #ifdef CORE_NET_LIB
 
-// Custom scores to denote precedence
-#define NEIGH_SCORE_REACHABLE   30
-#define NEIGH_SCORE_DELAY       20
-#define NEIGH_SCORE_STALE       10
-#define ARRAY_SIZE(arr)         (sizeof(arr) / sizeof((arr)[0]))
-
-struct neigh_state_score_map {
-    int state;
-    int score;
-};
-
-static const struct neigh_state_score_map neigh_score_map[] = {
-    { NEIGH_STATE_REACHABLE, NEIGH_SCORE_REACHABLE },
-    { NEIGH_STATE_DELAY, NEIGH_SCORE_DELAY },
-    { NEIGH_STATE_STALE, NEIGH_SCORE_STALE },
-};
-
 static libnet_status file_append(const char *file_name ,const char *buf, size_t count)
 {
     FILE *fp = NULL;
@@ -1624,17 +1607,6 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
         return 1;
     }
 }
-
-#ifdef CORE_NET_LIB
-static int neigh_state_score(int state)
-{
-    for (size_t i = 0; i < ARRAY_SIZE(neigh_score_map); i++) {
-        if (neigh_score_map[i].state == state)
-            return neigh_score_map[i].score;
-    }
-    return 0;
-}
-#endif
 
 int getIPAddress(char *physAddress,char *IPAddress)
 {
