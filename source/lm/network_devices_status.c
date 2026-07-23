@@ -524,7 +524,7 @@ char* NDS_GetIpAddress(PLmObjectHost host)
         return strdup("Unknown");
 
     // By default PLmObjectHost pStringParaValue ipaddress holds ipv4 address.
-    CcspTraceDebug(("%s:%d, LM_HOST_IPAddressId:%s \n",__FUNCTION__,__LINE__, host->pStringParaValue[LM_HOST_IPAddressId]));
+    CcspTraceDebug(("%s:%d, LM_HOST_IPAddressId:%s \n", __FUNCTION__, __LINE__, host->pStringParaValue[LM_HOST_IPAddressId] ? host->pStringParaValue[LM_HOST_IPAddressId] : "(null)"));
     if(host->pStringParaValue[LM_HOST_IPAddressId])
     {
         pIpv4address = host->pStringParaValue[LM_HOST_IPAddressId];
