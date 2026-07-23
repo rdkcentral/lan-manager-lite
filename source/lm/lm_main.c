@@ -1635,7 +1635,7 @@ static PLmObjectHostIPAddress Add_Update_IPv6Address (PLmObjectHost pHost, char 
 	{
 		pCur=pIpAddrList;
 	}
-    CcspTraceDebug(("%s:%d, Final:In-ipv6:LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, temp->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
+    CcspTraceDebug(("%s:%d, Final:In-ipv6: ipAddress=%s \n", __FUNCTION__, __LINE__, ipAddress ? ipAddress : "(null)"));
 	LanManager_CheckCloneCopy(&(pCur->pStringParaValue[LM_HOST_IPAddress_IPAddressId]), ipAddress);
 	return pCur;
 }
