@@ -622,7 +622,7 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
 	memset(addressSource,0,sizeof(addressSource));
 	memset(IPAddress,0,sizeof(IPAddress));
 	memset(interface,0,sizeof(interface));
-    CcspTraceDebug(("%s:%d, Before:LM_HOST_IPAddressId:%s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
+    CcspTraceDebug(("%s:%d, Before:LM_HOST_IPAddressId:%s \n", __FUNCTION__, __LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId] ? pHost->pStringParaValue[LM_HOST_IPAddressId] : "(null)"));
     if ( ! pHost->pStringParaValue[LM_HOST_IPAddressId] )
     {
         getIPAddress(pHost->pStringParaValue[LM_HOST_PhysAddressId], IPAddress);
