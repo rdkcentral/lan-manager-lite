@@ -1501,8 +1501,6 @@ void getAddressSource(char *physAddress, char *pAddressSource)
     int ret;
     LM_host_entry_t dhcpHost;
     errno_t rc = -1;
-    char ipAddress[50] = {0};
-    getIPAddress(physAddress , ipAddress);
 
     if ( (fp=fopen(DNSMASQ_LEASES_FILE, "r")) == NULL )
     {
@@ -1528,7 +1526,7 @@ void getAddressSource(char *physAddress, char *pAddressSource)
         if(ret != 4)
             continue;
 
-    if (!strcasecmp(ipAddress,(const char *)dhcpHost.ipAddr))
+    if (!strcasecmp(physAddress,(const char *)dhcpHost.phyAddr))
 	{
 		rc = STRCPY_S_NOCLOBBER(pAddressSource, 20,"DHCP");
 		ERR_CHK(rc);
@@ -1649,8 +1647,8 @@ int getIPAddress(char *physAddress,char *IPAddress)
 
     FILE *fp = NULL;
     char output[IP_ADDR_STR_LEN] = {0};
-    char buf[200] = {0};
-#if 0
+    errno_t rc = -1;
+
     v_secure_system("ip -4 nei show | grep brlan0 | grep -v 192.168.10 | grep -i %s | awk '{print $1}' | tail -1 > /tmp/LMgetIP.txt ", physAddress);
 
     fp = fopen ("/tmp/LMgetIP.txt", "r");
@@ -1659,207 +1657,12 @@ int getIPAddress(char *physAddress,char *IPAddress)
     {
         while(fgets(output, sizeof(output), fp)!=NULL);
         fclose (fp);
-        fp=NULL
+        fp=NULL;
     }
 
     rc = STRCPY_S_NOCLOBBER(IPAddress, 50,output);
     ERR_CHK(rc);
     return 0;
-#endif
-
-//FIX START
-/* With previous fix provided few corner cases was not not getting handled.
-   This was seen when connected clients moved from DHCP to Static
-   1) Not transitioning states when changed from DHCP to Static while client was connected.
-
-   This led to improper values in Host Table or not getting updated at all resulting wrong values in UI.
-
-   This fix handles the above case by dividing the updation of neighbour table into 2 parts :
-   CASE 1 : handles the updation of host table from neighbour table when clients are connected and mode is changed to STATIC on the fly.
-   CASE 2 : handles the updation of host table from neighbour table when clients are disconnected/change mode to DHCP
-   CASE 3 : handles the updation of host table from dnsmasq.leases when connected clients are set to receive ip from DHCP.
-*/
-
-#ifdef CORE_NET_LIB
-    char *mac_filter = NULL;
-    char *if_filter = NULL;
-    int af_filter = AF_INET;
-    libnet_status st = CNL_STATUS_FAILURE;
-
-    if (physAddress != NULL) {
-        mac_filter = strdup(physAddress);
-        if (!mac_filter) {
-            CcspTraceError(("%s: Failed to copy MAC string\n", __FUNCTION__));
-            return -1;
-        }
-    }
-    else{
-        CcspTraceError(("%s: Input MAC address is NULL\n", __FUNCTION__));
-        return -1;
-    }
-
-    struct neighbour_info *neighbours =  init_neighbour_info();
-    if (!neighbours) {
-        CcspTraceError(("%s: Failed to initialize neighbor information structure\n", __FUNCTION__));
-        free(mac_filter);
-        goto CASE_DNSMASQ;
-    }
-
-    st = neighbour_get_list(neighbours, mac_filter, if_filter, af_filter);
-    free(mac_filter);
-    if (st != CNL_STATUS_SUCCESS) {
-        CcspTraceError(("%s: Failed to execute neighbour_get_list!\n", __FUNCTION__));
-        neighbour_free_neigh(neighbours);
-        goto CASE_DNSMASQ;
-    }
-
-    CcspTraceDebug(("%s: Successfully retrieved neighbor list based on MAC:%s, and Neighbour count: %d\n", __FUNCTION__, physAddress, neighbours->neigh_count));
-    if (neighbours->neigh_count <= 0 || neighbours->neigh_arr == NULL) {
-        CcspTraceDebug(("%s: Neighbour list is empty\n", __FUNCTION__));
-        neighbour_free_neigh(neighbours);
-        goto CASE_DNSMASQ;
-    }
-
-    /* Choose the best neighbour based on scoring precedence
-     * Priority is based on neighbour state while still allowing
-     * STALE to win if it is the only valid entry
-     */
-    int best_score = -1;
-    int best_state = -1;
-    char best_ip[IP_ADDR_STR_LEN] = {0};
-
-    for (int i = 0; i < neighbours->neigh_count; ++i) {
-        CcspTraceDebug(("Neighbor %d: local=%s, mac=%s, ifname=%s, state=%d\n",
-            i,
-            neighbours->neigh_arr[i].local ? neighbours->neigh_arr[i].local : "NULL",
-            neighbours->neigh_arr[i].mac ? neighbours->neigh_arr[i].mac : "NULL",
-            neighbours->neigh_arr[i].ifname ? neighbours->neigh_arr[i].ifname : "NULL",
-            neighbours->neigh_arr[i].state));
-
-        if (neighbours->neigh_arr[i].local == NULL || strlen(neighbours->neigh_arr[i].local) == 0 || strcmp(neighbours->neigh_arr[i].local, "none") == 0) {
-            CcspTraceError(("%s %d: Invalid local value for neighbor %d\n", __FUNCTION__, __LINE__, i));
-            continue;
-        }
-
-        if (strstr(neighbours->neigh_arr[i].local, "169.254.") != NULL) {
-            continue;
-        }
-
-        int score = neigh_state_score(neighbours->neigh_arr[i].state);
-        if (score <= 0) {
-            continue;
-        }
-
-        if (score > best_score) {
-            best_score = score;
-            best_state = neighbours->neigh_arr[i].state;
-            strncpy(best_ip, neighbours->neigh_arr[i].local, sizeof(best_ip) - 1);
-            best_ip[sizeof(best_ip) - 1] = '\0';
-        }
-    }
-
-    if (best_ip[0] != '\0') {
-
-        strncpy(IPAddress, best_ip, sizeof(best_ip) - 1);
-        IPAddress[sizeof(best_ip) - 1] = '\0';
-
-        if (best_state == NEIGH_STATE_STALE) {
-            //CASE 1 : To update neighbour table when Static clients are transitioning between REACHABLE and DELAY
-            CcspTraceDebug(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));  //Case 1
-        } else {
-            //CASE 2 : To update neighbour table when Static clients are disconnected or mode changes to DHCP due to which it receives new IP...existing IP is obsolete
-            CcspTraceDebug(("client is either reachable or delay: MAC %s IP %s\n", physAddress, IPAddress)); //Case 2
-        }
-        neighbour_free_neigh(neighbours);
-        return 0;
-    }
-    neighbour_free_neigh(neighbours);
-#else /* CORE_NET_LIB */
-//CASE 1 : To update neighbour table when Static clients are transitioning between REACHABLE and DELAY
-    memset(buf, 0, sizeof(buf));
-    memset(output, 0, sizeof(output));
-    snprintf(buf, sizeof(buf), "ip -4 nei show | grep -i %s | grep -e REACHABLE -e DELAY | awk '{print $1}' | grep -v 169.254. | tail -1", physAddress); //Link local IP is filtered.
-    if((fp = popen(buf, "r")))
-    {
-        while(fgets(output, sizeof(output), fp)!=NULL)
-        {
-                output[strlen(output) - 1] = '\0';
-        }
-        if (output[0] != '\0')
-        {
-            memcpy(IPAddress,output,sizeof(output));
-            CcspTraceDebug(("client is either reachable or delay: MAC %s IP %s\n", physAddress, IPAddress));
-            pclose(fp);
-            fp = NULL;
-            return 0;
-         }
-         else
-         {
-             pclose(fp);
-             fp = NULL;
-         }
-    }
-
-//CASE 2 : To update neighbour table when Static clients are disconnected or mode changes to DHCP due to which it receives new IP...existing IP is obsolete
-    memset(buf, 0, sizeof(buf));
-    memset(output, 0, sizeof(output));
-    snprintf(buf, sizeof(buf), "ip -4 nei show | grep -i %s | grep -e STALE | awk '{print $1}' | grep -v 169.254. | tail -1", physAddress); //Link local IP is filtered.
-    if((fp = popen(buf, "r")))
-    {
-        while(fgets(output, sizeof(output), fp)!=NULL)
-        {
-                output[strlen(output) - 1] = '\0';
-        }
-        if (output[0] != '\0')
-        {
-             memcpy(IPAddress,output,sizeof(output));
-             CcspTraceDebug(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));
-             pclose(fp);
-             fp = NULL;
-             return 0;
-         }
-         else
-         {
-             pclose(fp);
-             fp = NULL;
-         }
-    }
-#endif /* CORE_NET_LIB */
-
-#ifdef CORE_NET_LIB
-CASE_DNSMASQ:
-#endif /* CORE_NET_LIB */
-
-//CASE 3 : Handles details of clients that are set to receive automatic IP via DHCP
-    memset(buf, 0, sizeof(buf));
-    memset(output, 0, sizeof(output));
-    snprintf(buf, sizeof(buf), "cat /nvram/dnsmasq.leases | grep -i %s | cut -d ' ' -f3", physAddress);
-
-   if( ( (access( "/nvram/dnsmasq.leases", F_OK ) != -1)) && (fp = popen(buf, "r")))
-    {
-         while(fgets(output, sizeof(output), fp)!=NULL)
-         {
-             output[strlen(output) - 1] = '\0';
-         }
-
-         if (output[0] != '\0')
-         {
-             memcpy(IPAddress,output,sizeof(output));
-             CcspTraceDebug(("client mac present in dnsmasq: MAC %s IP %s\n", physAddress, IPAddress));
-             pclose(fp);
-             fp = NULL;
-             return 0;
-         }
-         else
-         {
-             pclose(fp);
-             fp = NULL;
-         }
-    }
-//FIX END
-//Return empty and update primray IP in caller
-   memcpy(IPAddress,output,sizeof(output));
-   return 0;
 
 }
 
