@@ -1605,10 +1605,11 @@ static PLmObjectHostIPAddress Add_Update_IPv6Address (PLmObjectHost pHost, char 
 				return NULL;
 			}
 			else
-			{
-                CcspTraceDebug(("%s:%d, Before:In-ipv6:LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, temp->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
-				//temp->pStringParaValue[LM_HOST_IPAddress_IPAddressId] = AnscCloneString("EMPTY");
-				temp->pStringParaValue[LM_HOST_IPAddress_IPAddressId] = AnscCloneString(" "); // fix for RDKB-19836
+            else
+            {
+                CcspTraceDebug(("%s:%d, Allocating IPv6 placeholder entry\n", __FUNCTION__, __LINE__));
+                //temp->pStringParaValue[LM_HOST_IPAddress_IPAddressId] = AnscCloneString("EMPTY");
+                temp->pStringParaValue[LM_HOST_IPAddress_IPAddressId] = AnscCloneString(" "); // fix for RDKB-19836
 				(*num)++;
 				temp->instanceNum = *num;
 				temp->pNext=prev;
