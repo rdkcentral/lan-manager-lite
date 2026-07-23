@@ -1613,7 +1613,7 @@ Host_GetParamStringValue
         }
         if(strcmp(ParamName, "IPAddress") == 0)
         {
-            CcspTraceDebug(("%s:%d, Before:LM_HOST_IPAddressId:%s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
+            CcspTraceDebug(("%s:%d, Before:LM_HOST_IPAddressId:%s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId] ? pHost->pStringParaValue[LM_HOST_IPAddressId] : "(null)"));
             getIPAddress(pHost->pStringParaValue[LM_HOST_PhysAddressId], pValue);
 
             /*if both static/dhcp get failes, CPE will choose a 'primary' address.*/
