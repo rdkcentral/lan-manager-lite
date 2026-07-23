@@ -1513,7 +1513,7 @@ static void Host_FreeIPAddress(PLmObjectHost pHost, int version)
     *num = 0;
     while(pIpAddrList != NULL)
     {
-        CcspTraceDebug(("%s:%d, Free:In-ipv4:LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, pIpAddrList->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
+        CcspTraceDebug(("%s:%d, Free:In-ipv%d:LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, version, pIpAddrList->pStringParaValue[LM_HOST_IPAddress_IPAddressId] ? pIpAddrList->pStringParaValue[LM_HOST_IPAddress_IPAddressId] : "(null)"));
         AnscFreeMemory(pIpAddrList->pStringParaValue[LM_HOST_IPAddress_IPAddressId]);
         pCur = pIpAddrList;
         pIpAddrList = pIpAddrList->pNext;
@@ -1605,9 +1605,7 @@ static PLmObjectHostIPAddress Add_Update_IPv6Address (PLmObjectHost pHost, char 
 				return NULL;
 			}
 			else
-            else
             {
-                CcspTraceDebug(("%s:%d, Allocating IPv6 placeholder entry\n", __FUNCTION__, __LINE__));
                 //temp->pStringParaValue[LM_HOST_IPAddress_IPAddressId] = AnscCloneString("EMPTY");
                 temp->pStringParaValue[LM_HOST_IPAddress_IPAddressId] = AnscCloneString(" "); // fix for RDKB-19836
 				(*num)++;
@@ -1616,7 +1614,6 @@ static PLmObjectHostIPAddress Add_Update_IPv6Address (PLmObjectHost pHost, char 
 				pIpAddrList=temp;
 				*ppHeader=temp;
 				prev=temp;
-                CcspTraceDebug(("%s:%d, After:In-ipv6:LM_HOST_IPAddress_IPAddressId: %s \n",__FUNCTION__,__LINE__, temp->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
 			}
 		}
 	}
