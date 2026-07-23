@@ -1822,13 +1822,11 @@ void lm_wrapper_get_dhcpv4_client()
                 }
 	}
             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AddressSource]), "DHCP");
-            char ipAddress[50] = {0};
-            getIPAddress((char *)dhcpHost.phyAddr, ipAddress);
 
             pIP = Host_AddIPv4Address
             (
                 pHost,
-                (char *)ipAddress
+                (char *)dhcpHost.ipAddr
             );
             if(pIP != NULL)
             {
