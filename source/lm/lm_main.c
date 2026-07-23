@@ -2641,7 +2641,7 @@ static void *Event_HandlerThread(void *threadid)
                 pthread_mutex_lock(&LmHostObjectMutex);
                 CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
                 pHost = Hosts_FindHostByPhysAddress((char *)hosts.phyAddr);
-                CcspTraceDebug(("%s:%d, LM_HOST_IPAddressId:%s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
+                CcspTraceDebug(("%s:%d, LM_HOST_IPAddressId:%s \n", __FUNCTION__, __LINE__, (pHost && pHost->pStringParaValue[LM_HOST_IPAddressId]) ? pHost->pStringParaValue[LM_HOST_IPAddressId] : "(null)"));
                 if (pHost && pHost->pStringParaValue[LM_HOST_PhysAddressId] && pHost->pStringParaValue[LM_HOST_IPAddressId])
                 {
                     CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is WiFi, MacAddress is %s IP from DNSMASQ is %s \n",pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_IPAddressId])); 
