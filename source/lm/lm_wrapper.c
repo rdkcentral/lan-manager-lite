@@ -1812,8 +1812,38 @@ int getIPAddress(char *physAddress,char *IPAddress)
         }
         if (output[0] != '\0')
         {
-             memcpy(IPAddress,output,sizeof(output));
-             CcspTraceDebug(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));
+            BOOL isDHCPServerDisable = FALSE;
+#if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
+            PLmObjectHost pHost;
+            pHost = Hosts_FindHostByPhysAddress((char *)physAddress);
+            if(pHost)
+            {
+                if(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId])
+                {
+                    if((strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId],"WiFi")) && (pHost->ipv4Active == TRUE))
+                    {
+                        if(IsBusinessModeDHCPServerDisable())
+                        {
+                            isDHCPServerDisable = TRUE;
+                            CcspTraceDebug(("%s:%d DHCP Server is Disabled on WiFi \n",__FUNCTION__,__LINE__));
+                        }
+                        else
+                        {
+                            CcspTraceDebug(("%s:%d DHCP Server is Enabled on WiFi \n",__FUNCTION__,__LINE__));
+                        }
+                    }
+                }
+            }
+#endif
+            if(!isDHCPServerDisable)
+            {
+                memcpy(IPAddress,output,sizeof(output));
+                CcspTraceDebug(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));
+            }
+            else
+            {
+                CcspTraceDebug(("client is in stale state: MAC %s IP %s\n", physAddress, output));
+            }
              pclose(fp);
              fp = NULL;
              return 0;

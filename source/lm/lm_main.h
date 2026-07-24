@@ -364,4 +364,7 @@ int XLM_get_online_device (void);
 int XLM_get_host_info();
 int XLM_get_online_device();
 #endif
+#if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
+BOOL IsBusinessModeDHCPServerDisable(void);
+#endif
 #endif

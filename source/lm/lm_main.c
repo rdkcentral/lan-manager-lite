@@ -510,6 +510,38 @@ static void Send_Notification (char *interface, char *mac, ClientConnectState st
 
 #endif
 
+#if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
+BOOL IsBusinessModeDHCPServerDisable(void)
+{
+    char device_mode[32] = {0};
+    char dhcp_server_enabled[32] = {0};
+
+    CcspTraceDebug(("%s:%d Entry\n",__FUNCTION__,__LINE__));
+#if defined (_ONESTACK_PRODUCT_REQ_)
+    if(!syscfg_get(NULL, "devicemode", device_mode, sizeof(device_mode)))
+    {
+        CcspTraceDebug(("%s:%d Its a %s Mode\n",__FUNCTION__,__LINE__, device_mode));
+        if(strncmp(device_mode, "business", strlen("business")) == 0)
+        {
+#endif
+            if(!syscfg_get(NULL, "dhcp_server_enabled", dhcp_server_enabled, sizeof(dhcp_server_enabled)))
+            {
+                CcspTraceDebug(("%s:%d DHCP SERVER is %s\n",__FUNCTION__,__LINE__, dhcp_server_enabled));
+                if(strncmp(dhcp_server_enabled, "0", strlen("0")) == 0)
+                {
+                    CcspTraceDebug(("%s:%d Its BusinessMode and DHCP Server Disable\n",__FUNCTION__,__LINE__));
+                    return TRUE;
+                }
+            }
+#if defined (_ONESTACK_PRODUCT_REQ_)
+        }
+    }
+#endif
+    CcspTraceDebug(("%s:%d Exit\n",__FUNCTION__,__LINE__));
+    return FALSE;
+}
+#endif
+
 static int FindHostInLeases (char *Temp, char *FileName)
 {
     char buf[200];
@@ -731,6 +763,22 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
         }
         pHost->bBoolParaValue[LM_HOST_ActiveId] = state;
         pHost->activityChangeTime = time((time_t*)NULL);
+#if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
+        if((strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId],"WiFi")) && (!state) && (pHost->ipv4Active == TRUE))
+        {
+            if(IsBusinessModeDHCPServerDisable())
+            {
+                if(pHost->pStringParaValue[LM_HOST_IPAddressId])
+                {
+                    AnscFreeMemory(pHost->pStringParaValue[LM_HOST_IPAddressId]);
+                    pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
+                }
+                Host_FreeIPAddress(pHost, 4);
+                pHost->ipv4Active = FALSE;
+                CcspTraceDebug(("%s:%d IPv4 Address removing from host table \n",__FUNCTION__,__LINE__));
+            }
+        }
+#endif
 		logOnlineDevicesCount();
 
 	}
