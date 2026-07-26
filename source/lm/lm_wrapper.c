@@ -1820,16 +1820,17 @@ int getIPAddress(char *physAddress,char *IPAddress)
             {
                 if(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId])
                 {
+                    CcspTraceWarning(("%s:%d IF: %s, ipv4Active: %d \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], pHost->ipv4Active));
                     if((strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId],"WiFi")) && (pHost->ipv4Active == TRUE))
                     {
                         if(IsBusinessModeDHCPServerDisable())
                         {
                             isDHCPServerDisable = TRUE;
-                            CcspTraceDebug(("%s:%d DHCP Server is Disabled on WiFi \n",__FUNCTION__,__LINE__));
+                            CcspTraceWarning(("%s:%d DHCP Server is Disabled on WiFi \n",__FUNCTION__,__LINE__));
                         }
                         else
                         {
-                            CcspTraceDebug(("%s:%d DHCP Server is Enabled on WiFi \n",__FUNCTION__,__LINE__));
+                            CcspTraceWarning(("%s:%d DHCP Server is Enabled on WiFi \n",__FUNCTION__,__LINE__));
                         }
                     }
                 }
@@ -1838,11 +1839,12 @@ int getIPAddress(char *physAddress,char *IPAddress)
             if(!isDHCPServerDisable)
             {
                 memcpy(IPAddress,output,sizeof(output));
-                CcspTraceDebug(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));
+                CcspTraceWarning(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));
             }
             else
             {
-                CcspTraceDebug(("client is in stale state: MAC %s IP %s\n", physAddress, output));
+                IPAddress[0] = '\0';
+                CcspTraceWarning(("client is in stale state: MAC %s IP %s\n", physAddress, output));
             }
              pclose(fp);
              fp = NULL;
