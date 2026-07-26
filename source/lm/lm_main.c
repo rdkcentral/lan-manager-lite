@@ -767,7 +767,7 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
         pHost->bBoolParaValue[LM_HOST_ActiveId] = state;
         pHost->activityChangeTime = time((time_t*)NULL);
 #if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
-        CcspTraceWarning(("%s:%d IF: %s, state: %d, ipv4Active: %d \n",__FUNCTION__,__LINE__, pStringParaValue[LM_HOST_Layer1InterfaceId], state, pHost->ipv4Active));
+        CcspTraceWarning(("%s:%d IF: %s, state: %d, ipv4Active: %d \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], state, pHost->ipv4Active));
         if((strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId],"WiFi")) && (!state) && (pHost->ipv4Active == TRUE))
         {
             if(IsBusinessModeDHCPServerDisable())
