@@ -1575,6 +1575,49 @@ memset(buf,0,sizeof(buf));
      ERR_CHK(rc);
 
    }
+   /* If not found via file-based check, also verify against syscfg.
+    * This covers the race window where utopia has written the reservation
+    * to syscfg but the DHCP server has not yet regenerated dhcp_static_hosts.
+    *
+    * Root cause (confirmed by XB10 commercial mode logs):
+    *   TrueStaticIp feature active in commercial mode causes a DHCP_CONF_CHANGE
+    *   event on every DHCP parameter set. This fires a premature
+    *   prepare_dhcp_conf_static_hosts() with OLD syscfg data before the PHP
+    *   commits the reservation. Utopia_Free() returns based on that premature
+    *   restart's dhcp_server-status change, so the UI redirects before the
+    *   correct /etc/dhcp_static_hosts is generated. getAddressSource() then
+    *   finds no MAC in the stale file and wrongly returns "DHCP".
+    *
+    *   CBR and XB10 residential are unaffected; the file is already correct
+    *   before Utopia_Free() returns in those modes.
+    */
+   if (rc != -1 && pAddressSource && strcasecmp(pAddressSource, "Static") != 0)
+   {
+       char numHosts[8] = {0};
+       syscfg_get(NULL, "dhcp_num_static_hosts", numHosts, sizeof(numHosts));
+       int numEntries = atoi(numHosts);
+       int idx;
+       for (idx = 1; idx <= numEntries; idx++)
+       {
+           char key[32] = {0};
+           char entry[256] = {0};
+           char entryMac[32] = {0};
+           snprintf(key, sizeof(key), "dhcp_static_host_%d", idx);
+           syscfg_get(NULL, key, entry, sizeof(entry));
+           /* entry format: "<mac>,<ip>,<name>" */
+           if (sscanf(entry, "%31[^,]", entryMac) == 1)
+           {
+               if (!strcasecmp(physAddress, entryMac))
+               {
+                   rc = STRCPY_S_NOCLOBBER(pAddressSource, 20, "Static");
+                   ERR_CHK(rc);
+                   CcspTraceInfo(("%s: MAC %s found in syscfg (file not yet updated); "
+                                  "reporting Static\n", __FUNCTION__, physAddress));
+                   break;
+               }
+           }
+       }
+   }
    return;
 }
 
