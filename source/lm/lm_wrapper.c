@@ -64,7 +64,6 @@
 
 /* Fix RDKB-499 */
 #define DHCPV4_RESERVED_FORMAT  "%17[^,],%63[^,],%63[^,]"
-#define LM_DHCP_CLIENT_FORMAT   "%63d %17s %63s %63s"   
 #define LM_ARP_ENTRY_FORMAT  "%63s %63s %63s %63s %17s %31s"   
 
 extern ANSC_HANDLE bus_handle;
@@ -1812,11 +1811,11 @@ int getIPAddress(char *physAddress,char *IPAddress)
         }
         if (output[0] != '\0')
         {
-            memcpy(IPAddress,output,sizeof(output));
-            CcspTraceDebug(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));
-            pclose(fp);
-            fp = NULL;
-            return 0;
+             memcpy(IPAddress,output,sizeof(output));
+             CcspTraceDebug(("client is in stale state: MAC %s IP %s\n", physAddress, IPAddress));
+             pclose(fp);
+             fp = NULL;
+             return 0;
          }
          else
          {

@@ -197,6 +197,8 @@ LmObjectHostPossibleDeviceTypeKeyWords,  *PLmObjectHostPossibleDeviceTypeKeyWord
 #define LM_ADDRESS_SOURCE_RESERVED_STR      "ReservedIP"
 #define LM_ADDRESS_SOURCE_AUTOIP_STR        "AUTOIP"
 
+#define LM_DHCP_CLIENT_FORMAT   "%63d %17s %63s %63s"
+
 #define TIME_NO_NEGATIVE(x) ((long)(x) < 0 ? 0 : (x))
 #ifdef VENDOR_CLASS_ID
 #define DNSMASQ_VENDORCLASS_FILE "/nvram/dnsmasq.vendorclass"

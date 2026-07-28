@@ -515,12 +515,11 @@ BOOL IsBusinessModeDHCPServerDisable(void)
 {
     char dhcp_server_enabled[32] = {0};
 
-    CcspTraceDebug(("%s:%d Entry\n",__FUNCTION__,__LINE__));
 #if defined (_ONESTACK_PRODUCT_REQ_)
     char device_mode[32] = {0};
     if(!syscfg_get(NULL, "devicemode", device_mode, sizeof(device_mode)))
     {
-        CcspTraceDebug(("%s:%d Its a %s Mode\n",__FUNCTION__,__LINE__, device_mode));
+        CcspTraceDebug(("%s:%d Device in %s Mode\n",__FUNCTION__,__LINE__, device_mode));
         if(strncmp(device_mode, "business", strlen("business")) == 0)
         {
 #endif
@@ -537,7 +536,6 @@ BOOL IsBusinessModeDHCPServerDisable(void)
         }
     }
 #endif
-    CcspTraceDebug(("%s:%d Exit\n",__FUNCTION__,__LINE__));
     return FALSE;
 }
 #endif
@@ -2819,7 +2817,7 @@ static void Hosts_SyncArp (void)
                         FILE            *fp        = NULL;
                         char            buf[200]   = {0};
                         int             ret;
-                        BOOL     isArpIpMatchOnDNSMasq = FALSE;
+                        BOOL            isArpIpMatchOnDNSMasq = FALSE;
 
                         if(IsBusinessModeDHCPServerDisable())
                         {
@@ -2828,7 +2826,7 @@ static void Hosts_SyncArp (void)
                                 CcspTraceDebug(("%s:%d, Failed to open dnsmasq configuration file\n",__FUNCTION__,__LINE__));
                             }
 
-                            while(fgets(buf, sizeof(buf), fp)!= NULL)
+                            while((fp) && (fgets(buf, sizeof(buf), fp)!= NULL))
                             {
                                 memset(&dhcpHost,0,sizeof(LM_host_entry_t));
                                 /*
@@ -2853,23 +2851,23 @@ static void Hosts_SyncArp (void)
                                     break;
                                 }
                             }
-                            fclose(fp);
-                            fp=NULL;
+                            if(fp)
+                            {
+                                fclose(fp);
+                                fp=NULL;
+                            }
 
                             if(!isArpIpMatchOnDNSMasq)
                             {
-                                if(IsBusinessModeDHCPServerDisable())
+                                if(pHost->pStringParaValue[LM_HOST_IPAddressId])
                                 {
-                                    if(pHost->pStringParaValue[LM_HOST_IPAddressId])
-                                    {
-                                        CcspTraceWarning(("%s:%d LM_HOST_IPAddressId: %s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
-                                        AnscFreeMemory(pHost->pStringParaValue[LM_HOST_IPAddressId]);
-                                        pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
-                                    }
-                                    Host_FreeIPAddress(pHost, 4);
-                                    pHost->ipv4Active = FALSE;
-                                    CcspTraceWarning(("%s:%d IPv4 Address removing from host table and ipv4Active disable\n",__FUNCTION__,__LINE__));
+                                    CcspTraceDebug(("%s:%d LM_HOST_IPAddressId: %s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
+                                    AnscFreeMemory(pHost->pStringParaValue[LM_HOST_IPAddressId]);
+                                    pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
                                 }
+                                Host_FreeIPAddress(pHost, 4);
+                                pHost->ipv4Active = FALSE;
+                                CcspTraceDebug(("%s:%d IPv4 Address removing from host table and ipv4Active disable\n",__FUNCTION__,__LINE__));
                             }
                         }
                         else
