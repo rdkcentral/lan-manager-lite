@@ -513,23 +513,23 @@ static void Send_Notification (char *interface, char *mac, ClientConnectState st
 #if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
 BOOL IsBusinessModeDHCPServerDisable(void)
 {
-    char device_mode[32] = {0};
     char dhcp_server_enabled[32] = {0};
 
-    CcspTraceWarning(("%s:%d Entry\n",__FUNCTION__,__LINE__));
+    CcspTraceDebug(("%s:%d Entry\n",__FUNCTION__,__LINE__));
 #if defined (_ONESTACK_PRODUCT_REQ_)
+    char device_mode[32] = {0};
     if(!syscfg_get(NULL, "devicemode", device_mode, sizeof(device_mode)))
     {
-        CcspTraceWarning(("%s:%d Its a %s Mode\n",__FUNCTION__,__LINE__, device_mode));
+        CcspTraceDebug(("%s:%d Its a %s Mode\n",__FUNCTION__,__LINE__, device_mode));
         if(strncmp(device_mode, "business", strlen("business")) == 0)
         {
 #endif
             if(!syscfg_get(NULL, "dhcp_server_enabled", dhcp_server_enabled, sizeof(dhcp_server_enabled)))
             {
-                CcspTraceWarning(("%s:%d DHCP SERVER is %s\n",__FUNCTION__,__LINE__, dhcp_server_enabled));
+                CcspTraceDebug(("%s:%d DHCP SERVER is %s\n",__FUNCTION__,__LINE__, dhcp_server_enabled));
                 if(strncmp(dhcp_server_enabled, "0", strlen("0")) == 0)
                 {
-                    CcspTraceWarning(("%s:%d Its BusinessMode and DHCP Server Disabled\n",__FUNCTION__,__LINE__));
+                    CcspTraceDebug(("%s:%d Its BusinessMode and DHCP Server Disabled\n",__FUNCTION__,__LINE__));
                     return TRUE;
                 }
             }
@@ -537,7 +537,7 @@ BOOL IsBusinessModeDHCPServerDisable(void)
         }
     }
 #endif
-    CcspTraceWarning(("%s:%d Exit\n",__FUNCTION__,__LINE__));
+    CcspTraceDebug(("%s:%d Exit\n",__FUNCTION__,__LINE__));
     return FALSE;
 }
 #endif
@@ -653,10 +653,7 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
     if ( ! pHost->pStringParaValue[LM_HOST_IPAddressId] )
     {
         getIPAddress(pHost->pStringParaValue[LM_HOST_PhysAddressId], IPAddress);
-        if(IPAddress[0] != '\0')
-        {
-            LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]) , IPAddress);
-        }
+        LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]) , IPAddress);
     }
 /*
 		getAddressSource(pHost->pStringParaValue[LM_HOST_PhysAddressId], addressSource);
@@ -766,24 +763,6 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
         }
         pHost->bBoolParaValue[LM_HOST_ActiveId] = state;
         pHost->activityChangeTime = time((time_t*)NULL);
-#if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
-        CcspTraceWarning(("%s:%d IF: %s, state: %d, ipv4Active: %d \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], state, pHost->ipv4Active));
-        if((strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId],"WiFi")) && (!state) && (pHost->ipv4Active == TRUE))
-        {
-            if(IsBusinessModeDHCPServerDisable())
-            {
-                if(pHost->pStringParaValue[LM_HOST_IPAddressId])
-                {
-                    CcspTraceWarning(("%s:%d LM_HOST_IPAddressId: %s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
-                    AnscFreeMemory(pHost->pStringParaValue[LM_HOST_IPAddressId]);
-                    pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
-                }
-                Host_FreeIPAddress(pHost, 4);
-                pHost->ipv4Active = FALSE;
-                CcspTraceWarning(("%s:%d IPv4 Address removing from host table and ipv4Active disable\n",__FUNCTION__,__LINE__));
-            }
-        }
-#endif
 		logOnlineDevicesCount();
 
 	}
@@ -1572,7 +1551,7 @@ static PLmObjectHostIPAddress Add_Update_IPv4Address (PLmObjectHost pHost, char 
 	pIpAddrList = pHost->ipv4AddrArray;
 	ppHeader = &(pHost->ipv4AddrArray);
 	pHost->ipv4Active = TRUE;
-    CcspTraceWarning(("%s:%d ipv4Active enable, ipAddress: %s\n",__FUNCTION__,__LINE__, ipAddress));
+    CcspTraceDebug(("%s:%d ipv4Active enable, ipAddress: %s\n",__FUNCTION__,__LINE__, ipAddress));
 	pPre = NULL;
 
    for(pCur = pIpAddrList; pCur != NULL; pPre = pCur, pCur = pCur->pNext){
@@ -1747,7 +1726,7 @@ PLmObjectHostIPAddress Host_AddIPAddress (PLmObjectHost pHost, char *ipAddress, 
 {
     PLmObjectHostIPAddress pCur;
 
-	if((!ipAddress) || (ipAddress[0] == '\0'))
+	if(!ipAddress)
 		return NULL;
 
     if(version == 4)
@@ -2036,7 +2015,7 @@ static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
          CcspTraceWarning(("Invalid IP Address %s\n",pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
          continue;
         }
-        CcspTraceWarning(("%s:%d Valid IP Address %s\n",__FUNCTION__,__LINE__, pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
+        CcspTraceDebug(("%s:%d Valid IP Address %s\n",__FUNCTION__,__LINE__, pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
         pIp->addrSource = _get_addr_source(pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressSourceId]);
         pIp->priFlg = pIpSrc->l3unReachableCnt;
         if(pIp->addrSource == LM_ADDRESS_SOURCE_DHCP)
@@ -2835,15 +2814,79 @@ static void Hosts_SyncArp (void)
                     }
                     else
                     {
-						/*
-						  * We need to update non-reachable IP in host details. No need to swap.
-						  */
-						pIP = LM_FindIPv4BaseFromLink( pHost, (char *)hosts[i].ipAddr );
+#if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
+                        LM_host_entry_t dhcpHost;
+                        FILE            *fp        = NULL;
+                        char            buf[200]   = {0};
+                        int             ret;
+                        BOOL     isArpIpMatchOnDNSMasq = FALSE;
 
-						if( NULL != pIP )
-						{
-							Host_SetIPAddress(pIP, LM_HOST_RETRY_LIMIT, "NONE"); 
-						}
+                        if(IsBusinessModeDHCPServerDisable())
+                        {
+                            if((fp=fopen(DNSMASQ_FILE, "r")) == NULL)
+                            {
+                                CcspTraceDebug(("%s:%d, Failed to open dnsmasq configuration file\n",__FUNCTION__,__LINE__));
+                            }
+
+                            while(fgets(buf, sizeof(buf), fp)!= NULL)
+                            {
+                                memset(&dhcpHost,0,sizeof(LM_host_entry_t));
+                                /*
+                                    Sample:
+                                    6885 f0:de:f1:0b:39:65 10.0.0.96 shiywang-WS 01:f0:de:f1:0b:39:65 6765 MSFT 5.0
+                                    6487 02:10:18:01:00:02 10.0.0.91 * * 6367 *
+                                 */
+                                ret = sscanf(buf, LM_DHCP_CLIENT_FORMAT,
+                                        &(dhcpHost.LeaseTime),
+                                        dhcpHost.phyAddr,
+                                        dhcpHost.ipAddr,
+                                        dhcpHost.hostName
+                                        );
+
+
+                                if(ret != 4)
+                                    continue;
+
+                                if (!strcasecmp((const char *)hosts[i].ipAddr, (const char *)dhcpHost.ipAddr))
+                                {
+                                    isArpIpMatchOnDNSMasq = TRUE;
+                                    break;
+                                }
+                            }
+                            fclose(fp);
+                            fp=NULL;
+
+                            if(!isArpIpMatchOnDNSMasq)
+                            {
+                                if(IsBusinessModeDHCPServerDisable())
+                                {
+                                    if(pHost->pStringParaValue[LM_HOST_IPAddressId])
+                                    {
+                                        CcspTraceWarning(("%s:%d LM_HOST_IPAddressId: %s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
+                                        AnscFreeMemory(pHost->pStringParaValue[LM_HOST_IPAddressId]);
+                                        pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
+                                    }
+                                    Host_FreeIPAddress(pHost, 4);
+                                    pHost->ipv4Active = FALSE;
+                                    CcspTraceWarning(("%s:%d IPv4 Address removing from host table and ipv4Active disable\n",__FUNCTION__,__LINE__));
+                                }
+                            }
+                        }
+                        else
+                        {
+#endif
+                            /*
+                             * We need to update non-reachable IP in host details. No need to swap.
+                             */
+                            pIP = LM_FindIPv4BaseFromLink( pHost, (char *)hosts[i].ipAddr );
+
+                            if( NULL != pIP )
+                            {
+                                Host_SetIPAddress(pIP, LM_HOST_RETRY_LIMIT, "NONE");
+                            }
+#if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
+                        }
+#endif
                     }
                 }
 
