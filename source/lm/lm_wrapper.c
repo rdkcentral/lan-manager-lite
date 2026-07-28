@@ -1571,7 +1571,7 @@ memset(buf,0,sizeof(buf));
     fclose(fp);
    if(rc == -1)
    {
-     rc = STRCPY_S_NOCLOBBER(pAddressSource, 20,"DHCP");
+     rc = STRCPY_S_NOCLOBBER(pAddressSource, 20,"Static");
      ERR_CHK(rc);
 
    }
