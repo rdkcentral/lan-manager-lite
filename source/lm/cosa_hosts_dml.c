@@ -1603,33 +1603,6 @@ Host_GetParamStringValue
                 break;
             }
         }
-        if(strcmp(ParamName, "AddressSource") == 0)
-        {
-            getAddressSource(pHost->pStringParaValue[LM_HOST_PhysAddressId], pValue);
-            LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AddressSource]) , pValue);
-            pthread_mutex_unlock(&LmHostObjectMutex);
-            CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-            return 0;
-        }
-        if(strcmp(ParamName, "IPAddress") == 0)
-        {
-            getIPAddress(pHost->pStringParaValue[LM_HOST_PhysAddressId], pValue);
-
-            /*if both static/dhcp get failes, CPE will choose a 'primary' address.*/
-            if ((pValue[0] == '\0') && (pHost->pStringParaValue[LM_HOST_IPAddressId]))
-            {
-                memcpy(pValue, pHost->pStringParaValue[LM_HOST_IPAddressId], strlen(pHost->pStringParaValue[LM_HOST_IPAddressId])+1);
-                //  AnscTraceWarning(("[primary] client : MAC %s IP %s\n", pHost->pStringParaValue[LM_HOST_PhysAddressId], pValue));
-            }
-            else if (pHost->pStringParaValue[LM_HOST_IPAddressId])
-            {
-                AnscCopyString(pHost->pStringParaValue[LM_HOST_IPAddressId],pValue) ;
-            }
-            pthread_mutex_unlock(&LmHostObjectMutex);
-            CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-            return 0;
-        }
-
     }
 
     return GetParamStringValue_common (pValue, pUlSize, value, rc, &LmHostObjectMutex);
