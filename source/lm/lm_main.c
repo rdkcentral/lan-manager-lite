@@ -353,6 +353,7 @@ static void Host_FreeMloLinks (PLmObjectHost pHost);
 static void Hosts_SyncDHCP(void);
 static void Sendmsg_dnsmasq(BOOL enablePresenceFeature);
 static void Send_Eth_Host_Sync_Req(void);
+static BOOL ValidateHost(char *mac);
 
 #if defined (CONFIG_SYSTEM_MOCA)
 static void Send_MoCA_Host_Sync_Req(void);
@@ -2571,14 +2572,27 @@ static void *Event_HandlerThread(void *threadid)
                     {
                         if(!strcmp(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], (const char *)hosts.ssidList[0]))
                         {
-                            memset(radio, 0, sizeof(radio));
-                            hosts.ssidList[0][LM_GEN_STR_SIZE - 1] = '\0';
-                            convert_ssid_to_radio((char *)hosts.ssidList[0], radio);
-                            DelAndShuffleAssoDevIndx(pHost);
-                            LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
-                            LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)hosts.ssidList[0]);
-                            LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " "); // fix for RDKB-19836
-                            LM_SET_ACTIVE_STATE_TIME(pHost, FALSE);
+                            /* Device still reachable in ARP/DHCP — likely moved to extender Ethernet */
+                            if ( ValidateHost((char *)hosts.phyAddr) )
+                            {
+                                CcspTraceWarning(("%s: WiFi disconnect for %s but host still reachable, marking as Ethernet\n",
+                                                   __FUNCTION__, pHost->pStringParaValue[LM_HOST_PhysAddressId]));
+                                DelAndShuffleAssoDevIndx(pHost);
+                                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " ");
+                                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), "Ethernet");
+                                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), "");
+                            }
+                            else
+                            {
+                                memset(radio, 0, sizeof(radio));
+                                hosts.ssidList[0][LM_GEN_STR_SIZE - 1] = '\0';
+                                convert_ssid_to_radio((char *)hosts.ssidList[0], radio);
+                                DelAndShuffleAssoDevIndx(pHost);
+                                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
+                                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)hosts.ssidList[0]);
+                                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " "); // fix for RDKB-19836
+                                LM_SET_ACTIVE_STATE_TIME(pHost, FALSE);
+                            }
                         }
                     }
                 }
