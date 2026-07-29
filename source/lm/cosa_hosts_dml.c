@@ -1618,13 +1618,11 @@ Host_GetParamStringValue
             /*if both static/dhcp get failes, CPE will choose a 'primary' address.*/
             if ((pValue[0] == '\0') && (pHost->pStringParaValue[LM_HOST_IPAddressId]))
             {
-                CcspTraceWarning(("%s:%d, LM_HOST_IPAddressId: %s, pValue is NULL\n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
                 memcpy(pValue, pHost->pStringParaValue[LM_HOST_IPAddressId], strlen(pHost->pStringParaValue[LM_HOST_IPAddressId])+1);
                 //  AnscTraceWarning(("[primary] client : MAC %s IP %s\n", pHost->pStringParaValue[LM_HOST_PhysAddressId], pValue));
             }
             else if (pHost->pStringParaValue[LM_HOST_IPAddressId])
             {
-                CcspTraceWarning(("%s:%d, LM_HOST_IPAddressId: %s\n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
                 AnscCopyString(pHost->pStringParaValue[LM_HOST_IPAddressId],pValue) ;
             }
             pthread_mutex_unlock(&LmHostObjectMutex);

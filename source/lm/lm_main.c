@@ -519,16 +519,14 @@ BOOL IsBusinessModeDHCPServerDisable(void)
     char device_mode[32] = {0};
     if(!syscfg_get(NULL, "devicemode", device_mode, sizeof(device_mode)))
     {
-        CcspTraceDebug(("%s:%d Device in %s Mode\n",__FUNCTION__,__LINE__, device_mode));
         if(strncmp(device_mode, "business", strlen("business")) == 0)
         {
 #endif
             if(!syscfg_get(NULL, "dhcp_server_enabled", dhcp_server_enabled, sizeof(dhcp_server_enabled)))
             {
-                CcspTraceDebug(("%s:%d DHCP SERVER is %s\n",__FUNCTION__,__LINE__, dhcp_server_enabled));
                 if(strncmp(dhcp_server_enabled, "0", strlen("0")) == 0)
                 {
-                    CcspTraceDebug(("%s:%d Its BusinessMode and DHCP Server Disabled\n",__FUNCTION__,__LINE__));
+                    CcspTraceDebug(("%s:%d Device in business mode and DHCP server is disabled\n",__FUNCTION__,__LINE__));
                     return TRUE;
                 }
             }
@@ -1549,7 +1547,6 @@ static PLmObjectHostIPAddress Add_Update_IPv4Address (PLmObjectHost pHost, char 
 	pIpAddrList = pHost->ipv4AddrArray;
 	ppHeader = &(pHost->ipv4AddrArray);
 	pHost->ipv4Active = TRUE;
-    CcspTraceDebug(("%s:%d ipv4Active enable, ipAddress: %s\n",__FUNCTION__,__LINE__, ipAddress));
 	pPre = NULL;
 
    for(pCur = pIpAddrList; pCur != NULL; pPre = pCur, pCur = pCur->pNext){
@@ -2013,7 +2010,6 @@ static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
          CcspTraceWarning(("Invalid IP Address %s\n",pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
          continue;
         }
-        CcspTraceDebug(("%s:%d Valid IP Address %s\n",__FUNCTION__,__LINE__, pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
         pIp->addrSource = _get_addr_source(pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressSourceId]);
         pIp->priFlg = pIpSrc->l3unReachableCnt;
         if(pIp->addrSource == LM_ADDRESS_SOURCE_DHCP)
@@ -2813,6 +2809,10 @@ static void Hosts_SyncArp (void)
                     else
                     {
 #if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
+                        /*
+                         * We need to remove non-reachable IP in host details. When DHCPv4 Server is disabled
+                         * and IP is not present in DNSMASQ lease file.
+                         */
                         LM_host_entry_t dhcpHost;
                         FILE            *fp        = NULL;
                         char            buf[200]   = {0};
@@ -2861,13 +2861,12 @@ static void Hosts_SyncArp (void)
                             {
                                 if(pHost->pStringParaValue[LM_HOST_IPAddressId])
                                 {
-                                    CcspTraceDebug(("%s:%d LM_HOST_IPAddressId: %s \n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
+                                    CcspTraceDebug(("%s:%d IPv4 address %s removed from the host table and disabled\n",__FUNCTION__,__LINE__, pHost->pStringParaValue[LM_HOST_IPAddressId]));
                                     AnscFreeMemory(pHost->pStringParaValue[LM_HOST_IPAddressId]);
                                     pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
                                 }
                                 Host_FreeIPAddress(pHost, 4);
                                 pHost->ipv4Active = FALSE;
-                                CcspTraceDebug(("%s:%d IPv4 Address removing from host table and ipv4Active disable\n",__FUNCTION__,__LINE__));
                             }
                         }
                         else
