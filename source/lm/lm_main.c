@@ -2400,8 +2400,16 @@ static void *Event_HandlerThread(void *threadid)
             }
             else
             {
-                CcspTraceDebug(("%s-%d LM Ethernet client is NOT active \n",__FUNCTION__,__LINE__));
-                LM_SET_ACTIVE_STATE_TIME(pHost, FALSE);
+                if ( ValidateHost(EthHost.MacAddr) )
+                {
+                    CcspTraceWarning(("%s: Ethernet disconnect for %s but host still reachable, keeping active\n",
+                                       __FUNCTION__, pHost->pStringParaValue[LM_HOST_PhysAddressId]));
+                }
+                else
+                {
+                    CcspTraceDebug(("%s-%d LM Ethernet client is NOT active \n",__FUNCTION__,__LINE__));
+                    LM_SET_ACTIVE_STATE_TIME(pHost, FALSE);
+                }
             }
            
             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), ""); 
@@ -2572,27 +2580,14 @@ static void *Event_HandlerThread(void *threadid)
                     {
                         if(!strcmp(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], (const char *)hosts.ssidList[0]))
                         {
-                            /* Device still reachable in ARP/DHCP — likely moved to extender Ethernet */
-                            if ( ValidateHost((char *)hosts.phyAddr) )
-                            {
-                                CcspTraceWarning(("%s: WiFi disconnect for %s but host still reachable, marking as Ethernet\n",
-                                                   __FUNCTION__, pHost->pStringParaValue[LM_HOST_PhysAddressId]));
-                                DelAndShuffleAssoDevIndx(pHost);
-                                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " ");
-                                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), "Ethernet");
-                                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), "");
-                            }
-                            else
-                            {
-                                memset(radio, 0, sizeof(radio));
-                                hosts.ssidList[0][LM_GEN_STR_SIZE - 1] = '\0';
-                                convert_ssid_to_radio((char *)hosts.ssidList[0], radio);
-                                DelAndShuffleAssoDevIndx(pHost);
-                                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
-                                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)hosts.ssidList[0]);
-                                LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " "); // fix for RDKB-19836
-                                LM_SET_ACTIVE_STATE_TIME(pHost, FALSE);
-                            }
+                            memset(radio, 0, sizeof(radio));
+                            hosts.ssidList[0][LM_GEN_STR_SIZE - 1] = '\0';
+                            convert_ssid_to_radio((char *)hosts.ssidList[0], radio);
+                            DelAndShuffleAssoDevIndx(pHost);
+                            LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
+                            LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)hosts.ssidList[0]);
+                            LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " "); // fix for RDKB-19836
+                            LM_SET_ACTIVE_STATE_TIME(pHost, FALSE);
                         }
                     }
                 }
