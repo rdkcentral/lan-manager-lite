@@ -644,6 +644,9 @@ static int DelimiterCount (char *inputstring)
     int c;
     int count = 0;
 
+    if (!inputstring)
+        return 0;
+
     while ((c = *inputstring++) != 0) {
         if (c == ',')
             count++;
@@ -1137,8 +1140,11 @@ Host_GetEntry
     CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 	pthread_mutex_lock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-	*pInsNumber = lmHosts.hostArray[nIndex]->instanceNum;
-	host = (ANSC_HANDLE) (lmHosts.hostArray[nIndex]);
+	if (nIndex < (ULONG)lmHosts.numHost && lmHosts.hostArray[nIndex] != NULL)
+	{
+		*pInsNumber = lmHosts.hostArray[nIndex]->instanceNum;
+		host = (ANSC_HANDLE) (lmHosts.hostArray[nIndex]);
+	}
 	pthread_mutex_unlock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 
@@ -1271,6 +1277,9 @@ Host_GetParamBoolValue
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;
     int i;
 
+    if (pHost == NULL)
+        return FALSE;
+
     //printf("Host_GetParamBoolValue %p, %s\n", hInsContext, ParamName);
 
     for(i = 0; i < LM_HOST_NumBoolPara; i++) {
@@ -1340,6 +1349,9 @@ Host_GetParamIntValue
     )
 {
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+
+    if (pHost == NULL)
+        return FALSE;
 
     if (strcmp(ParamName, "X_CISCO_COM_ActiveTime") == 0)
     {
@@ -1464,6 +1476,9 @@ Host_GetParamUlongValue
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;
     int i;
 
+    if (pHost == NULL)
+        return FALSE;
+
     //printf("Host_GetParamUlongValue %p, %s\n", hInsContext, ParamName);
 
     for (i = 0; i < LM_HOST_NumUlongPara; i++) {
@@ -1571,6 +1586,9 @@ Host_GetParamStringValue
     char *value = NULL;
     int rc = -1;
     int i;
+
+    if (pHost == NULL)
+        return (ULONG) -1;
 
     //printf("Host_GetParamStringValue %p, %s\n", hInsContext, ParamName);
 
@@ -1813,6 +1831,9 @@ Host_SetParamStringValue
 {
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;
 
+    if (pHost == NULL)
+        return FALSE;
+
     if (strcmp(ParamName, "Comments") == 0)
     {
         CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -1943,8 +1964,13 @@ Host_Commit
     )
 {
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;
-    
+
+    if (pHost == NULL)
+        return (ULONG) -1;
+
+    pthread_mutex_lock(&LmHostObjectMutex);
     LMDmlHostsSetHostComment(pHost->pStringParaValue[LM_HOST_PhysAddressId], pHost->pStringParaValue[LM_HOST_Comments]);
+    pthread_mutex_unlock(&LmHostObjectMutex);
 
     return 0;
 }
@@ -2025,11 +2051,15 @@ Host_IPv4Address_GetEntryCount
         ANSC_HANDLE                 hInsContext
     )
 {
-	ULONG count = 0;		
+	ULONG count = 0;
+	PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+
+	if (pHost == NULL)
+		return 0;
+
     CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 	pthread_mutex_lock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-    PLmObjectHost pHost = (PLmObjectHost) hInsContext;    
     //printf("IPv4Address_GetEntryCount %d\n", pHost->numIPv4Addr);
 	count = pHost->numIPv4Addr;
 	pthread_mutex_unlock(&LmHostObjectMutex);
@@ -2076,10 +2106,14 @@ Host_IPv4Address_GetEntry
     )
 {
 	PLmObjectHostIPAddress IPArr = NULL;
+	PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+
+	if (pHost == NULL)
+		return NULL;
+
     CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 	pthread_mutex_lock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-    PLmObjectHost pHost = (PLmObjectHost) hInsContext;    
     //printf("IPv4Address_GetEntry %p, %ld\n", pHost, nIndex);
 	IPArr = LM_GetIPArr_FromIndex(pHost, nIndex, IP_V4);
 	if(IPArr)
@@ -2279,6 +2313,9 @@ Host_IPv4Address_GetParamStringValue
     int rc = -1;
     int i;
 
+    if (pIPv4Address == NULL)
+        return (ULONG) -1;
+
     //printf("IPv4Address_GetParamStringValue %p, %s\n", hInsContext, ParamName);
 
     CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -2340,11 +2377,15 @@ Host_IPv6Address_GetEntryCount
         ANSC_HANDLE                 hInsContext
     )
 {
-	ULONG count = 0;	
+	ULONG count = 0;
+	PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+
+	if (pHost == NULL)
+		return 0;
+
     CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 	pthread_mutex_lock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-    PLmObjectHost pHost = (PLmObjectHost) hInsContext;    
     //printf("IPv6Address_GetEntryCount %d\n", pHost->numIPv6Addr);
 	count = pHost->numIPv6Addr;
 	pthread_mutex_unlock(&LmHostObjectMutex);
@@ -2391,10 +2432,14 @@ Host_IPv6Address_GetEntry
     )
 {
 	PLmObjectHostIPAddress IPArr = NULL;
+	PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+
+	if (pHost == NULL)
+		return NULL;
+
     CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 	pthread_mutex_lock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-    PLmObjectHost pHost = (PLmObjectHost) hInsContext;    
     //printf("IPv6Address_GetEntry %p, %ld\n", pHost, nIndex);
 	IPArr = LM_GetIPArr_FromIndex(pHost, nIndex, IP_V6);
 	if(IPArr)
@@ -2594,6 +2639,9 @@ Host_IPv6Address_GetParamStringValue
     int rc = -1;
     int i;
 
+    if (pIPv6Address == NULL)
+        return (ULONG) -1;
+
     //printf("IPv6Address_GetParamStringValue %p, %s\n", hInsContext, ParamName);
 
     CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -2617,6 +2665,32 @@ Host_IPv6Address_GetParamStringValue
  APIs for Object:  Hosts.Host.{i}.MloLink.{j}.
 ***********************************************************************/
 
+/*
+ * Validate that a PLmObjectMloLink pointer is still part of a host's
+ * MloLink linked list.  Must be called with LmHostObjectMutex held.
+ * Returns TRUE if the pointer is found (still valid), FALSE otherwise.
+ */
+static BOOL Host_ValidateMloLinkPtr(PLmObjectMloLink pLink)
+{
+    int i;
+    PLmObjectMloLink pCur;
+
+    if (pLink == NULL)
+        return FALSE;
+
+    for (i = 0; i < lmHosts.numHost; i++)
+    {
+        if (lmHosts.hostArray[i] == NULL)
+            continue;
+        for (pCur = lmHosts.hostArray[i]->mloLinkArray; pCur != NULL; pCur = pCur->pNext)
+        {
+            if (pCur == pLink)
+                return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 ULONG
 Host_MloLink_GetEntryCount
     (
@@ -2624,10 +2698,14 @@ Host_MloLink_GetEntryCount
     )
 {
     ULONG count = 0;
+    PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+
+    if (pHost == NULL)
+        return 0;
+
     CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     pthread_mutex_lock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-    PLmObjectHost pHost = (PLmObjectHost) hInsContext;
     count = (ULONG)pHost->numMloLinks;
     pthread_mutex_unlock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -2644,10 +2722,14 @@ Host_MloLink_GetEntry
 {
     PLmObjectMloLink pLink = NULL;
     ULONG idx = 0;
+    PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+
+    if (pHost == NULL)
+        return NULL;
+
     CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     pthread_mutex_lock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-    PLmObjectHost pHost = (PLmObjectHost) hInsContext;
 
     for (pLink = pHost->mloLinkArray; pLink != NULL; pLink = pLink->pNext)
     {
@@ -2678,6 +2760,13 @@ Host_MloLink_GetParamIntValue
         CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
         pthread_mutex_lock(&LmHostObjectMutex);
         CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+        if (!Host_ValidateMloLinkPtr(pLink))
+        {
+            CcspTraceWarning(("%s:%d, pLink %p is stale (use-after-free avoided)\n",__FUNCTION__,__LINE__, pLink));
+            pthread_mutex_unlock(&LmHostObjectMutex);
+            CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+            return FALSE;
+        }
         *pInt = pLink->rssi;
         pthread_mutex_unlock(&LmHostObjectMutex);
         CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -2703,6 +2792,14 @@ Host_MloLink_GetParamStringValue
     CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     pthread_mutex_lock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+
+    if (!Host_ValidateMloLinkPtr(pLink))
+    {
+        CcspTraceWarning(("%s:%d, pLink %p is stale (use-after-free avoided)\n",__FUNCTION__,__LINE__, pLink));
+        pthread_mutex_unlock(&LmHostObjectMutex);
+        CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+        return (ULONG) -1;
+    }
 
     if (strcmp(ParamName, "X_RDK-Layer1Interface") == 0)
     {

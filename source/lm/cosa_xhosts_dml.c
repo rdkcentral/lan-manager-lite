@@ -272,10 +272,12 @@ XHost_GetEntry
 {
 	UNREFERENCED_PARAMETER(hInsContext);
 	ANSC_HANDLE host = NULL;
-	pthread_mutex_lock(&XLmHostObjectMutex); 
-	*pInsNumber = XlmHosts.hostArray[nIndex]->instanceNum;
-
-    host = (ANSC_HANDLE) (XlmHosts.hostArray[nIndex]);
+	pthread_mutex_lock(&XLmHostObjectMutex);
+	if (nIndex < (ULONG)XlmHosts.numHost && XlmHosts.hostArray[nIndex] != NULL)
+	{
+		*pInsNumber = XlmHosts.hostArray[nIndex]->instanceNum;
+		host = (ANSC_HANDLE) (XlmHosts.hostArray[nIndex]);
+	}
 	pthread_mutex_unlock(&XLmHostObjectMutex);
 	return host;
 }
@@ -404,6 +406,11 @@ XHost_GetParamBoolValue
     //printf("Host_GetParamBoolValue %p, %s\n", hInsContext, ParamName);
 	pthread_mutex_lock(&XLmHostObjectMutex); 
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+    if (pHost == NULL)
+    {
+        pthread_mutex_unlock(&XLmHostObjectMutex);
+        return FALSE;
+    }
     int i = 0;
     for(; i<LM_HOST_NumBoolPara; i++){
         if (strcmp(ParamName, XlmHosts.pHostBoolParaName[i]) == 0)
@@ -461,6 +468,11 @@ XHost_GetParamIntValue
 
 	pthread_mutex_lock(&XLmHostObjectMutex);  
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+    if (pHost == NULL)
+    {
+        pthread_mutex_unlock(&XLmHostObjectMutex);
+        return FALSE;
+    }
     /* check the parameter name and return the corresponding value */
     if (strcmp(ParamName, "X_CISCO_COM_ActiveTime") == 0)
     {
@@ -571,6 +583,11 @@ XHost_GetParamUlongValue
     //printf("Host_GetParamUlongValue %p, %s\n", hInsContext, ParamName);
 	pthread_mutex_lock(&XLmHostObjectMutex); 
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+    if (pHost == NULL)
+    {
+        pthread_mutex_unlock(&XLmHostObjectMutex);
+        return FALSE;
+    }
     int i = 0;
     for(; i<LM_HOST_NumUlongPara; i++){
         if (strcmp(ParamName, COSA_HOSTS_Extension1_Name) == 0)
@@ -647,6 +664,11 @@ XHost_GetParamStringValue
     //printf("Host_GetParamStringValue %p, %s\n", hInsContext, ParamName);
 	pthread_mutex_lock(&XLmHostObjectMutex); 
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+    if (pHost == NULL)
+    {
+        pthread_mutex_unlock(&XLmHostObjectMutex);
+        return (ULONG) -1;
+    }
     errno_t  rc  = -1;
     int i = 0;
     for(; i<LM_HOST_NumStringPara; i++){
@@ -678,6 +700,11 @@ XHost_GetParamStringValue
     if (strcmp(ParamName, "Layer3Interface") == 0)
     {
         /* collect value */
+        if (pHost->Layer3Interface == NULL)
+        {
+            pthread_mutex_unlock(&XLmHostObjectMutex);
+            return (ULONG) -1;
+        }
         rc = strcpy_s(pValue, *pUlSize, pHost->Layer3Interface);
         if(rc != EOK)
         {
@@ -735,6 +762,11 @@ XHost_SetParamStringValue
     /* check the parameter name and set the corresponding value */
 	pthread_mutex_lock(&XLmHostObjectMutex); 
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+    if (pHost == NULL)
+    {
+        pthread_mutex_unlock(&XLmHostObjectMutex);
+        return FALSE;
+    }
 
     if (strcmp(ParamName, "Comments") == 0)
     {
@@ -822,9 +854,13 @@ XHost_Commit
 
     pthread_mutex_lock(&XLmHostObjectMutex);     
     PLmObjectHost pHost = (PLmObjectHost) hInsContext;
-    pthread_mutex_unlock(&XLmHostObjectMutex); 
-    
+    if (pHost == NULL)
+    {
+        pthread_mutex_unlock(&XLmHostObjectMutex);
+        return (ULONG) -1;
+    }
     LMDmlHostsSetHostComment(pHost->pStringParaValue[LM_HOST_PhysAddressId], pHost->pStringParaValue[LM_HOST_Comments]);
+    pthread_mutex_unlock(&XLmHostObjectMutex); 
     return 0;
 }
 
@@ -908,7 +944,12 @@ XHost_IPv4Address_GetEntryCount
     ULONG count = 0; 
 
     pthread_mutex_lock(&XLmHostObjectMutex);       
-    PLmObjectHost pHost = (PLmObjectHost) hInsContext;    
+    PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+    if (pHost == NULL)
+    {
+        pthread_mutex_unlock(&XLmHostObjectMutex);
+        return 0;
+    }
     count = pHost->numIPv4Addr;
     pthread_mutex_unlock(&XLmHostObjectMutex);  
     return count;
@@ -955,7 +996,12 @@ XHost_IPv4Address_GetEntry
 
     PLmObjectHostIPAddress IPArr = NULL;
     pthread_mutex_lock(&XLmHostObjectMutex);     
-    PLmObjectHost pHost = (PLmObjectHost) hInsContext;    
+    PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+    if (pHost == NULL)
+    {
+        pthread_mutex_unlock(&XLmHostObjectMutex);
+        return NULL;
+    }
     IPArr = LM_GetIPArr_FromIndex(pHost, nIndex, IP_V4);
     if(IPArr)
         *pInsNumber  = IPArr->instanceNum; 
@@ -1088,7 +1134,12 @@ XHost_IPv6Address_GetEntryCount
 {
     ULONG count = 0; 
 	pthread_mutex_lock(&XLmHostObjectMutex);    
-    PLmObjectHost pHost = (PLmObjectHost) hInsContext;    
+    PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+    if (pHost == NULL)
+    {
+        pthread_mutex_unlock(&XLmHostObjectMutex);
+        return 0;
+    }
     count = pHost->numIPv6Addr;
     pthread_mutex_unlock(&XLmHostObjectMutex);
 	return count;
@@ -1135,7 +1186,12 @@ XHost_IPv6Address_GetEntry
     PLmObjectHostIPAddress IPArr = NULL;
 	
     pthread_mutex_lock(&XLmHostObjectMutex);    
-    PLmObjectHost pHost = (PLmObjectHost) hInsContext;    
+    PLmObjectHost pHost = (PLmObjectHost) hInsContext;
+    if (pHost == NULL)
+    {
+        pthread_mutex_unlock(&XLmHostObjectMutex);
+        return NULL;
+    }
     IPArr = LM_GetIPArr_FromIndex(pHost, nIndex, IP_V6);
     if(IPArr)
         *pInsNumber  = IPArr->instanceNum; 
