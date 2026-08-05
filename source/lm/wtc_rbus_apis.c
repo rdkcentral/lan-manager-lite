@@ -259,6 +259,14 @@ BOOL Stats_GetParamStringValue
     }
     else if (strcmp(ParamName, "DscpCountPerInterval") == 0)
     {
+//kvr
+       if (!client->IsFirstIntervalDone)
+        {
+            WTC_LOG_INFO("First interval not yet elapsed, DscpCountPerInterval returning empty");
+            pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
+            return TRUE;
+        }
+//kvr
         if(client->InstanceNum == WTCinfo->WanMode)
         {
             WTC_GetCount(pValue, pUlSize, TRUE, client);
@@ -279,7 +287,16 @@ BOOL Stats_GetParamStringValue
     }
     else if (strcmp(ParamName, "DscpCountTotal") == 0)
     {
-        if(client->InstanceNum == WTCinfo->WanMode)
+     
+//kvr
+       if (!client->IsFirstIntervalDone)
+        {
+            WTC_LOG_INFO("First interval not yet elapsed, DscpCountPerInterval returning empty");
+            pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
+            return TRUE;
+        }
+//kvr
+	   if(client->InstanceNum == WTCinfo->WanMode)
         {
             WTC_GetCount(pValue, pUlSize, FALSE, client);
             if(RBUS_ERROR_SUCCESS == WTC_EventPublish(WTC_COUNTTOTAL, pValue, client->InstanceNum))
