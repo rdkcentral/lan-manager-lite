@@ -1421,6 +1421,7 @@ static VOID* WTC_Thread()
                         if ( RETURN_OK == platform_hal_getDscpClientList(WTCinfo->WanMode, &CliList) )
                          {
                             pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
+                            WTC_LOG_INFO("kvr : we are in switch case before insert client");
                             WanTrafficCountInfo_t[index]->DscpTree =
                             InsertClient(WanTrafficCountInfo_t[index]->DscpTree, &CliList);
                             pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
@@ -1472,8 +1473,8 @@ static VOID* WTC_Thread()
         }
 
         pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
-
-           ResetIsUpdatedFlag(WanTrafficCountInfo_t[index]->DscpTree);
+        WTC_LOG_INFO("kvr : we are after switch case before insert client");
+	ResetIsUpdatedFlag(WanTrafficCountInfo_t[index]->DscpTree);
            WanTrafficCountInfo_t[index]->DscpTree =
                              InsertClient(WanTrafficCountInfo_t[index]->DscpTree, &CliList);
         pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
