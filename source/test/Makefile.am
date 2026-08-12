@@ -53,6 +53,7 @@ CcspLMLite_gtest_bin_SOURCES = gtest_main.cpp \
                                $(top_srcdir)/source/lm/network_devices_status_avropack.c \
                                $(top_srcdir)/source/lm/network_devices_traffic.c \
                                $(top_srcdir)/source/lm/webpa_interface.c \
+                               $(top_srcdir)/source/lm/lm_rbus_api.c \
                                $(top_srcdir)/source/lm/network_devices_traffic_avropack.c \
                                $(top_srcdir)/source/lm/lm_wrapper_priv.c \
                                $(top_srcdir)/source/lm/lm_api_test.c \

@@ -395,5 +395,32 @@ Host_IPv6Address_GetParamStringValue
         ULONG*                      pUlSize
     );
 
+ULONG       
+Host_MloLink_GetEntryCount 
+    (
+        ANSC_HANDLE hInsContext
+    );
+ANSC_HANDLE 
+Host_MloLink_GetEntry             
+    (
+        ANSC_HANDLE hInsContext, 
+        ULONG nIndex, 
+        ULONG* pInsNumber
+    );
+BOOL        
+Host_MloLink_GetParamIntValue     
+    (
+        ANSC_HANDLE hInsContext, 
+        char* ParamName, 
+        int* pInt
+    );
+ULONG       
+Host_MloLink_GetParamStringValue  
+    (
+        ANSC_HANDLE hInsContext, 
+        char* ParamName, 
+        char* pValue, 
+        ULONG* pUlSize
+    );
 
 #endif
