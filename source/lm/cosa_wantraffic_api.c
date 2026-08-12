@@ -1418,14 +1418,14 @@ static VOID* WTC_Thread()
                         WTC_LOG_INFO("Traffic count start Success");
                         WTC_RbusSubscribe(index);
 //kvr
-                        if ( RETURN_OK == platform_hal_getDscpClientList(WTCinfo->WanMode, &CliList) )
-                         {
-                            pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
-                            WTC_LOG_INFO("kvr : we are in switch case before insert client");
-                            WanTrafficCountInfo_t[index]->DscpTree =
-                            InsertClient(WanTrafficCountInfo_t[index]->DscpTree, &CliList);
-                            pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
-                         }
+   //                     if ( RETURN_OK == platform_hal_getDscpClientList(WTCinfo->WanMode, &CliList) )
+   //                      {
+   //                        pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
+   //                         WTC_LOG_INFO("kvr : we are in switch case before insert client");
+   //                         WanTrafficCountInfo_t[index]->DscpTree =
+   //                         InsertClient(WanTrafficCountInfo_t[index]->DscpTree, &CliList);
+   //                         pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
+   //                      }
 //kvr
                     }
                     else
@@ -1437,7 +1437,7 @@ static VOID* WTC_Thread()
                 }
                 WTC_SetThreadStatus(index, WTC_THRD_INITIALIZED);
                 WTC_SetThreadState(index, WTC_THRD_RUN);
-                sleep(WanTrafficCountInfo_t[index]->SleepInterval);
+//kvr           sleep(WanTrafficCountInfo_t[index]->SleepInterval);
                 continue;
             }
             case WTC_THRD_RUN:
@@ -1473,7 +1473,7 @@ static VOID* WTC_Thread()
         }
 
         pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
-        WTC_LOG_INFO("kvr : we are after switch case before insert client");
+//        WTC_LOG_INFO("kvr : we are after switch case before insert client");
 	ResetIsUpdatedFlag(WanTrafficCountInfo_t[index]->DscpTree);
            WanTrafficCountInfo_t[index]->DscpTree =
                              InsertClient(WanTrafficCountInfo_t[index]->DscpTree, &CliList);
