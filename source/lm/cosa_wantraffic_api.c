@@ -211,7 +211,7 @@ VOID WTC_Init
             WanTrafficCountInfo_t[i]->IsDscpListSet = FALSE;
             WanTrafficCountInfo_t[i]->IsSleepIntvlSet = FALSE;
 //kvr
-            WanTrafficCountInfo_t[i]->IsFirstIntervalDone = FALSE;
+ //           WanTrafficCountInfo_t[i]->IsFirstIntervalDone = FALSE;
             WanTrafficCountInfo_t[i]->NumElements = 0;
             WanTrafficCountInfo_t[i]->InstanceNum = i+1;
             WanTrafficCountInfo_t[i]->SleepInterval = 0;
@@ -860,7 +860,7 @@ static VOID WTC_DeInit
         WanTrafficCountInfo_t[index]->IsDscpListSet = FALSE;
         WanTrafficCountInfo_t[index]->IsSleepIntvlSet = FALSE;
 //kvr  
-        WanTrafficCountInfo_t[index]->IsFirstIntervalDone = FALSE;
+  //      WanTrafficCountInfo_t[index]->IsFirstIntervalDone = FALSE;
         WanTrafficCountInfo_t[index]->SleepInterval = 0;
         if(WanTrafficCountInfo_t[index]->EnabledDSCPList != NULL)
         {
@@ -1488,7 +1488,7 @@ static VOID* WTC_Thread()
 
         WTC_SendTrafficCountRbus(index);
 //kvr
-        WanTrafficCountInfo_t[index]->IsFirstIntervalDone = TRUE;
+  //      WanTrafficCountInfo_t[index]->IsFirstIntervalDone = TRUE;
         sleep(WanTrafficCountInfo_t[index]->SleepInterval);
         continue;
         }

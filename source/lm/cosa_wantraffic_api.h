@@ -228,7 +228,7 @@ typedef struct _stWanTrafficCountInfo_t {
     BOOL                  IsDscpListSet;
     BOOL                  IsSleepIntvlSet;
 //kvr
-    BOOL                  IsFirstIntervalDone;
+ //   BOOL                  IsFirstIntervalDone;
     UINT                  NumElements;
     UINT                  InstanceNum;
     UINT                  SleepInterval;

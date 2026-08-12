@@ -260,12 +260,12 @@ BOOL Stats_GetParamStringValue
     else if (strcmp(ParamName, "DscpCountPerInterval") == 0)
     {
 //kvr
-       if (!client->IsFirstIntervalDone)
-        {
-            WTC_LOG_INFO("First interval not yet elapsed, DscpCountPerInterval returning empty");
-            pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
-            return TRUE;
-        }
+  //     if (!client->IsFirstIntervalDone)
+  //      {
+  //          WTC_LOG_INFO("First interval not yet elapsed, DscpCountPerInterval returning empty");
+  //          pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
+  //          return TRUE;
+  //      }
 //kvr
         if(client->InstanceNum == WTCinfo->WanMode)
         {
@@ -289,12 +289,12 @@ BOOL Stats_GetParamStringValue
     {
      
 //kvr
-       if (!client->IsFirstIntervalDone)
-        {
-            WTC_LOG_INFO("First interval not yet elapsed, DscpCountPerInterval returning empty");
-            pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
-            return TRUE;
-        }
+  //     if (!client->IsFirstIntervalDone)
+  //      {
+  //          WTC_LOG_INFO("First interval not yet elapsed, DscpCountPerInterval returning empty");
+  //          pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
+  //          return TRUE;
+  //      }
 //kvr
 	   if(client->InstanceNum == WTCinfo->WanMode)
         {
