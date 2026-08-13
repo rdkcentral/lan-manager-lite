@@ -898,9 +898,9 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                                 DscpTree->ClientList[j].RxBytes = 0;
                                 DscpTree->ClientList[j].TxBytes = 0;
                                 DscpTree->ClientList[j].RxBytesTot = 0;
-                               //kvr           CliList->DSCP_Element[DscpTree->Dscp].Client[i].rxBytes;
+                               //           CliList->DSCP_Element[DscpTree->Dscp].Client[i].rxBytes;
                                 DscpTree->ClientList[j].TxBytesTot = 0;
-                               //kvr           CliList->DSCP_Element[DscpTree->Dscp].Client[i].txBytes;
+                               //           CliList->DSCP_Element[DscpTree->Dscp].Client[i].txBytes;
                                 DscpTree->ClientList[j].IsUpdated = TRUE;
                                 DscpTree->NumClients++;
                                 DscpTree->IsUpdated = TRUE;
