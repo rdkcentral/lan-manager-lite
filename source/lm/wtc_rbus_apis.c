@@ -279,8 +279,7 @@ BOOL Stats_GetParamStringValue
     }
     else if (strcmp(ParamName, "DscpCountTotal") == 0)
     {
-     
-	   if(client->InstanceNum == WTCinfo->WanMode)
+        if(client->InstanceNum == WTCinfo->WanMode)
         {
             WTC_GetCount(pValue, pUlSize, FALSE, client);
             if(RBUS_ERROR_SUCCESS == WTC_EventPublish(WTC_COUNTTOTAL, pValue, client->InstanceNum))
