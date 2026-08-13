@@ -1458,6 +1458,7 @@ static VOID* WTC_Thread()
         }
 
         pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
+
            ResetIsUpdatedFlag(WanTrafficCountInfo_t[index]->DscpTree);
            WanTrafficCountInfo_t[index]->DscpTree =
                              InsertClient(WanTrafficCountInfo_t[index]->DscpTree, &CliList);
