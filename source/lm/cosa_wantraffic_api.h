@@ -227,8 +227,6 @@ typedef struct _stWanTrafficCountInfo_t {
     BOOL                  IsRbusSubscribed;
     BOOL                  IsDscpListSet;
     BOOL                  IsSleepIntvlSet;
-//kvr
- //   BOOL                  IsFirstIntervalDone;
     UINT                  NumElements;
     UINT                  InstanceNum;
     UINT                  SleepInterval;
