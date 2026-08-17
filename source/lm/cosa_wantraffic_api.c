@@ -1423,7 +1423,6 @@ static VOID* WTC_Thread()
                 }
                 WTC_SetThreadStatus(index, WTC_THRD_INITIALIZED);
                 WTC_SetThreadState(index, WTC_THRD_RUN);
-                sleep(WanTrafficCountInfo_t[index]->SleepInterval);
                 continue;
             }
             case WTC_THRD_RUN:
