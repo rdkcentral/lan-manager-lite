@@ -289,13 +289,16 @@ static void LM_SendPendingNotification(LmNotifyPending *notif)
         getIPAddress(notif->getip_mac, IPAddress);
         if (IPAddress[0] != '\0')
         {
+            CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             pthread_mutex_lock(&LmHostObjectMutex);
+            CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             PLmObjectHost pHostIP = Hosts_FindHostByPhysAddress(notif->getip_mac);
             if (pHostIP && !pHostIP->pStringParaValue[LM_HOST_IPAddressId])
             {
                 LanManager_CheckCloneCopy(&(pHostIP->pStringParaValue[LM_HOST_IPAddressId]), IPAddress);
             }
             pthread_mutex_unlock(&LmHostObjectMutex);
+            CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
         }
     }
 
@@ -3954,7 +3957,9 @@ int XLM_get_host_info()
 
 	for(i = 0; i<XlmHosts.numHost; i++){
 		Xlm_wrapper_get_info(XlmHosts.hostArray[i]);
+    CcspTraceDebug(("%s:%d, Acquiring XLmHostObjectMutex\n",__FUNCTION__,__LINE__));
 	pthread_mutex_lock(&XLmHostObjectMutex);
+    CcspTraceDebug(("%s:%d, Acquired XLmHostObjectMutex\n",__FUNCTION__,__LINE__));
 		_get_dmbyname(g_IPIfNameDMListNum, g_pIPIfNameDMList, &(XlmHosts.hostArray[i]->Layer3Interface), XlmHosts.hostArray[i]->pStringParaValue[LM_HOST_Layer3InterfaceId]);
 
 		if(XlmHosts.hostArray[i]->numIPv4Addr)
@@ -3964,6 +3969,7 @@ int XLM_get_host_info()
             }
 		}
 		
+    CcspTraceDebug(("%s:%d, unlocked XLmHostObjectMutex\n",__FUNCTION__,__LINE__));
 	pthread_mutex_unlock(&XLmHostObjectMutex);
 	}
 
@@ -4016,7 +4022,9 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
 		{
 			Xlm_wrapper_get_info(pHost);
 
+            CcspTraceDebug(("%s:%d, Acquiring XLmHostObjectMutex\n",__FUNCTION__,__LINE__));
 			pthread_mutex_lock(&XLmHostObjectMutex);
+            CcspTraceDebug(("%s:%d, Acquired XLmHostObjectMutex\n",__FUNCTION__,__LINE__));
             /* reset MLO link table before repopulating */
             Host_FreeMloLinks(pHost);
 
@@ -4128,6 +4136,7 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
 				}
 			}
 
+            CcspTraceDebug(("%s:%d, unlocked XLmHostObjectMutex\n",__FUNCTION__,__LINE__));
 			pthread_mutex_unlock(&XLmHostObjectMutex);
 		}
 #endif
