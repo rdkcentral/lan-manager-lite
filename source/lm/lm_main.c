@@ -351,6 +351,8 @@ static void Wifi_ServerSyncHost(char *phyAddr, char apList[][LM_GEN_STR_SIZE], c
 static void Host_FreeIPAddress(PLmObjectHost pHost, int version);
 static void Host_FreeMloLinks (PLmObjectHost pHost);
 static void Hosts_SyncDHCP(void);
+static BOOL LanMgr_IsLanDhcpv4Enabled(void);
+static void Clean_Expired_DHCP_Hosts_OnDhcpDisabled(void);
 static void Sendmsg_dnsmasq(BOOL enablePresenceFeature);
 static void Send_Eth_Host_Sync_Req(void);
 
@@ -1094,6 +1096,64 @@ static void Clean_Host_Table (void)
         lmHosts.hostArray[count]->instanceNum = count+1;
         lmHosts.hostArray[count1] = NULL;
     }
+}
+
+/* syscfg key toggled by Device.DHCPv4.Server.Enable; LAN DHCP off means this reads "0" */
+static BOOL LanMgr_IsLanDhcpv4Enabled(void)
+{
+    char value[16] = {0};
+
+    if (syscfg_get(NULL, "dhcp_server_enabled", value, sizeof(value)) != 0)
+        return TRUE;
+
+    return (strcmp(value, "0") != 0);
+}
+
+/* Requirement: once LAN DHCP is disabled, expired DHCP leases must be removed from the host table (not just hidden in UI) */
+static void Clean_Expired_DHCP_Hosts_OnDhcpDisabled(void)
+{
+    int count, count1, total_count;
+    time_t currentTime;
+
+    if (LanMgr_IsLanDhcpv4Enabled())
+        return;
+
+    CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+    pthread_mutex_lock(&LmHostObjectMutex);
+    CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+
+    currentTime = time(NULL);
+    total_count = lmHosts.numHost;
+
+    for(count=0 ; count < total_count; count++)
+    {
+        PLmObjectHost pHost = lmHosts.hostArray[count];
+
+        if(pHost &&
+            (strcmp(pHost->pStringParaValue[LM_HOST_AddressSource], LM_ADDRESS_SOURCE_DHCP_STR) == 0) &&
+            (pHost->LeaseTime != 0xFFFFFFFF) && (currentTime >= (time_t)pHost->LeaseTime))
+        {
+            CcspTraceWarning(("LAN DHCP disabled: removing expired host %s\n",pHost->pStringParaValue[LM_HOST_PhysAddressId]));
+            Hosts_FreeHost(pHost);
+            lmHosts.hostArray[count] = NULL;
+        }
+    }
+
+    for(count=0 ; count < total_count; count++)
+    {
+        if(lmHosts.hostArray[count]) continue;
+        for(count1=count+1; count1 < total_count; count1++)
+        {
+            if(lmHosts.hostArray[count1]) break;
+        }
+        if(count1 >= total_count) break;
+        lmHosts.hostArray[count] = lmHosts.hostArray[count1];
+        lmHosts.hostArray[count]->instanceNum = count+1;
+        lmHosts.hostArray[count1] = NULL;
+    }
+
+    pthread_mutex_unlock(&LmHostObjectMutex);
+    CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 }
 
 static PLmObjectHost Hosts_AddHost (int instanceNum)
@@ -2971,6 +3031,7 @@ static void *Hosts_StatSyncThreadFunc(void *args)
             Hosts_SyncDHCP();
             Hosts_SyncArp();
             Add_IPv6_from_Dibbler();
+            Clean_Expired_DHCP_Hosts_OnDhcpDisabled();
         }
     }
     return NULL;
