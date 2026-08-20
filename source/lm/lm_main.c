@@ -352,7 +352,7 @@ static void Host_FreeIPAddress(PLmObjectHost pHost, int version);
 static void Host_FreeMloLinks (PLmObjectHost pHost);
 static void Hosts_SyncDHCP(void);
 static BOOL LanMgr_IsLanDhcpv4Enabled(void);
-static void Clean_Expired_DHCP_Hosts_OnDhcpDisabled(void);
+static void Hosts_CleanExpiredDHCP(void);
 static void Sendmsg_dnsmasq(BOOL enablePresenceFeature);
 static void Send_Eth_Host_Sync_Req(void);
 
@@ -1109,10 +1109,10 @@ static BOOL LanMgr_IsLanDhcpv4Enabled(void)
     return (strcmp(value, "0") != 0);
 }
 
-/* Requirement: once LAN DHCP is disabled, expired DHCP leases must be removed from the host table (not just hidden in UI) */
-static void Clean_Expired_DHCP_Hosts_OnDhcpDisabled(void)
+/* Requirement: once LAN DHCP is disabled, expired DHCP lease's IPv4 address must be cleared from the host entry (host entry itself is kept) */
+static void Hosts_CleanExpiredDHCP(void)
 {
-    int count, count1, total_count;
+    int count, total_count;
     time_t currentTime;
 
     if (LanMgr_IsLanDhcpv4Enabled())
@@ -1131,25 +1131,14 @@ static void Clean_Expired_DHCP_Hosts_OnDhcpDisabled(void)
 
         if(pHost &&
             (strcmp(pHost->pStringParaValue[LM_HOST_AddressSource], LM_ADDRESS_SOURCE_DHCP_STR) == 0) &&
-            (pHost->LeaseTime != 0xFFFFFFFF) && (currentTime >= (time_t)pHost->LeaseTime))
+            (pHost->LeaseTime != 0xFFFFFFFF) && (currentTime >= (time_t)pHost->LeaseTime) &&
+            (pHost->numIPv4Addr > 0))
         {
-            CcspTraceWarning(("LAN DHCP disabled: removing expired host %s\n",pHost->pStringParaValue[LM_HOST_PhysAddressId]));
-            Hosts_FreeHost(pHost);
-            lmHosts.hostArray[count] = NULL;
+            CcspTraceWarning(("LAN DHCP disabled: clearing expired IPv4 for host %s\n",pHost->pStringParaValue[LM_HOST_PhysAddressId]));
+            Host_FreeIPAddress(pHost, 4);
+            pHost->ipv4Active = FALSE;
+            LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]), "");
         }
-    }
-
-    for(count=0 ; count < total_count; count++)
-    {
-        if(lmHosts.hostArray[count]) continue;
-        for(count1=count+1; count1 < total_count; count1++)
-        {
-            if(lmHosts.hostArray[count1]) break;
-        }
-        if(count1 >= total_count) break;
-        lmHosts.hostArray[count] = lmHosts.hostArray[count1];
-        lmHosts.hostArray[count]->instanceNum = count+1;
-        lmHosts.hostArray[count1] = NULL;
     }
 
     pthread_mutex_unlock(&LmHostObjectMutex);
@@ -3031,7 +3020,7 @@ static void *Hosts_StatSyncThreadFunc(void *args)
             Hosts_SyncDHCP();
             Hosts_SyncArp();
             Add_IPv6_from_Dibbler();
-            Clean_Expired_DHCP_Hosts_OnDhcpDisabled();
+            Hosts_CleanExpiredDHCP();
         }
     }
     return NULL;
