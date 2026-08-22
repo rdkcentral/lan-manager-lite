@@ -267,6 +267,13 @@ void network_devices_traffic_report(struct networkdevicetrafficdata *head, struc
 #endif
   tstamp_av_main = tstamp_av_main/1000;
 
+  // CID 259670 -  Explicit null dereferenced (FORWARD_NULL)
+  if (optional.iface == NULL)
+  {
+    CcspTraceWarning(("optional.iface is NULL"));  
+    return;
+  }
+
   avro_value_set_long(&optional, tstamp_av_main );
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, timestamp = ""%" PRId64 "\n", tstamp_av_main ));
 
@@ -426,6 +433,12 @@ void network_devices_traffic_report(struct networkdevicetrafficdata *head, struc
     
       //Append a DeviceReport item to array
       avro_value_append(&adrField, &dr, NULL);
+      // CID 274952 #1-  Explicit null dereferenced (FORWARD_NULL)
+      if (dr.iface == NULL)
+      {
+        CcspTraceWarning(("dr.iface is NULL"));
+        break;
+      }
       CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, \tDevice Traffic Report\tType: %d\n", avro_value_get_type(&dr)));
 
       //data array block
@@ -443,6 +456,12 @@ void network_devices_traffic_report(struct networkdevicetrafficdata *head, struc
       }
 
       //device_mac - fixed 6 bytes
+      // CID 274952 #2 -  Explicit null dereferenced (FORWARD_NULL)
+      if (dr.iface == NULL)
+      {
+        CcspTraceWarning(("dr.iface is NULL"));  
+        break;
+      }
       avro_value_get_by_name(&dr, "device_id", &drField, NULL);
       if ( CHK_AVRO_ERR ) CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s\n", avro_strerror()));
       CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, device_id\tType: %d\n", avro_value_get_type(&drField)));
