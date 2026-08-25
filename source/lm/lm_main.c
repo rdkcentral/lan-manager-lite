@@ -1138,7 +1138,7 @@ static void Hosts_CleanExpiredDHCP(void)
             Host_FreeIPAddress(pHost, 4);
             pHost->ipv4Active = FALSE;
             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]), "");
-        }
+            Hosts_UpdateDeviceIntoPresenceDetection(pHost, TRUE, FALSE);
     }
 
     pthread_mutex_unlock(&LmHostObjectMutex);

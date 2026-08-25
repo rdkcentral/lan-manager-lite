@@ -559,11 +559,13 @@ char* NDS_GetIpAddress(PLmObjectHost host)
     char *pIpv6addressindex3 = NULL;
     BOOL dhcpv4Enabled = NDS_GetSyscfgBool("dhcp_server_enabled", TRUE);
     BOOL dhcpSource = FALSE;
+    time_t now = 0;
 
     if (!host)
         return strdup("Unknown");
 
     dhcpSource = NDS_IsDhcpAddressSource(host);
+    now = time(NULL);
 
     // By default PLmObjectHost pStringParaValue ipaddress holds ipv4 address.
     if(host->pStringParaValue[LM_HOST_IPAddressId])
@@ -571,7 +573,8 @@ char* NDS_GetIpAddress(PLmObjectHost host)
         pIpv4address = host->pStringParaValue[LM_HOST_IPAddressId];
     }
 
-    if ((!dhcpv4Enabled) && dhcpSource)
+    if ((!dhcpv4Enabled) && dhcpSource &&
+        (host->LeaseTime != 0xFFFFFFFF) && (now >= (time_t)host->LeaseTime))
     {
         pIpv4address = NULL;
     }
