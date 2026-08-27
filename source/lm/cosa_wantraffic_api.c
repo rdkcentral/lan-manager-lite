@@ -72,6 +72,8 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <errno.h>
+#include <limits.h>
 #include <rbus/rbus.h>
 
 #include "ansc_platform.h"
@@ -222,20 +224,40 @@ VOID WTC_Init
             CHAR buf[BUFLEN_256] = {0};
             CHAR buf1[BUFLEN_32] = {0};
 
-            if( !WTC_GetConfig("DscpEnabledList", buf, sizeof(buf), i+1) &&
-                !WTC_GetConfig("DscpSleepInterval", buf1, sizeof(buf1), i+1) )
+            if(!WTC_GetConfig("DscpEnabledList", buf, sizeof(buf), i+1) && *buf)
             {
-                if(*buf && atoi(buf1))
+                if(CheckIfValidDscp(buf))
                 {
-                    if(CheckIfValidDscp(buf) && IsDigit(buf1))
+                    WTCinfo->WTCConfigFlag[i] |= WTC_DSCP_CONFIGURED;
+                }
+                else
+                {
+                    WTC_LOG_ERROR("Invalid dscp");
+                }
+            }
+
+            if(!WTC_GetConfig("DscpSleepInterval", buf1, sizeof(buf1), i+1) && *buf1)
+            {
+                if(IsDigit(buf1))
+                {
+                    unsigned long interval;
+
+                    errno = 0;
+                    interval = strtoul(buf1, NULL, 10);
+
+                    /* 0 intentionally means "not configured"; */
+                    if(errno == ERANGE || interval > UINT_MAX)
                     {
-                        WTCinfo->WTCConfigFlag[i] |= WTC_DSCP_CONFIGURED;
+                        WTC_LOG_ERROR("Sleep interval out of range");
+                    }
+                    else if(interval > 0)
+                    {
                         WTCinfo->WTCConfigFlag[i] |= WTC_SLEEPINTRVL_CONFIGURED;
                     }
-                    else
-                    {
-                        WTC_LOG_ERROR("Invalid dscp");
-                    }
+                }
+                else
+                {
+                    WTC_LOG_ERROR("Invalid sleep interval");
                 }
             }
 
