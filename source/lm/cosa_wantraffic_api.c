@@ -72,6 +72,8 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <errno.h>
+#include <limits.h>
 #include <rbus/rbus.h>
 
 #include "ansc_platform.h"
@@ -234,11 +236,20 @@ VOID WTC_Init
                 }
             }
 
-            if(!WTC_GetConfig("DscpSleepInterval", buf1, sizeof(buf1), i+1) && atoi(buf1))
+            if(!WTC_GetConfig("DscpSleepInterval", buf1, sizeof(buf1), i+1) && *buf1)
             {
                 if(IsDigit(buf1))
                 {
-                    WTCinfo->WTCConfigFlag[i] |= WTC_SLEEPINTRVL_CONFIGURED;
+                    unsigned long interval;
+
+                    errno = 0;
+                    interval = strtoul(buf1, NULL, 10);
+
+                    /* 0 intentionally means "not configured"; reject overflow */
+                    if(errno != ERANGE && interval > 0 && interval <= UINT_MAX)
+                    {
+                        WTCinfo->WTCConfigFlag[i] |= WTC_SLEEPINTRVL_CONFIGURED;
+                    }
                 }
                 else
                 {
