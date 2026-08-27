@@ -72,7 +72,6 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <pthread.h>
-#include <errno.h>
 #include <limits.h>
 #include <rbus/rbus.h>
 
@@ -240,13 +239,10 @@ VOID WTC_Init
             {
                 if(IsDigit(buf1))
                 {
-                    unsigned long interval;
+                    unsigned long interval = strtoul(buf1, NULL, 10);
 
-                    errno = 0;
-                    interval = strtoul(buf1, NULL, 10);
-
-                    /* 0 intentionally means "not configured"; reject overflow */
-                    if(errno != ERANGE && interval > 0 && interval <= UINT_MAX)
+                    /* 0 intentionally means "not configured" */
+                    if(interval > 0 && interval <= UINT_MAX)
                     {
                         WTCinfo->WTCConfigFlag[i] |= WTC_SLEEPINTRVL_CONFIGURED;
                     }
