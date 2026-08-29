@@ -81,7 +81,7 @@
 #define ETH_WAN_ENABLE_STRING    "eth_wan_enabled"
 //this is to test FORCE MERGE
 #if defined(_SR300_PRODUCT_REQ_) || defined(_RDKB_GLOBAL_PRODUCT_REQ_)
-extern rbusHandle_t rbus_handle;
+rbusHandle_t rbus_handle;
 #endif
 
 static UINT EnabledDscpCount = 0;
