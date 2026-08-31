@@ -203,121 +203,6 @@ typedef struct _RetryHostList
 
 RetryHostList *pListHead = NULL;
 
-/* Forward declarations needed by LM_SendPendingNotification below, whose
- * definition precedes these static functions and the mutex declaration. */
-extern pthread_mutex_t LmHostObjectMutex;
-static int FindHostInLeases (char *Temp, char *FileName);
-static void Send_Notification (char *interface, char *mac, ClientConnectState status, char *hostname);
-
-/*
- * LmNotifyPending — filled by LM_SET_ACTIVE_STATE_TIME_ while LmHostObjectMutex
- * is held (cheap string copies only), then consumed after the mutex is released
- * to perform blocking work without holding the lock.
- *
- * Why this matters:
- *   LMLite's CCSP inbound message handler thread (which services all inbound
- *   Get/Set requests from rbuscore / CCSP message bus) calls cosa_hosts_dml.c
- *   functions that acquire LmHostObjectMutex.  While Event_HandlerThread holds
- *   LmHostObjectMutex and performs a blocking synchronous CcspBaseIf_setParameterValues
- *   call (Send_Notification → notifycomponent) or a flash write (syscfg_set_u_commit),
- *   every inbound CCSP/RBUS request queues up.  With 70+ connected devices this
- *   easily overflows the 25-message queue, causing PROVIDER_NOT_RESPONDING.
- *
- * pending == TRUE means "caller must invoke LM_SendPendingNotification()".
- * All fields are plain arrays so no heap allocation is needed.
- */
-typedef struct {
-    BOOL              pending;           /* TRUE iff notification is queued     */
-    char              interface[32];     /* "WiFi", "Ethernet", "MoCA", "Other" */
-    char              mac[18];           /* MAC address string                  */
-    char              hostname[64];      /* host name string                    */
-    ClientConnectState state;            /* CLIENT_STATE_CONNECT / _ONLINE / …  */
-    BOOL              do_syscfg_commit;  /* TRUE iff syscfg counter must be saved */
-    unsigned long     lastActivity;      /* value to write to syscfg            */
-    /* Fields for deferred IP-range check (avoids /nvram read inside mutex)    */
-    BOOL              do_ip_range_check; /* TRUE iff post-unlock IP check needed */
-    char              check_ip[50];      /* snapshot of pHost->ipv4 IP address  */
-    char              check_mac[18];     /* snapshot of pHost MAC for log       */
-    /* Fields for deferred getIPAddress() call (avoids netlink + /nvram inside mutex) */
-    BOOL              do_getipaddress;   /* TRUE iff getIPAddress must be called post-unlock */
-    char              getip_mac[18];     /* MAC to pass to getIPAddress()       */
-} LmNotifyPending;
-
-/*
- * LM_SendPendingNotification — call this AFTER releasing LmHostObjectMutex.
- * Performs:
- *   1. Deferred IP-range check (reads /nvram/dnsmasq.leases + syscfg_get).
- *   2. Blocking CCSP IPC Send_Notification.
- *   3. Optional syscfg_set_u_commit (flash write for HostVersionId counter).
- * Clears notif->pending on return.
- */
-static void LM_SendPendingNotification(LmNotifyPending *notif)
-{
-    if (!notif || !notif->pending)
-        return;
-
-    /* 1. Deferred IP-range check — /nvram file read + syscfg_get, now outside mutex */
-    if (notif->do_ip_range_check && notif->check_ip[0] != '\0')
-    {
-        if (0 == FindHostInLeases(notif->check_ip, DNS_LEASE))
-        {
-            char lan_ip_address[32] = {0};
-            char lan_net_mask[32]   = {0};
-            syscfg_get(NULL, "lan_ipaddr",  lan_ip_address, sizeof(lan_ip_address));
-            syscfg_get(NULL, "lan_netmask", lan_net_mask,   sizeof(lan_net_mask));
-            if (!lm_wrap_checkIPv4AddressInRange(lan_ip_address, notif->check_ip, lan_net_mask))
-            {
-                CcspTraceWarning(("<%s> IPAddress out of range : IPAddress = %s, MAC Addr = %s \n",
-                                  __FUNCTION__, notif->check_ip, notif->check_mac));
-                t2_event_d("SYS_ERROR_IPAOR", 1);
-            }
-        }
-        else
-        {
-            CcspTraceWarning(("<%s> IPAddress not found in lease file : IPAddress = %s, MAC Addr = %s \n",
-                              __FUNCTION__, notif->check_ip, notif->check_mac));
-        }
-    }
-
-    /* 2. Deferred getIPAddress() — calls neighbour_get_list() (kernel netlink) and
-     *    falls back to /nvram/dnsmasq.leases.  Both block; must not run while
-     *    LmHostObjectMutex is held because cosa_hosts_dml.c Get/Set handlers need it.
-     *    After the lookup, re-acquire the mutex briefly just to store the result. */
-    if (notif->do_getipaddress && notif->getip_mac[0] != '\0')
-    {
-        char IPAddress[50] = {0};
-        getIPAddress(notif->getip_mac, IPAddress);
-        if (IPAddress[0] != '\0')
-        {
-            CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-            pthread_mutex_lock(&LmHostObjectMutex);
-            CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-            PLmObjectHost pHostIP = Hosts_FindHostByPhysAddress(notif->getip_mac);
-            if (pHostIP && !pHostIP->pStringParaValue[LM_HOST_IPAddressId])
-            {
-                LanManager_CheckCloneCopy(&(pHostIP->pStringParaValue[LM_HOST_IPAddressId]), IPAddress);
-            }
-            pthread_mutex_unlock(&LmHostObjectMutex);
-            CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-        }
-    }
-
-    /* 3. Synchronous CCSP bus call to notifycomponent (webpa/webconfig connected-client
-     *    notification) — must not be called while holding LmHostObjectMutex */
-    Send_Notification(notif->interface, notif->mac, notif->state, notif->hostname);
-
-    /* 4. Flash write — must not be called while holding LmHostObjectMutex */
-    if (notif->do_syscfg_commit)
-    {
-        if (syscfg_set_u_commit(NULL, "X_RDKCENTRAL-COM_HostVersionId", notif->lastActivity) != 0)
-        {
-            AnscTraceWarning(("syscfg_set failed\n"));
-        }
-    }
-
-    notif->pending = FALSE;
-}
-
 int g_IPIfNameDMListNum = 0;
 Name_DM_t *g_pIPIfNameDMList = NULL;
 
@@ -720,37 +605,12 @@ static void get_vendor_class_id (char* physAddress, char* vendor_class)
 }
 #endif
 
-/*
- * LM_SET_ACTIVE_STATE_TIME — convenience wrapper.
- * Pass a pointer to an LmNotifyPending as the third argument (z) to receive
- * deferred-notification data that must be acted on after releasing
- * LmHostObjectMutex via LM_SendPendingNotification().
- * Pass NULL if you don't need the notification (notification is then skipped).
- */
-#define LM_SET_ACTIVE_STATE_TIME(x, y) LM_SET_ACTIVE_STATE_TIME_(__LINE__, x, y, NULL)
-#define LM_SET_ACTIVE_STATE_TIME_NOTIF(x, y, z) LM_SET_ACTIVE_STATE_TIME_(__LINE__, x, y, z)
-/*
- * LM_SET_ACTIVE_STATE_TIME_ — updates pHost state fields and fills *pNotif with
- * any work that must be done AFTER releasing LmHostObjectMutex.
- *
- * Blocking operations moved out of the mutex hold:
- *   - CcspBaseIf_setParameterValues (synchronous CCSP bus call to notifycomponent
- *     for connected-client notifications to webpa/webconfig) — can take hundreds
- *     of milliseconds; holding LmHostObjectMutex blocks all inbound CCSP/RBUS
- *     Get/Set handlers in cosa_hosts_dml.c, overflowing the 25-message queue.
- *   - syscfg_set_u_commit (flash write, 100-500ms)
- *   - FindHostInLeases (reads /nvram/dnsmasq.leases, flash file I/O)
- *
- * Call LM_SendPendingNotification(pNotif) once the mutex is released.
- * pNotif may be NULL for callers that don't need deferred work.
- */
-static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost, BOOL state, LmNotifyPending *pNotif){
+#define LM_SET_ACTIVE_STATE_TIME(x, y) LM_SET_ACTIVE_STATE_TIME_(__LINE__, x, y)
+static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
         UNREFERENCED_PARAMETER(line);
 	char interface[32] = {0};
 	int uptime = 0;
 	errno_t rc = -1;
-    /* Clear pNotif so the caller can safely test ->pending even if we return early */
-    if (pNotif) memset(pNotif, 0, sizeof(*pNotif));
     if(pHost->bBoolParaValue[LM_HOST_ActiveId] != state){
 
         char addressSource[20] = {0};
@@ -760,26 +620,8 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost, BOOL state,
 	memset(interface,0,sizeof(interface));
     if ( ! pHost->pStringParaValue[LM_HOST_IPAddressId] )
     {
-        if (pNotif)
-        {
-            /*
-             * getIPAddress() calls neighbour_get_list() (kernel netlink socket)
-             * and falls back to reading /nvram/dnsmasq.leases.  Calling it while
-             * LmHostObjectMutex is held blocks all inbound CCSP/RBUS Get/Set
-             * handlers in cosa_hosts_dml.c.  Defer it to LM_SendPendingNotification
-             * which runs after the mutex is released.
-             */
-            pNotif->do_getipaddress = TRUE;
-            strncpy(pNotif->getip_mac,
-                    pHost->pStringParaValue[LM_HOST_PhysAddressId] ? pHost->pStringParaValue[LM_HOST_PhysAddressId] : "",
-                    sizeof(pNotif->getip_mac) - 1);
-        }
-        else
-        {
-            /* Legacy / NULL-pNotif path — call inline (may block briefly) */
-            getIPAddress(pHost->pStringParaValue[LM_HOST_PhysAddressId], IPAddress);
-            LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]) , IPAddress);
-        }
+        getIPAddress(pHost->pStringParaValue[LM_HOST_PhysAddressId], IPAddress);
+        LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]) , IPAddress);
     }
 /*
 		getAddressSource(pHost->pStringParaValue[LM_HOST_PhysAddressId], addressSource);
@@ -869,36 +711,21 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost, BOOL state,
 
         if(pHost->ipv4Active == TRUE) {
             if (state) {
-                /*
-                 * Snapshot IP and MAC for the deferred IP-range check that
-                 * LM_SendPendingNotification will perform after the mutex is
-                 * released, avoiding /nvram file I/O and syscfg_get inside the lock.
-                 */
-                if (pNotif)
-                {
-                    pNotif->do_ip_range_check = TRUE;
-                    strncpy(pNotif->check_ip,  pHost->pStringParaValue[LM_HOST_IPAddressId]  ? pHost->pStringParaValue[LM_HOST_IPAddressId]  : "", sizeof(pNotif->check_ip)  - 1);
-                    strncpy(pNotif->check_mac, pHost->pStringParaValue[LM_HOST_PhysAddressId] ? pHost->pStringParaValue[LM_HOST_PhysAddressId] : "", sizeof(pNotif->check_mac) - 1);
+                if(0 == FindHostInLeases(pHost->pStringParaValue[LM_HOST_IPAddressId], DNS_LEASE)){
+                    char lan_ip_address[32] = {0};
+                    char lan_net_mask[32] = {0};
+
+                    syscfg_get( NULL, "lan_ipaddr", lan_ip_address, sizeof(lan_ip_address));
+                    syscfg_get( NULL, "lan_netmask", lan_net_mask, sizeof(lan_net_mask));
+                    
+                    if(!lm_wrap_checkIPv4AddressInRange(lan_ip_address, pHost->pStringParaValue[LM_HOST_IPAddressId], lan_net_mask))
+                    {
+                        CcspTraceWarning(("<%s> IPAddress out of range : IPAddress = %s, MAC Addr = %s \n",__FUNCTION__, pHost->pStringParaValue[LM_HOST_IPAddressId], pHost->pStringParaValue[LM_HOST_PhysAddressId]));
+                        t2_event_d("SYS_ERROR_IPAOR", 1);
+                    }
                 }
-                else
-                {
-                    /* Legacy path — no pNotif, do the check inline (may block) */
-                    if(0 == FindHostInLeases(pHost->pStringParaValue[LM_HOST_IPAddressId], DNS_LEASE)){
-                        char lan_ip_address[32] = {0};
-                        char lan_net_mask[32] = {0};
-
-                        syscfg_get( NULL, "lan_ipaddr", lan_ip_address, sizeof(lan_ip_address));
-                        syscfg_get( NULL, "lan_netmask", lan_net_mask, sizeof(lan_net_mask));
-
-                        if(!lm_wrap_checkIPv4AddressInRange(lan_ip_address, pHost->pStringParaValue[LM_HOST_IPAddressId], lan_net_mask))
-                        {
-                            CcspTraceWarning(("<%s> IPAddress out of range : IPAddress = %s, MAC Addr = %s \n",__FUNCTION__, pHost->pStringParaValue[LM_HOST_IPAddressId], pHost->pStringParaValue[LM_HOST_PhysAddressId]));
-                            t2_event_d("SYS_ERROR_IPAOR", 1);
-                        }
-                    }
-                    else {
-                        CcspTraceWarning(("<%s> IPAddress not found in lease file : IPAddress = %s, MAC Addr = %s \n",__FUNCTION__, pHost->pStringParaValue[LM_HOST_IPAddressId], pHost->pStringParaValue[LM_HOST_PhysAddressId]));
-                    }
+                else {
+                    CcspTraceWarning(("<%s> IPAddress not found in lease file : IPAddress = %s, MAC Addr = %s \n",__FUNCTION__, pHost->pStringParaValue[LM_HOST_IPAddressId], pHost->pStringParaValue[LM_HOST_PhysAddressId]));
                 }
             }
         }
@@ -973,25 +800,10 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost, BOOL state,
 
 			#if defined(FEATURE_SUPPORT_MESH)
             // We are going to send offline notifications to mesh when clients go offline.
-            // Defer Send_Notification outside the mutex to avoid holding LmHostObjectMutex
-            // across a blocking synchronous CCSP bus call to notifycomponent.
             if(pHost->bNotify == TRUE)
             {
                 //CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is %s, MacAddress is %s Offline \n",interface,pHost->pStringParaValue[LM_HOST_PhysAddressId]));
-                if (pNotif)
-                {
-                    pNotif->pending = TRUE;
-                    strncpy(pNotif->interface, interface, sizeof(pNotif->interface) - 1);
-                    strncpy(pNotif->mac, pHost->pStringParaValue[LM_HOST_PhysAddressId] ? pHost->pStringParaValue[LM_HOST_PhysAddressId] : "", sizeof(pNotif->mac) - 1);
-                    strncpy(pNotif->hostname, pHost->pStringParaValue[LM_HOST_HostNameId] ? pHost->pStringParaValue[LM_HOST_HostNameId] : "", sizeof(pNotif->hostname) - 1);
-                    pNotif->state = CLIENT_STATE_OFFLINE;
-                    pNotif->do_syscfg_commit = FALSE;
-                }
-                else
-                {
-                    /* Legacy path: no deferred struct provided — call inline (may block) */
-                    Send_Notification(interface, pHost->pStringParaValue[LM_HOST_PhysAddressId], CLIENT_STATE_OFFLINE, pHost->pStringParaValue[LM_HOST_HostNameId]);
-                }
+                Send_Notification(interface, pHost->pStringParaValue[LM_HOST_PhysAddressId], CLIENT_STATE_OFFLINE, pHost->pStringParaValue[LM_HOST_HostNameId]);
             }
 			#endif
 		}
@@ -1031,35 +843,11 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost, BOOL state,
 						}
 					}
 					//CcspTraceWarning(("RDKB_CONNECTED_CLIENTS:  %s pHost->bClientReady = %d \n",interface,pHost->bClientReady));
-                    /*
-                     * Defer Send_Notification + syscfg_set_u_commit to after the
-                     * mutex is released. Both calls block for extended periods:
-                     * CcspBaseIf_setParameterValues is a synchronous CCSP bus call to
-                     * notifycomponent (for webpa/webconfig connected-client events) and
-                     * syscfg_set_u_commit writes to flash. Holding LmHostObjectMutex
-                     * during either call blocks all inbound CCSP/RBUS Get/Set handlers
-                     * in cosa_hosts_dml.c, overflowing the 25-message queue and causing
-                     * PROVIDER_NOT_RESPONDING.
-                     */
-                    if (pNotif)
-                    {
-                        pNotif->pending = TRUE;
-                        strncpy(pNotif->interface, interface, sizeof(pNotif->interface) - 1);
-                        strncpy(pNotif->mac, pHost->pStringParaValue[LM_HOST_PhysAddressId] ? pHost->pStringParaValue[LM_HOST_PhysAddressId] : "", sizeof(pNotif->mac) - 1);
-                        strncpy(pNotif->hostname, pHost->pStringParaValue[LM_HOST_HostNameId] ? pHost->pStringParaValue[LM_HOST_HostNameId] : "", sizeof(pNotif->hostname) - 1);
-                        pNotif->state            = CLIENT_STATE_CONNECT;
-                        pNotif->do_syscfg_commit = TRUE;
-                        pNotif->lastActivity     = lmHosts.lastActivity;
-                    }
-                    else
-                    {
-                        /* Legacy path: no deferred struct provided — call inline (may block) */
-                        Send_Notification(interface, pHost->pStringParaValue[LM_HOST_PhysAddressId], CLIENT_STATE_CONNECT, pHost->pStringParaValue[LM_HOST_HostNameId]);
-                        if (syscfg_set_u_commit(NULL, "X_RDKCENTRAL-COM_HostVersionId", lmHosts.lastActivity) != 0)
-                        {
-                            AnscTraceWarning(("syscfg_set failed\n"));
-                        }
-                    }
+					Send_Notification(interface, pHost->pStringParaValue[LM_HOST_PhysAddressId], CLIENT_STATE_CONNECT, pHost->pStringParaValue[LM_HOST_HostNameId]);
+					if (syscfg_set_u_commit(NULL, "X_RDKCENTRAL-COM_HostVersionId", lmHosts.lastActivity) != 0)
+					{
+						AnscTraceWarning(("syscfg_set failed\n"));
+					}
 					pHost->bNotify = TRUE;
 				}
 				else
@@ -1067,21 +855,7 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost, BOOL state,
 				    // This case is for "Online" events after we have send a connection message. WebPA apparently only wants a
 				    // single connect request and no online/offline events.
                     //CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is %s, MacAddress is %s and HostName is %s Online  \n",interface,pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]));
-                    /* Defer Send_Notification outside mutex — same reason as above */
-                    if (pNotif)
-                    {
-                        pNotif->pending = TRUE;
-                        strncpy(pNotif->interface, interface, sizeof(pNotif->interface) - 1);
-                        strncpy(pNotif->mac, pHost->pStringParaValue[LM_HOST_PhysAddressId] ? pHost->pStringParaValue[LM_HOST_PhysAddressId] : "", sizeof(pNotif->mac) - 1);
-                        strncpy(pNotif->hostname, pHost->pStringParaValue[LM_HOST_HostNameId] ? pHost->pStringParaValue[LM_HOST_HostNameId] : "", sizeof(pNotif->hostname) - 1);
-                        pNotif->state            = CLIENT_STATE_ONLINE;
-                        pNotif->do_syscfg_commit = FALSE;
-                    }
-                    else
-                    {
-                        /* Legacy path: no deferred struct provided — call inline (may block) */
-                        Send_Notification(interface, pHost->pStringParaValue[LM_HOST_PhysAddressId], CLIENT_STATE_ONLINE, pHost->pStringParaValue[LM_HOST_HostNameId]);
-                    }
+                    Send_Notification(interface, pHost->pStringParaValue[LM_HOST_PhysAddressId], CLIENT_STATE_ONLINE, pHost->pStringParaValue[LM_HOST_HostNameId]);
                 }
 			}
 			
@@ -2534,7 +2308,6 @@ static void *Event_HandlerThread(void *threadid)
 	char radio[32];
     BOOL do_dhcpsync = FALSE;
     int lnk;
-    LmNotifyPending notif;  /* filled inside mutex, consumed after unlock */
 
     /* initialize the queue attributes */
     attr.mq_flags = 0;
@@ -2622,12 +2395,12 @@ static void *Event_HandlerThread(void *threadid)
                     do_dhcpsync = TRUE;
                 }
  
-                LM_SET_ACTIVE_STATE_TIME_NOTIF(pHost, TRUE, &notif);
+                LM_SET_ACTIVE_STATE_TIME(pHost, TRUE);
             }
             else
             {
                 CcspTraceDebug(("%s-%d LM Ethernet client is NOT active \n",__FUNCTION__,__LINE__));
-                LM_SET_ACTIVE_STATE_TIME_NOTIF(pHost, FALSE, &notif);
+                LM_SET_ACTIVE_STATE_TIME(pHost, FALSE);
             }
            
             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), ""); 
@@ -2635,8 +2408,6 @@ static void *Event_HandlerThread(void *threadid)
             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_DeviceType]), "empty");
             pthread_mutex_unlock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-            /* Send notification and syscfg commit AFTER releasing LmHostObjectMutex */
-            LM_SendPendingNotification(&notif);
 
             if(EthHost.Active && do_dhcpsync)
             {
@@ -2758,11 +2529,11 @@ static void *Event_HandlerThread(void *threadid)
                         CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is WiFi MLO, MacAddress is %s IPAddr is not updated in ARP\n",pHost->pStringParaValue[LM_HOST_PhysAddressId]));
                         do_dhcpsync = TRUE;
                     }
-                    LM_SET_ACTIVE_STATE_TIME_NOTIF(pHost, TRUE, &notif);
+                    LM_SET_ACTIVE_STATE_TIME(pHost, TRUE);
                 }
                 else
                 {
-                    LM_SET_ACTIVE_STATE_TIME_NOTIF(pHost, FALSE, &notif);
+                    LM_SET_ACTIVE_STATE_TIME(pHost, FALSE);
                 }
             }
             else
@@ -2790,7 +2561,7 @@ static void *Event_HandlerThread(void *threadid)
                         CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is WiFi, MacAddress is %s IPAddr is not updated in ARP\n",pHost->pStringParaValue[LM_HOST_PhysAddressId]));
                         do_dhcpsync = TRUE;
                     }
-                    LM_SET_ACTIVE_STATE_TIME_NOTIF(pHost, TRUE, &notif);
+                    LM_SET_ACTIVE_STATE_TIME(pHost, TRUE);
                 }
                 else
                 {
@@ -2807,7 +2578,7 @@ static void *Event_HandlerThread(void *threadid)
                             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), radio);
                             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId]), (const char *)hosts.ssidList[0]);
                             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), " "); // fix for RDKB-19836
-                            LM_SET_ACTIVE_STATE_TIME_NOTIF(pHost, FALSE, &notif);
+                            LM_SET_ACTIVE_STATE_TIME(pHost, FALSE);
                         }
                     }
                 }
@@ -2817,8 +2588,6 @@ static void *Event_HandlerThread(void *threadid)
             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_DeviceType]), " ");
             pthread_mutex_unlock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-            /* Send notification and syscfg commit AFTER releasing LmHostObjectMutex */
-            LM_SendPendingNotification(&notif);
 
             if(hosts.Status && do_dhcpsync) 
             {
@@ -2889,7 +2658,7 @@ static void *Event_HandlerThread(void *threadid)
                     CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is MoCA, MacAddress is %s IPAddr is not updated in ARP\n",pHost->pStringParaValue[LM_HOST_PhysAddressId]));
                 }
                 
-                LM_SET_ACTIVE_STATE_TIME_NOTIF(pHost, TRUE, &notif);
+                LM_SET_ACTIVE_STATE_TIME(pHost, TRUE);
             }
             else
             {
@@ -2897,12 +2666,10 @@ static void *Event_HandlerThread(void *threadid)
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Layer1Interface]), "");
                 LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AssociatedDeviceId]), (const char *)mhosts.AssociatedDevice);
 
-                LM_SET_ACTIVE_STATE_TIME_NOTIF(pHost, FALSE, &notif);
+                LM_SET_ACTIVE_STATE_TIME(pHost, FALSE);
             }       
             pthread_mutex_unlock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
-            /* Send notification and syscfg commit AFTER releasing LmHostObjectMutex */
-            LM_SendPendingNotification(&notif);
 
            if(mhosts.Status && do_dhcpsync)
             {
@@ -3957,9 +3724,7 @@ int XLM_get_host_info()
 
 	for(i = 0; i<XlmHosts.numHost; i++){
 		Xlm_wrapper_get_info(XlmHosts.hostArray[i]);
-    CcspTraceDebug(("%s:%d, Acquiring XLmHostObjectMutex\n",__FUNCTION__,__LINE__));
 	pthread_mutex_lock(&XLmHostObjectMutex);
-    CcspTraceDebug(("%s:%d, Acquired XLmHostObjectMutex\n",__FUNCTION__,__LINE__));
 		_get_dmbyname(g_IPIfNameDMListNum, g_pIPIfNameDMList, &(XlmHosts.hostArray[i]->Layer3Interface), XlmHosts.hostArray[i]->pStringParaValue[LM_HOST_Layer3InterfaceId]);
 
 		if(XlmHosts.hostArray[i]->numIPv4Addr)
@@ -3969,7 +3734,6 @@ int XLM_get_host_info()
             }
 		}
 		
-    CcspTraceDebug(("%s:%d, unlocked XLmHostObjectMutex\n",__FUNCTION__,__LINE__));
 	pthread_mutex_unlock(&XLmHostObjectMutex);
 	}
 
@@ -4022,9 +3786,7 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
 		{
 			Xlm_wrapper_get_info(pHost);
 
-            CcspTraceDebug(("%s:%d, Acquiring XLmHostObjectMutex\n",__FUNCTION__,__LINE__));
 			pthread_mutex_lock(&XLmHostObjectMutex);
-            CcspTraceDebug(("%s:%d, Acquired XLmHostObjectMutex\n",__FUNCTION__,__LINE__));
             /* reset MLO link table before repopulating */
             Host_FreeMloLinks(pHost);
 
@@ -4136,7 +3898,6 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
 				}
 			}
 
-            CcspTraceDebug(("%s:%d, unlocked XLmHostObjectMutex\n",__FUNCTION__,__LINE__));
 			pthread_mutex_unlock(&XLmHostObjectMutex);
 		}
 #endif

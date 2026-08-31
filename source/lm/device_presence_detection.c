@@ -737,7 +737,6 @@ int sendIpv4ArpMessage(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient
     struct sockaddr_ll device;
     struct ifreq ifr;
     char buf[64];
-    char cSnapIpv4[IPV4_SIZE]; /* snapshot of obj->ipv4, copied before mutex is released */
     errno_t rc = -1;
 
     if (pobject)
@@ -796,39 +795,16 @@ int sendIpv4ArpMessage(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient
                     }
                 }
 #endif
-                /*
-                 * Snapshot the target IP and interface name, then release
-                 * PresenceDetectionMutex before performing any blocking I/O:
-                 *   - sendProbeRequest() opens a NETLINK_ROUTE socket and
-                 *     calls sendmsg() to the kernel.
-                 *   - The ARP raw socket path (socket/ioctl/getaddrinfo/sendto)
-                 *     may block on DNS or network operations.
-                 * Holding the mutex across per-host I/O for 70+ devices starves
-                 * the RBUS callback thread, overflows the 25-message queue, and
-                 * triggers PROVIDER_NOT_RESPONDING.
-                 * The mutex is reacquired at freeResources before returning to
-                 * the loop, which requires it to be held.
-                 */
-                char cSnapIface[64] = {0};
-                if (bSendProbe)
-                {
-                    syscfg_get(NULL, "lan_ifname", cSnapIface, sizeof(cSnapIface));
-                    if (0 == strlen(cSnapIface))
-                    {
-                        snprintf(cSnapIface, sizeof(cSnapIface), "%s", "brlan0");
-                    }
-                }
-                rc = strcpy_s(cSnapIpv4, sizeof(cSnapIpv4), obj->ipv4);
-                ERR_CHK(rc);
-                CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex (before ARP I/O for %s)\n",__FUNCTION__,__LINE__,cSnapIpv4));
-                pthread_mutex_unlock(&PresenceDetectionMutex);
-                /* ---- PresenceDetectionMutex NOT held below this line ---- */
-
                 if (TRUE == bSendProbe)
                 {
-                    sendProbeRequest(IPV4, cSnapIpv4, cSnapIface);
+                    char cBuf[64] = {0};
+                    syscfg_get(NULL, "lan_ifname", cBuf, sizeof(cBuf));
+                    if ( 0 == strlen(cBuf))
+                    {
+                        snprintf(cBuf,sizeof(cBuf),"%s","brlan0");
+                    }
+                    sendProbeRequest(IPV4, obj->ipv4,cBuf);
                 }
-
                 // Allocate memory for various arrays.
                 src_mac = allocate_ustrmem (6);
                 dst_mac = allocate_ustrmem (6);
@@ -894,7 +870,7 @@ int sendIpv4ArpMessage(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient
 
                 // Destination URL or IPv4 address (must be a link-local node): you need to fill this out
                 //strcpy (target, "10.0.0.126");
-                rc = strcpy_s(target, 40, cSnapIpv4); /* use snapshot; mutex is not held here */
+                rc = strcpy_s(target, 40,obj->ipv4);
                 ERR_CHK(rc);
 
                 // Fill out hints for getaddrinfo().
@@ -996,12 +972,6 @@ int sendIpv4ArpMessage(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient
                 // }
                 // Free allocated memory.
     freeResources:
-                /* Reacquire PresenceDetectionMutex before returning to the
-                 * loop; the caller (Send_arp_ipv4_thread) and subsequent loop
-                 * iterations require it to be held. */
-                pthread_mutex_lock(&PresenceDetectionMutex);
-                CcspTraceDebug(("%s:%d, Acquired PresenceDetectionMutex (after ARP I/O for %s)\n",__FUNCTION__,__LINE__,cSnapIpv4));
-                /* ---- PresenceDetectionMutex held again above this line ---- */
                 free (src_mac);
                 free (dst_mac);
                 free (ether_frame);
@@ -2190,41 +2160,12 @@ int Send_ipv6_neighbourdiscovery(PLmDevicePresenceDetectionInfo pobject,BOOL bac
                         continue;
                     }
                 }
-
-                /*
-                 * Snapshot the IPv6 address and interface name, then release
-                 * PresenceDetectionMutex before performing blocking I/O:
-                 *   - popen("ndisc6 ...") forks a process and waits for its
-                 *     completion (includes an ICMPv6 round-trip timeout).
-                 *   - sendProbeRequest() opens a NETLINK_ROUTE socket and
-                 *     calls sendmsg() to the kernel.
-                 * Holding PresenceDetectionMutex across these calls (×N active
-                 * IPv6 clients) starves acquirePresencelocks() callers, which
-                 * take LmHostObjectMutex first and then PresenceDetectionMutex,
-                 * causing the RBUS inbound queue to overflow.
-                 * The mutex is reacquired at reacquireLock before returning to
-                 * the loop, which requires it to be held.
-                 */
-                syscfg_get(NULL, "lan_ifname", buf, sizeof(buf));
-                if (0 == strlen(buf))
-                {
-                    snprintf(buf, sizeof(buf), "%s", "brlan0");
-                }
-
-                char cSnapIpv6[IPV6_SIZE] = {0};
-                char cSnapIface[64]       = {0};
-                strncpy(cSnapIpv6,  pobj->ipv6, sizeof(cSnapIpv6) - 1);
-                strncpy(cSnapIface, buf,         sizeof(cSnapIface) - 1);
-
-                CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex (before IPv6 I/O for %s)\n",__FUNCTION__,__LINE__,cSnapIpv6));
-                pthread_mutex_unlock(&PresenceDetectionMutex);
-                /* ---- PresenceDetectionMutex NOT held below this line ---- */
-
-                CcspTraceDebug(("cmd = ndisc6 %s %s -r 1 -q", cSnapIpv6, cSnapIface));
+                syscfg_get( NULL, "lan_ifname", buf, sizeof(buf));
+                CcspTraceDebug(("cmd = ndisc6 %s %s -r 1 -q", pobj->ipv6,buf));
                 char cLine[256] = {0};
-                snprintf(cLine, sizeof(cLine), "ndisc6 %s %s -r 1 -q", cSnapIpv6, cSnapIface);
+                snprintf (cLine, sizeof(cLine), "ndisc6 %s %s -r 1 -q", pobj->ipv6,buf);
                 FILE *fpPipe = popen(cLine, "r");
-                if (NULL == fpPipe)
+                if(NULL == fpPipe)
                 {
                     CcspTraceError(("%s:%d, Failed to execute the command\n",__FUNCTION__,__LINE__));
                 }
@@ -2234,15 +2175,12 @@ int Send_ipv6_neighbourdiscovery(PLmDevicePresenceDetectionInfo pobject,BOOL bac
                 }
                 if (TRUE == bSendProbe)
                 {
-                    sendProbeRequest(IPV6, cSnapIpv6, cSnapIface);
+                    if ( 0 == strlen(buf))
+                    {
+                        snprintf(buf,sizeof(buf),"%s","brlan0");
+                    }
+                    sendProbeRequest (IPV6, pobj->ipv6, buf);
                 }
-
-                /* Reacquire PresenceDetectionMutex before returning to the
-                 * loop; the caller (SendNS_Thread) and subsequent loop
-                 * iterations require it to be held. */
-                pthread_mutex_lock(&PresenceDetectionMutex);
-                CcspTraceDebug(("%s:%d, Acquired PresenceDetectionMutex (after IPv6 I/O for %s)\n",__FUNCTION__,__LINE__,cSnapIpv6));
-                /* ---- PresenceDetectionMutex held again above this line ---- */
             }
         }
     }
