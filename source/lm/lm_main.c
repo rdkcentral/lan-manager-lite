@@ -1152,7 +1152,9 @@ static void Hosts_CleanExpiredDHCP(void)
                 pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
             }
 
+            pthread_mutex_lock(&PresenceDetectionMutex);
             Hosts_UpdateDeviceIntoPresenceDetection(pHost, TRUE, FALSE);
+            pthread_mutex_unlock(&PresenceDetectionMutex);
         }
     }
 
