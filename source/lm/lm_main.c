@@ -1106,7 +1106,13 @@ static BOOL LanMgr_IsLanDhcpv4Enabled(void)
     if (syscfg_get(NULL, "dhcp_server_enabled", value, sizeof(value)) != 0)
         return TRUE;
 
-    return (strcmp(value, "0") != 0);
+    if ((strcmp(value, "0") == 0) || (strcmp(value, "false") == 0) || (strcmp(value, "FALSE") == 0))
+        return FALSE;
+
+    if ((strcmp(value, "1") == 0) || (strcmp(value, "true") == 0) || (strcmp(value, "TRUE") == 0))
+        return TRUE;
+
+    return TRUE;
 }
 
 /* Requirement: once LAN DHCP is disabled, expired DHCP lease's IPv4 address must be cleared from the host entry (host entry itself is kept) */
