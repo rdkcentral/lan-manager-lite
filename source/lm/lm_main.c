@@ -1135,16 +1135,25 @@ static void Hosts_CleanExpiredDHCP(void)
     {
         PLmObjectHost pHost = lmHosts.hostArray[count];
 
-        if(pHost &&
+        if (pHost &&
+            pHost->pStringParaValue[LM_HOST_AddressSource] &&
             (strcmp(pHost->pStringParaValue[LM_HOST_AddressSource], LM_ADDRESS_SOURCE_DHCP_STR) == 0) &&
             (pHost->LeaseTime != 0xFFFFFFFF) && (currentTime >= (time_t)pHost->LeaseTime) &&
             (pHost->numIPv4Addr > 0))
         {
-            CcspTraceWarning(("LAN DHCP disabled: clearing expired IPv4 for host %s\n",pHost->pStringParaValue[LM_HOST_PhysAddressId]));
+            const char *mac = pHost->pStringParaValue[LM_HOST_PhysAddressId] ? pHost->pStringParaValue[LM_HOST_PhysAddressId] : "Unknown";
+            CcspTraceWarning(("LAN DHCP disabled: clearing expired IPv4 for host %s\n", mac));
             Host_FreeIPAddress(pHost, 4);
             pHost->ipv4Active = FALSE;
-            LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]), "");
+
+            if (pHost->pStringParaValue[LM_HOST_IPAddressId])
+            {
+                AnscFreeMemory(pHost->pStringParaValue[LM_HOST_IPAddressId]);
+                pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
+            }
+
             Hosts_UpdateDeviceIntoPresenceDetection(pHost, TRUE, FALSE);
+        }
     }
 
     pthread_mutex_unlock(&LmHostObjectMutex);
