@@ -351,6 +351,8 @@ static void Wifi_ServerSyncHost(char *phyAddr, char apList[][LM_GEN_STR_SIZE], c
 static void Host_FreeIPAddress(PLmObjectHost pHost, int version);
 static void Host_FreeMloLinks (PLmObjectHost pHost);
 static void Hosts_SyncDHCP(void);
+static BOOL LanMgr_IsLanDhcpv4Enabled(void);
+static void Hosts_CleanExpiredDHCP(void);
 static void Sendmsg_dnsmasq(BOOL enablePresenceFeature);
 static void Send_Eth_Host_Sync_Req(void);
 
@@ -1094,6 +1096,70 @@ static void Clean_Host_Table (void)
         lmHosts.hostArray[count]->instanceNum = count+1;
         lmHosts.hostArray[count1] = NULL;
     }
+}
+
+/* syscfg key toggled by Device.DHCPv4.Server.Enable; LAN DHCP off means this reads "0" */
+static BOOL LanMgr_IsLanDhcpv4Enabled(void)
+{
+    char value[16] = {0};
+
+    if (syscfg_get(NULL, "dhcp_server_enabled", value, sizeof(value)) != 0)
+        return TRUE;
+
+    if ((strcmp(value, "0") == 0) || (strcmp(value, "false") == 0) || (strcmp(value, "FALSE") == 0))
+        return FALSE;
+
+    if ((strcmp(value, "1") == 0) || (strcmp(value, "true") == 0) || (strcmp(value, "TRUE") == 0))
+        return TRUE;
+
+    return TRUE;
+}
+
+/* Requirement: once LAN DHCP is disabled, expired DHCP lease's IPv4 address must be cleared from the host entry (host entry itself is kept) */
+static void Hosts_CleanExpiredDHCP(void)
+{
+    int count, total_count;
+    time_t currentTime;
+
+    if (LanMgr_IsLanDhcpv4Enabled())
+        return;
+
+    CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+    pthread_mutex_lock(&LmHostObjectMutex);
+    CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+
+    currentTime = time(NULL);
+    total_count = lmHosts.numHost;
+
+    for(count=0 ; count < total_count; count++)
+    {
+        PLmObjectHost pHost = lmHosts.hostArray[count];
+
+        if (pHost &&
+            pHost->pStringParaValue[LM_HOST_AddressSource] &&
+            (strcmp(pHost->pStringParaValue[LM_HOST_AddressSource], LM_ADDRESS_SOURCE_DHCP_STR) == 0) &&
+            (pHost->LeaseTime != 0xFFFFFFFF) && (currentTime >= (time_t)pHost->LeaseTime) &&
+            (pHost->numIPv4Addr > 0))
+        {
+            const char *mac = pHost->pStringParaValue[LM_HOST_PhysAddressId] ? pHost->pStringParaValue[LM_HOST_PhysAddressId] : "Unknown";
+            CcspTraceWarning(("LAN DHCP disabled: clearing expired IPv4 for host %s\n", mac));
+            Host_FreeIPAddress(pHost, 4);
+            pHost->ipv4Active = FALSE;
+
+            if (pHost->pStringParaValue[LM_HOST_IPAddressId])
+            {
+                AnscFreeMemory(pHost->pStringParaValue[LM_HOST_IPAddressId]);
+                pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
+            }
+
+            pthread_mutex_lock(&PresenceDetectionMutex);
+            Hosts_UpdateDeviceIntoPresenceDetection(pHost, TRUE, FALSE);
+            pthread_mutex_unlock(&PresenceDetectionMutex);
+        }
+    }
+
+    pthread_mutex_unlock(&LmHostObjectMutex);
+    CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 }
 
 static PLmObjectHost Hosts_AddHost (int instanceNum)
@@ -2971,6 +3037,7 @@ static void *Hosts_StatSyncThreadFunc(void *args)
             Hosts_SyncDHCP();
             Hosts_SyncArp();
             Add_IPv6_from_Dibbler();
+            Hosts_CleanExpiredDHCP();
         }
     }
     return NULL;

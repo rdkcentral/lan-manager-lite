@@ -40,6 +40,7 @@
 #include "safec_lib_common.h"
 #include "secure_wrapper.h"
 #include "lm_rbus_api.h"
+#include "syscfg/syscfg.h"
 
 static pthread_mutex_t ndsMutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t ndsCond = PTHREAD_COND_INITIALIZER;
@@ -76,6 +77,43 @@ static struct networkdevicestatusdata *headnode = NULL;
 static struct networkdevicestatusdata *headnodeextender = NULL;
 
 extern pthread_mutex_t LmHostObjectMutex;
+
+static BOOL NDS_GetSyscfgBool(const char *key, BOOL defaultValue)
+{
+    char value[16] = {0};
+
+    if (key == NULL)
+    {
+        return defaultValue;
+    }
+
+    if (syscfg_get(NULL, key, value, sizeof(value)) != 0)
+    {
+        return defaultValue;
+    }
+
+    if ((strcasecmp(value, "true") == 0) || (strcmp(value, "1") == 0))
+    {
+        return TRUE;
+    }
+
+    if ((strcasecmp(value, "false") == 0) || (strcmp(value, "0") == 0))
+    {
+        return FALSE;
+    }
+
+    return defaultValue;
+}
+
+static BOOL NDS_IsDhcpAddressSource(PLmObjectHost host)
+{
+    if ((host == NULL) || (host->pStringParaValue[LM_HOST_AddressSource] == NULL))
+    {
+        return FALSE;
+    }
+
+    return (strstr(host->pStringParaValue[LM_HOST_AddressSource], "DHCP") != NULL);
+}
 
 // RDKB-9258 : set polling and reporting periods to NVRAM after TTL expiry
 extern ANSC_STATUS SetNDSPollingPeriodInNVRAM(ULONG pPollingVal);
@@ -519,14 +557,26 @@ char* NDS_GetIpAddress(PLmObjectHost host)
     char *pIpv4address = NULL;
     char *pIpv6addressindex1 = NULL;
     char *pIpv6addressindex3 = NULL;
+    BOOL dhcpv4Enabled = NDS_GetSyscfgBool("dhcp_server_enabled", TRUE);
+    BOOL dhcpSource = FALSE;
+    time_t now = 0;
 
     if (!host)
         return strdup("Unknown");
+
+    dhcpSource = NDS_IsDhcpAddressSource(host);
+    now = time(NULL);
 
     // By default PLmObjectHost pStringParaValue ipaddress holds ipv4 address.
     if(host->pStringParaValue[LM_HOST_IPAddressId])
     {
         pIpv4address = host->pStringParaValue[LM_HOST_IPAddressId];
+    }
+
+    if ((!dhcpv4Enabled) && dhcpSource &&
+        (host->LeaseTime != 0xFFFFFFFF) && (now >= (time_t)host->LeaseTime))
+    {
+        pIpv4address = NULL;
     }
 
     if ((!host->ipv6Active) && (!pIpv4address))
