@@ -1593,11 +1593,7 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
         char cHostname[64];
         size_t len;
 
-        pthread_mutex_unlock(&LmHostObjectMutex);
-        CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
         sleep(HOST_NAME_RETRY_INTERVAL);
-        pthread_mutex_lock(&LmHostObjectMutex);
-        CcspTraceDebug(("%s:%d, locked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
 
         *HostName = 0;
 
@@ -1619,8 +1615,13 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
                         /* Case-insensitive MAC address comparison */
                         if (strcasecmp(cMac, physAddress) == 0)
                         {
-                            strncpy(HostName, cHostname, HostNameLen - 1);
-                            HostName[HostNameLen - 1] = '\0';
+                            if (HostNameLen > 0) {
+                                errno_t rc = strcpy_s(HostName, HostNameLen, cHostname);
+                                if (rc != EOK) {
+                                    ERR_CHK(rc);
+                                    HostName[0] = '\0';
+                                }
+                            }
                             break;
                         }
                     }

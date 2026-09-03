@@ -835,20 +835,47 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
 
 						if(0 == strcmp(pHost->pStringParaValue[LM_HOST_HostNameId],pHost->pStringParaValue[LM_HOST_PhysAddressId]))
 						{
-							char HostName[50];
-							if (get_HostName(pHost->pStringParaValue[LM_HOST_PhysAddressId],HostName,sizeof(HostName)) == 1)
-								LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_HostNameId]), HostName);
+							char cHostName[50];
+							char cMacCopy[32] = {0};
+							errno_t macRc = strcpy_s(cMacCopy, sizeof(cMacCopy), pHost->pStringParaValue[LM_HOST_PhysAddressId]);
+							ERR_CHK(macRc);
 
-							CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is %s, MacAddress is %s and HostName is %s Connected \n",interface,pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]));
+							/* get_HostName() retries with sleeps for several seconds; release the
+							 * lock so other threads aren't blocked, then re-resolve pHost since it
+							 * may have been freed/reallocated while the lock was dropped. */
+							CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+							pthread_mutex_unlock(&LmHostObjectMutex);
+
+							int iHostNameFound = get_HostName(cMacCopy, cHostName, sizeof(cHostName));
+
+							CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+							pthread_mutex_lock(&LmHostObjectMutex);
+							CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
+
+							pHost = Hosts_FindHostByPhysAddress(cMacCopy);
+							if (pHost != NULL)
+							{
+								if (iHostNameFound == 1)
+									LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_HostNameId]), cHostName);
+
+								CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Client type is %s, MacAddress is %s and HostName is %s Connected \n",interface,pHost->pStringParaValue[LM_HOST_PhysAddressId],pHost->pStringParaValue[LM_HOST_HostNameId]));
+							}
+							else
+							{
+								CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Host %s removed while resolving HostName\n", cMacCopy));
+							}
 						}
 					}
 					//CcspTraceWarning(("RDKB_CONNECTED_CLIENTS:  %s pHost->bClientReady = %d \n",interface,pHost->bClientReady));
-					Send_Notification(interface, pHost->pStringParaValue[LM_HOST_PhysAddressId], CLIENT_STATE_CONNECT, pHost->pStringParaValue[LM_HOST_HostNameId]);
-					if (syscfg_set_u_commit(NULL, "X_RDKCENTRAL-COM_HostVersionId", lmHosts.lastActivity) != 0)
+					if (pHost != NULL)
 					{
-						AnscTraceWarning(("syscfg_set failed\n"));
+				        Send_Notification(interface, pHost->pStringParaValue[LM_HOST_PhysAddressId], CLIENT_STATE_CONNECT, pHost->pStringParaValue[LM_HOST_HostNameId]);
+					    if (syscfg_set_u_commit(NULL, "X_RDKCENTRAL-COM_HostVersionId", lmHosts.lastActivity) != 0)
+					    {
+						    AnscTraceWarning(("syscfg_set failed\n"));
+					    }
+					    pHost->bNotify = TRUE;
 					}
-					pHost->bNotify = TRUE;
 				}
 				else
 				{
