@@ -1413,18 +1413,6 @@ static VOID* WTC_Thread()
                     {
                         WTC_LOG_INFO("Traffic count start Success");
                         WTC_RbusSubscribe(index);
-
-                        if ( RETURN_OK == platform_hal_getDscpClientList(WTCinfo->WanMode, &CliList) )
-                        {
-                            pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
-                            WanTrafficCountInfo_t[index]->DscpTree =
-                                      InsertClient(WanTrafficCountInfo_t[index]->DscpTree, &CliList);
-                            pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
-                        }
-                        else
-                        {
-                            WTC_LOG_ERROR("Platform get failed while initializing DSCP baseline");
-                        }
                     }
                     else
                     {
@@ -1435,7 +1423,6 @@ static VOID* WTC_Thread()
                 }
                 WTC_SetThreadStatus(index, WTC_THRD_INITIALIZED);
                 WTC_SetThreadState(index, WTC_THRD_RUN);
-                sleep(WanTrafficCountInfo_t[index]->SleepInterval);
                 continue;
             }
             case WTC_THRD_RUN:
