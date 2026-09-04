@@ -1616,7 +1616,7 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
                         if (strcasecmp(cMac, physAddress) == 0)
                         {
                             if (HostNameLen > 0) {
-                                errno_t rc = strcpy_s(HostName, HostNameLen, cHostname);
+                                errno_t rc = strncpy_s(HostName, HostNameLen, cHostname, HostNameLen - 1);
                                 if (rc != EOK) {
                                     ERR_CHK(rc);
                                     HostName[0] = '\0';

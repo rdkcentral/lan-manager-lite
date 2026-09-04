@@ -867,7 +867,7 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
 						}
 					}
 					//CcspTraceWarning(("RDKB_CONNECTED_CLIENTS:  %s pHost->bClientReady = %d \n",interface,pHost->bClientReady));
-					if (pHost != NULL)
+                    if (pHost != NULL && pHost->bNotify == FALSE)
 					{
 				        Send_Notification(interface, pHost->pStringParaValue[LM_HOST_PhysAddressId], CLIENT_STATE_CONNECT, pHost->pStringParaValue[LM_HOST_HostNameId]);
 					    if (syscfg_set_u_commit(NULL, "X_RDKCENTRAL-COM_HostVersionId", lmHosts.lastActivity) != 0)
