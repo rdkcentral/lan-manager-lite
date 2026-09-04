@@ -1588,6 +1588,9 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
     {
         struct stat st;
         FILE *fp = NULL;
+        char cBuf[256];
+        char cMac[18];
+        char cHostname[64];
         size_t len;
 
         sleep(HOST_NAME_RETRY_INTERVAL);
@@ -1596,29 +1599,48 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
 
         pthread_mutex_lock(&HostNameMutex);
 
-        if ((stat(DNSMASQ_LEASES_FILE, &st) == 0) &&
-            (st.st_size != 0) &&
-            ((fp = v_secure_popen("r", "grep -i %s " DNSMASQ_LEASES_FILE " | awk '{print $4}'", physAddress)) != NULL))
+        if ((stat(DNSMASQ_LEASES_FILE, &st) == 0) && (st.st_size != 0))
         {
-            while (fgets(HostName, HostNameLen, fp) != NULL)
+            fp = fopen(DNSMASQ_LEASES_FILE, "r");
+            if (fp != NULL)
             {
-                /* Read all lines */
-            }
+                while (fgets(cBuf, sizeof(cBuf), fp) != NULL)
+                {
+                    int timestamp;
+                    char cIp[64];
 
-            v_secure_pclose(fp);
+                    /* Parse line format: timestamp MAC IP hostname */
+                    if (sscanf(cBuf, "%d %17s %63s %63s", &timestamp, cMac, cIp, cHostname) >= 4)
+                    {
+                        /* Case-insensitive MAC address comparison */
+                        if (strcasecmp(cMac, physAddress) == 0)
+                        {
+                            if (HostNameLen > 0) {
+                                errno_t rc = strncpy_s(HostName, HostNameLen, cHostname, HostNameLen - 1);
+                                if (rc != EOK) {
+                                    ERR_CHK(rc);
+                                    HostName[0] = '\0';
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+                fclose(fp);
+            }
         }
 
         pthread_mutex_unlock(&HostNameMutex);
 
         len = strlen(HostName);
 
-        if ((len > 0) && (HostName[len - 1] == '\n'))
+        if ((len == 1) && (HostName[0] == '*'))
         {
-            HostName[len - 1] = 0;  /* Remove trailing newline */
-            len--;
+            CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Hostname unavailable ('*'), skipping retry\n"));
+            return 0;
         }
 
-        if ((len == 0) || ((len == 1) && (HostName[0] == '*')))
+        if (len == 0)
         {
             if (++count > HOST_NAME_RETRY)
             {
