@@ -72,7 +72,7 @@ void* StartNetworkDeviceStatusHarvesting( void *arg );
 #ifndef UTC_ENABLE
 static int _syscmd(FILE *f, char *retBuf, int retBufSize);
 #endif
-void add_to_list(PLmObjectHost host, struct networkdevicestatusdata **head);
+void add_to_list(PLmObjectHost host, struct networkdevicestatusdata **head, BOOL dhcpv4Enabled);
 static struct networkdevicestatusdata *headnode = NULL;
 static struct networkdevicestatusdata *headnodeextender = NULL;
 
@@ -520,7 +520,7 @@ static char* GetMLOBandsForHost(PLmObjectHost host)
     return mlo_bands;
 }
 
-char* NDS_GetIpAddress(PLmObjectHost host)
+char* NDS_GetIpAddress(PLmObjectHost host, BOOL dhcpv4Enabled)
 {
     PLmObjectHostIPAddress pIpAddrList;
     size_t ipv4_len;
@@ -530,7 +530,6 @@ char* NDS_GetIpAddress(PLmObjectHost host)
     char *pIpv4address = NULL;
     char *pIpv6addressindex1 = NULL;
     char *pIpv6addressindex3 = NULL;
-    char dhcpServerEnabled[16] = {0};
     BOOL dhcpSource = FALSE;
     time_t now = 0;
 
@@ -546,9 +545,9 @@ char* NDS_GetIpAddress(PLmObjectHost host)
         pIpv4address = host->pStringParaValue[LM_HOST_IPAddressId];
     }
 
-    if ((syscfg_get(NULL, "dhcp_server_enabled", dhcpServerEnabled, sizeof(dhcpServerEnabled)) == 0) &&
-        ((strcmp(dhcpServerEnabled, "0") == 0) || (strcasecmp(dhcpServerEnabled, "false") == 0)) && dhcpSource &&
+    if ((!dhcpv4Enabled) && dhcpSource &&
         (host->LeaseTime != 0xFFFFFFFF) && (now >= (time_t)host->LeaseTime))
+    {
         pIpv4address = NULL;
     }
 
@@ -638,7 +637,7 @@ char* NDS_GetIpAddress(PLmObjectHost host)
     return strdup("Unknown");
 }
 
-void add_to_list(PLmObjectHost host, struct networkdevicestatusdata **head)
+void add_to_list(PLmObjectHost host, struct networkdevicestatusdata **head, BOOL dhcpv4Enabled)
 {
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s ENTER\n", __FUNCTION__ ));
 
@@ -722,7 +721,7 @@ void add_to_list(PLmObjectHost host, struct networkdevicestatusdata **head)
 	CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, HostName[%s] \n",ptr->hostname ));
 
     
-        ptr->ipaddress = NDS_GetIpAddress(host);;
+        ptr->ipaddress = NDS_GetIpAddress(host, dhcpv4Enabled);;
 
         CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, IPAddress[%s] \n",ptr->ipaddress ));
 
@@ -817,6 +816,15 @@ void GetLMHostData()
 {
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s ENTER\n", __FUNCTION__ ));
     int i = 0;
+    char dhcpServerEnabled[16] = {0};
+    BOOL dhcpv4Enabled = TRUE;
+
+    if ((syscfg_get(NULL, "dhcp_server_enabled", dhcpServerEnabled, sizeof(dhcpServerEnabled)) == 0) &&
+        ((strcmp(dhcpServerEnabled, "0") == 0) || (strcasecmp(dhcpServerEnabled, "false") == 0)))
+    {
+        dhcpv4Enabled = FALSE;
+    }
+
     CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     pthread_mutex_lock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -854,16 +862,16 @@ void GetLMHostData()
             {
                 if(!strcasecmp(lmHosts.hostArray[i]->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Parent], (const char *)getFullDeviceMac()))
                     {
-                        add_to_list(lmHosts.hostArray[i], &headnode);
+                        add_to_list(lmHosts.hostArray[i], &headnode, dhcpv4Enabled);
                     }
                 else
                     {
-                        add_to_list(lmHosts.hostArray[i], &headnodeextender);
+                        add_to_list(lmHosts.hostArray[i], &headnodeextender, dhcpv4Enabled);
                     }
             }
             else
             {
-                add_to_list(lmHosts.hostArray[i], &headnode);
+                add_to_list(lmHosts.hostArray[i], &headnode, dhcpv4Enabled);
             }
 
         }
