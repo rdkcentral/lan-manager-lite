@@ -721,7 +721,7 @@ void add_to_list(PLmObjectHost host, struct networkdevicestatusdata **head, BOOL
 	CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, HostName[%s] \n",ptr->hostname ));
 
     
-        ptr->ipaddress = NDS_GetIpAddress(host, dhcpv4Enabled);;
+        ptr->ipaddress = NDS_GetIpAddress(host, dhcpv4Enabled);
 
         CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, IPAddress[%s] \n",ptr->ipaddress ));
 
