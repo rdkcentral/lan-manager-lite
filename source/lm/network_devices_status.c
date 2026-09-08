@@ -547,9 +547,8 @@ char* NDS_GetIpAddress(PLmObjectHost host)
     }
 
     if ((syscfg_get(NULL, "dhcp_server_enabled", dhcpServerEnabled, sizeof(dhcpServerEnabled)) == 0) &&
-        (strcmp(dhcpServerEnabled, "0") == 0) && dhcpSource &&
+        ((strcmp(dhcpServerEnabled, "0") == 0) || (strcasecmp(dhcpServerEnabled, "false") == 0)) && dhcpSource &&
         (host->LeaseTime != 0xFFFFFFFF) && (now >= (time_t)host->LeaseTime))
-    {
         pIpv4address = NULL;
     }
 
