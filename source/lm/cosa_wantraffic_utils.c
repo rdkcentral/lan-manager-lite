@@ -218,7 +218,7 @@ BOOL GetWanModeAndWtcIndex(WAN_INTERFACE *wanMode, UINT *wtcIndex)
         goto syscfg_fallback;
     }
 
-#if SUPPORTED_WAN_MODES == 1
+#if 0 /* Single-WTC-row path retained for reference; use the common index resolver. */
     *wanMode = activeMode;
     *wtcIndex = 0;
     WTC_LOG_INFO("WanManager resolved WAN mode %d, WTC index %d", *wanMode, *wtcIndex);
