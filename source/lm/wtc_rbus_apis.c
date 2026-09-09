@@ -273,8 +273,9 @@ BOOL Stats_GetParamStringValue
         }
         else
         {
-            WTC_LOG_INFO("client->InstanceNum != WTCinfo->WanMode, \
-                                    Do not call GetWantrafficCount");
+            WTC_LOG_INFO("WTC stats skipped: instance=%d, active WTC index=%d, \
+                          WAN mode=%d", client->InstanceNum,
+                          WTCinfo->WanModeWtcIndex, WTCinfo->WanMode);
         }
     }
     else if (strcmp(ParamName, "DscpCountTotal") == 0)
@@ -293,8 +294,9 @@ BOOL Stats_GetParamStringValue
         }
         else
         {
-            WTC_LOG_INFO("client->InstanceNum != WTCinfo->WanMode, \
-                                    Do not call GetWantrafficCount");
+            WTC_LOG_INFO("WTC stats skipped: instance=%d, active WTC index=%d, \
+                          WAN mode=%d", client->InstanceNum,
+                          WTCinfo->WanModeWtcIndex, WTCinfo->WanMode);
         }
     }
     else

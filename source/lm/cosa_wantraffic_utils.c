@@ -214,8 +214,8 @@ BOOL GetWanModeAndWtcIndex(WAN_INTERFACE *wanMode, UINT *wtcIndex)
 
     if (activeMode == INVALID_MODE)
     {
-        WTC_LOG_ERROR("No supported active WAN interface in %s", activeStatus);
-        return FALSE;
+        WTC_LOG_ERROR("No supported active WAN interface in %s; using syscfg fallback", activeStatus);
+        goto syscfg_fallback;
     }
 
 #if SUPPORTED_WAN_MODES == 1
@@ -315,6 +315,7 @@ syscfg_fallback:
 #else
     *wtcIndex = (*wanMode == DOCSIS) ? 0 : 1;
 #endif
+    WTC_LOG_INFO("Syscfg resolved WAN mode %d, WTC index %d", *wanMode, *wtcIndex);
     return TRUE;
 }
 
