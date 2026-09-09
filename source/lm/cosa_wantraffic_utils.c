@@ -897,10 +897,8 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                                 DscpTree->ClientList[j].Mac[sizeof(DscpTree->ClientList[j].Mac) - 1] = '\0';
                                 DscpTree->ClientList[j].RxBytes = 0;
                                 DscpTree->ClientList[j].TxBytes = 0;
-                                DscpTree->ClientList[j].RxBytesTot =
-                                          CliList->DSCP_Element[DscpTree->Dscp].Client[i].rxBytes;
-                                DscpTree->ClientList[j].TxBytesTot =
-                                          CliList->DSCP_Element[DscpTree->Dscp].Client[i].txBytes;
+                                DscpTree->ClientList[j].RxBytesTot = 0;
+                                DscpTree->ClientList[j].TxBytesTot = 0;
                                 DscpTree->ClientList[j].IsUpdated = TRUE;
                                 DscpTree->NumClients++;
                                 DscpTree->IsUpdated = TRUE;
