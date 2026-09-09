@@ -150,7 +150,7 @@ BOOL GetWanModeAndWtcIndex(WAN_INTERFACE *wanMode, UINT *wtcIndex)
     }
 
     if ((rbus_get(rbus_handle, TR181_ACTIVE_INTERFACE, &value) == RBUS_ERROR_SUCCESS) &&
-        ((status = rbusValue_ToString(value, NULL, NULL)) != NULL) &&
+        ((status = rbusValue_ToString(value, NULL, 0)) != NULL) &&
         (strcpy_s(activeStatus, sizeof(activeStatus), status) == EOK))
     {
         rbusValue_Release(value);
@@ -166,8 +166,8 @@ BOOL GetWanModeAndWtcIndex(WAN_INTERFACE *wanMode, UINT *wtcIndex)
         goto syscfg_fallback;
     }
 
-        WTC_LOG_ERROR("Failed to get %s; using syscfg fallback", TR181_AVAILABLE_INTERFACE);
-        ((status = rbusValue_ToString(value, NULL, NULL)) == NULL) ||
+    if ((rbus_get(rbus_handle, TR181_AVAILABLE_INTERFACE, &value) != RBUS_ERROR_SUCCESS) ||
+        ((status = rbusValue_ToString(value, NULL, 0)) == NULL) ||
         (strcpy_s(availableStatus, sizeof(availableStatus), status) != EOK))
     {
         WTC_LOG_INFO("WanManager interface status unavailable; using syscfg fallback");
