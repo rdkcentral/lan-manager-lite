@@ -1692,12 +1692,20 @@ static void Add_IPv6_from_Dibbler (void)
 PLmObjectHostIPAddress Host_AddIPAddress (PLmObjectHost pHost, char *ipAddress, int version)
 {
     PLmObjectHostIPAddress pCur;
+    struct in_addr ipv4Address;
 
 	if(!ipAddress)
 		return NULL;
 
     if(version == 4)
 	{
+        if(inet_pton(AF_INET, ipAddress, &ipv4Address) != 1)
+        {
+            CcspTraceWarning(("Invalid IP Address rejected host=%s ip='%s'\n",
+                pHost->pStringParaValue[LM_HOST_PhysAddressId] ? pHost->pStringParaValue[LM_HOST_PhysAddressId] : "NULL",
+                ipAddress));
+            return NULL;
+        }
 		pCur = Add_Update_IPv4Address(pHost,ipAddress);
 		LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]) , ipAddress);
     }
@@ -1977,7 +1985,7 @@ static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
     LM_ip_addr_t *pIp;
     for(i=0, pIpSrc = pHost->ipv4AddrArray; pIpSrc != NULL && i < LM_MAX_IP_AMOUNT;i++, pIpSrc = pIpSrc->pNext){
         pIp = &(pDestHost->ipv4AddrList[i]);
-        CcspTraceDebug(("LM_INVALID_IP_DEBUG: converting host=%s ipv4_index=%d ip='%s' source='%s'\n",
+        CcspTraceWarning(("LM_INVALID_IP_DEBUG: converting host=%s ipv4_index=%d ip='%s' source='%s'\n",
             pHost->pStringParaValue[LM_HOST_PhysAddressId] ? pHost->pStringParaValue[LM_HOST_PhysAddressId] : "NULL",
             i,
             pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId] ? pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId] : "NULL",
@@ -1989,7 +1997,7 @@ static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
              pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId] ? pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId] : "NULL"));
          continue;
         }
-        CcspTraceDebug(("LM_INVALID_IP_DEBUG: valid IPv4 Address host=%s ip='%s'\n",
+        CcspTraceWarning(("LM_INVALID_IP_DEBUG: valid IPv4 Address host=%s ip='%s'\n",
             pHost->pStringParaValue[LM_HOST_PhysAddressId] ? pHost->pStringParaValue[LM_HOST_PhysAddressId] : "NULL",
             pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId] ? pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId] : "NULL"));
         pIp->addrSource = _get_addr_source(pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressSourceId]);
@@ -2053,7 +2061,7 @@ static void _get_hosts_info_cfunc(int fd, void* recv_buf, int buf_size)
     pthread_mutex_lock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     hosts->count = lmHosts.numHost;
-    CcspTraceDebug(("LM_INVALID_IP_DEBUG: exporting host_count=%d\n", hosts->count));
+    CcspTraceWarning(("LM_INVALID_IP_DEBUG: exporting host_count=%d\n", hosts->count));
 
     for(i = 0; i < hosts->count; i++){
         pHost = lmHosts.hostArray[i];
@@ -2822,10 +2830,10 @@ static void Hosts_SyncArp (void)
 
 static void Hosts_SyncDHCP(void)
 {
-    CcspTraceDebug(("LM_INVALID_IP_DEBUG: starting DHCP/static host synchronization\n"));
+    CcspTraceWarning(("LM_INVALID_IP_DEBUG: starting DHCP/static host synchronization\n"));
     lm_wrapper_get_dhcpv4_client();
     lm_wrapper_get_dhcpv4_reserved();
-    CcspTraceDebug(("LM_INVALID_IP_DEBUG: completed DHCP/static host synchronization host_count=%d\n", lmHosts.numHost));
+    CcspTraceWarning(("LM_INVALID_IP_DEBUG: completed DHCP/static host synchronization host_count=%d\n", lmHosts.numHost));
 }
 
 static void *Hosts_LoggingThread(void *args)
