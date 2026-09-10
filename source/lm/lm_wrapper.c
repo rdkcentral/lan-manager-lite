@@ -1637,7 +1637,13 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
             len--;
         }
 
-        if ((len == 0) || ((len == 1) && (HostName[0] == '*')))
+        if ((len == 1) && (HostName[0] == '*'))
+        {
+            CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Hostname unavailable ('*'), skipping retry\n"));
+            return 0;
+        }
+
+        if (len == 0)
         {
             if (++count > HOST_NAME_RETRY)
             {
