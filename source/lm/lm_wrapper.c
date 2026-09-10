@@ -1586,8 +1586,11 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
 
     while (1)
     {
-        struct stat st;
         FILE *fp = NULL;
+        char cBuf[256];
+        char cMac[18];
+        char cIp[64];
+        char cHostname[64];
         size_t len;
 
         sleep(HOST_NAME_RETRY_INTERVAL);
@@ -1596,16 +1599,32 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
 
         pthread_mutex_lock(&HostNameMutex);
 
-        if ((stat(DNSMASQ_LEASES_FILE, &st) == 0) &&
-            (st.st_size != 0) &&
-            ((fp = v_secure_popen("r", "grep -i %s " DNSMASQ_LEASES_FILE " | awk '{print $4}'", physAddress)) != NULL))
+        fp = fopen(DNSMASQ_LEASES_FILE, "r");
+        if (fp != NULL)
         {
-            while (fgets(HostName, HostNameLen, fp) != NULL)
+            while (fgets(cBuf, sizeof(cBuf), fp) != NULL)
             {
-                /* Read all lines */
+                cMac[0] = '\0';
+                cIp[0] = '\0';
+                cHostname[0] = '\0';
+
+                if (sscanf(cBuf, "%*s %17s %63s %63s", cMac, cIp, cHostname) >= 3 &&
+                    strcasecmp(cMac, physAddress) == 0)
+                {
+                    if (HostNameLen > 0)
+                    {
+                        errno_t rc = strcpy_s(HostName, HostNameLen, cHostname);
+                        if (rc != EOK)
+                        {
+                            ERR_CHK(rc);
+                            HostName[0] = '\0';
+                        }
+                    }
+                    break;
+                }
             }
 
-            v_secure_pclose(fp);
+            fclose(fp);
         }
 
         pthread_mutex_unlock(&HostNameMutex);
@@ -1618,7 +1637,13 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
             len--;
         }
 
-        if ((len == 0) || ((len == 1) && (HostName[0] == '*')))
+        if ((len == 1) && (HostName[0] == '*'))
+        {
+            CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Hostname unavailable ('*'), skipping retry\n"));
+            return 0;
+        }
+
+        if (len == 0)
         {
             if (++count > HOST_NAME_RETRY)
             {
