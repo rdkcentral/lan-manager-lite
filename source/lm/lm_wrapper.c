@@ -2027,6 +2027,8 @@ void lm_wrapper_get_dhcpv4_client()
             LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AddressSource]), "DHCP");
             char ipAddress[50] = {0};
             getIPAddress((char *)dhcpHost.phyAddr, ipAddress);
+            CcspTraceDebug(("LM_INVALID_IP_DEBUG: dynamic lease mac=%s lease_ip=%s resolved_neighbor_ip='%s'\n",
+                dhcpHost.phyAddr, dhcpHost.ipAddr, ipAddress));
 
             pIP = Host_AddIPv4Address
             (
@@ -2035,6 +2037,9 @@ void lm_wrapper_get_dhcpv4_client()
             );
             if(pIP != NULL)
             {
+                CcspTraceDebug(("LM_INVALID_IP_DEBUG: dynamic IP stored mac=%s ip='%s'\n",
+                    dhcpHost.phyAddr,
+                    pIP->pStringParaValue[LM_HOST_IPAddress_IPAddressId] ? pIP->pStringParaValue[LM_HOST_IPAddress_IPAddressId] : "NULL"));
                 LanManager_CheckCloneCopy(&(pIP->pStringParaValue[LM_HOST_IPAddress_IPAddressSourceId]), "DHCP");
                 pIP->LeaseTime = (dhcpHost.LeaseTime == 0 ? 0xFFFFFFFF: (unsigned int)dhcpHost.LeaseTime);
                 pHost->LeaseTime = pIP->LeaseTime;
@@ -2083,6 +2088,9 @@ void lm_wrapper_get_dhcpv4_reserved()
         if((ret < 2) || (ret > 3))
             continue;
 
+        CcspTraceDebug(("LM_INVALID_IP_DEBUG: static entry mac=%s ip='%s' hostname='%s' parsed_fields=%d\n",
+            dhcpHost.phyAddr, dhcpHost.ipAddr, dhcpHost.hostName, ret));
+
         CcspTraceDebug(("%s:%d, Acquiring presence locks \n",__FUNCTION__,__LINE__));
         acquirePresencelocks();
         CcspTraceDebug(("%s:%d, Acquired presence locks \n",__FUNCTION__,__LINE__));
@@ -2091,6 +2099,8 @@ void lm_wrapper_get_dhcpv4_reserved()
         if ( !pHost )
         {
             pHost = Hosts_AddHostByPhysAddress((char *)dhcpHost.phyAddr);
+            CcspTraceDebug(("LM_INVALID_IP_DEBUG: static entry host mac=%s action=%s\n",
+                dhcpHost.phyAddr, pHost ? "created" : "create_failed"));
 
             if ( pHost )
             {
@@ -2106,6 +2116,8 @@ void lm_wrapper_get_dhcpv4_reserved()
 
         if ( pHost )
         {
+            CcspTraceDebug(("LM_INVALID_IP_DEBUG: adding static IP mac=%s ip='%s'\n",
+                dhcpHost.phyAddr, dhcpHost.ipAddr));
             PRINTD("%s: %s %s %s\n", __FUNCTION__, dhcpHost.phyAddr, dhcpHost.ipAddr, dhcpHost.hostName);
 			if (strcasecmp(pHost->pStringParaValue[LM_HOST_PhysAddressId], pHost->pStringParaValue[LM_HOST_HostNameId]) != 0){
 				rc = strcpy_s(pHost->backupHostname, sizeof(pHost->backupHostname),pHost->pStringParaValue[LM_HOST_HostNameId]); // hostanme change id.
