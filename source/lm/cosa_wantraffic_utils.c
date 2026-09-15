@@ -226,14 +226,13 @@ BOOL GetWanModeAndWtcIndex(WAN_INTERFACE *wanMode, UINT *wtcIndex)
 #else
     {
     CHAR availableStatusCopy[BUFLEN_256] = { '\0' };
-    WAN_INTERFACE modeOrder[] = { DOCSIS, EWAN, EPON, XGSPON };
     WAN_INTERFACE availableMode = INVALID_MODE;
     UINT modeIndex = 0;
     UINT index = 0;
     BOOL modePresent = FALSE;
 
     *wanMode = activeMode;
-    for (modeIndex = 0; modeIndex < (sizeof(modeOrder) / sizeof(modeOrder[0])); modeIndex++)
+    for (modeIndex = DOCSIS; modeIndex < WAN_INTERFACE_MAX; modeIndex++)
     {
         if (strcpy_s(availableStatusCopy, sizeof(availableStatusCopy), availableStatus) != EOK)
         {
@@ -268,7 +267,7 @@ BOOL GetWanModeAndWtcIndex(WAN_INTERFACE *wanMode, UINT *wtcIndex)
                 }
             }
 
-            if (availableMode == modeOrder[modeIndex])
+            if (availableMode == (WAN_INTERFACE)modeIndex)
             {
                 modePresent = TRUE;
                 break;
@@ -281,7 +280,7 @@ BOOL GetWanModeAndWtcIndex(WAN_INTERFACE *wanMode, UINT *wtcIndex)
             continue;
         }
 
-        if (modeOrder[modeIndex] == activeMode)
+        if ((WAN_INTERFACE)modeIndex == activeMode)
         {
             if (index >= SUPPORTED_WAN_MODES)
             {
