@@ -77,10 +77,9 @@
 #include "safec_lib_common.h"
 #include "cosa_wantraffic_api.h"
 #include "cosa_wantraffic_utils.h"
+#include "lm_rbus_api.h"
 
 #define ETH_WAN_ENABLE_STRING    "eth_wan_enabled"
-//this is to test FORCE MERGE
-extern rbusHandle_t rbus_handle;
 
 static UINT EnabledDscpCount = 0;
 
@@ -149,7 +148,7 @@ BOOL GetWanModeAndWtcIndex(WAN_INTERFACE *wanMode, UINT *wtcIndex)
         return FALSE;
     }
 
-    if ((rbus_get(rbus_handle, TR181_ACTIVE_INTERFACE, &value) == RBUS_ERROR_SUCCESS) &&
+    if ((rbus_get(get_rbus_handle(), TR181_ACTIVE_INTERFACE, &value) == RBUS_ERROR_SUCCESS) &&
         ((status = rbusValue_ToString(value, NULL, 0)) != NULL) &&
         (strcpy_s(activeStatus, sizeof(activeStatus), status) == EOK))
     {
@@ -166,7 +165,7 @@ BOOL GetWanModeAndWtcIndex(WAN_INTERFACE *wanMode, UINT *wtcIndex)
         goto syscfg_fallback;
     }
 
-    if ((rbus_get(rbus_handle, TR181_AVAILABLE_INTERFACE, &value) != RBUS_ERROR_SUCCESS) ||
+    if ((rbus_get(get_rbus_handle(), TR181_AVAILABLE_INTERFACE, &value) != RBUS_ERROR_SUCCESS) ||
         ((status = rbusValue_ToString(value, NULL, 0)) == NULL) ||
         (strcpy_s(availableStatus, sizeof(availableStatus), status) != EOK))
     {
