@@ -1693,7 +1693,7 @@ PLmObjectHostIPAddress Host_AddIPAddress (PLmObjectHost pHost, char *ipAddress, 
 {
     PLmObjectHostIPAddress pCur;
 
-	if(!ipAddress)
+    if(!pHost || !ipAddress || ipAddress[0] == '\0')
 		return NULL;
 
     if(version == 4)
@@ -1970,16 +1970,24 @@ static enum LM_ADDR_SOURCE _get_addr_source(char *source)
 
 static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
 {
-    int i;   
+    int i;
+    int validIPv4Count = 0;
     PLmObjectHostIPAddress pIpSrc; 
     pDestHost->ipv4AddrAmount = pHost->numIPv4Addr;
     pDestHost->ipv6AddrAmount = pHost->numIPv6Addr;
     LM_ip_addr_t *pIp;
     for(i=0, pIpSrc = pHost->ipv4AddrArray; pIpSrc != NULL && i < LM_MAX_IP_AMOUNT;i++, pIpSrc = pIpSrc->pNext){
-        pIp = &(pDestHost->ipv4AddrList[i]);
-        if(inet_pton(AF_INET, pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId],pIp->addr) != 1)
+          if(!pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId] ||
+              pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId][0] == '\0')
+          {
+            pDestHost->ipv4AddrAmount--;
+            continue;
+          }
+        pIp = &(pDestHost->ipv4AddrList[validIPv4Count]);
+          if(inet_pton(AF_INET, pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId],pIp->addr) != 1)
         {
          CcspTraceWarning(("Invalid IP Address %s\n",pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
+            pDestHost->ipv4AddrAmount--;
          continue;
         }
         pIp->addrSource = _get_addr_source(pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressSourceId]);
@@ -1988,6 +1996,7 @@ static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
             pIp->LeaseTime = pIpSrc->LeaseTime;
         else
             pIp->LeaseTime = 0;
+        validIPv4Count++;
    }
     
     
