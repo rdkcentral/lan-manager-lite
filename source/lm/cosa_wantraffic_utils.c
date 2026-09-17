@@ -858,7 +858,7 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                                                    DscpTree->ClientList[j].RxBytesTot,
                                                    DscpTree->ClientList[j].TxBytesTot, count);
 //kvr
-				WTC_LOG_INFO("Mac = %s , kvr Existing RxBytesBase = %lu",
+				WTC_LOG_INFO("Mac = %s , kvr Existing RxBytesBase = %lu,"
 					     "TxBytesBase = %lu",
 						DscpTree->ClientList[j].Mac,
 						DscpTree->ClientList[j].RxBytesBase,
