@@ -860,11 +860,11 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                                                    DscpTree->ClientList[j].RxBytesBase, 
                                                    DscpTree->ClientList[j].TxBytesBase,count);
 //kvr
-				WTC_LOG_INFO("Mac = %s , kvr Existing RxBytesBase = %lu,"
+		/*		WTC_LOG_INFO("Mac = %s , kvr Existing RxBytesBase = %lu,"
 					     "TxBytesBase = %lu",
 						DscpTree->ClientList[j].Mac,
 						DscpTree->ClientList[j].RxBytesBase,
-						DscpTree->ClientList[j].TxBytesBase);	
+						DscpTree->ClientList[j].TxBytesBase); */	
 
                                 break;
                             }
@@ -920,15 +920,15 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                                 DscpTree->NumClients++;
                                 DscpTree->IsUpdated = TRUE;
 //kvr
-                                 WTC_LOG_INFO("Mac = %s , kvr New client RxBytesBase = %lu,"
+                              /*   WTC_LOG_INFO("Mac = %s , kvr New client RxBytesBase = %lu,"
                                               "TxBytesBase = %lu",
                                                  DscpTree->ClientList[j].Mac,
                                                  DscpTree->ClientList[j].RxBytesBase,
-                                                 DscpTree->ClientList[j].TxBytesBase);
+                                                 DscpTree->ClientList[j].TxBytesBase); */
 
 
                                 WTC_LOG_INFO("j = %d, Dscp = %d, MAC = %s, RxBytes = %lu,"
-                                             "TxBytes = %lu, RxBytesTot = %lu, TxBytesTot = %lu,"
+                                             "TxBytes = %lu, RxBytesTot = %lu, TxBytesTot = %lu,RxBytesBase= %lu,TxBytesBase= %lu,"
                                              "Is_Updated = %d",
                                               j, DscpTree->Dscp,
                                               DscpTree->ClientList[j].Mac,
@@ -936,6 +936,8 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                                               DscpTree->ClientList[j].TxBytes,
                                               DscpTree->ClientList[j].RxBytesTot,
                                               DscpTree->ClientList[j].TxBytesTot,
+                                              DscpTree->ClientList[j].RxBytesBase,
+                                              DscpTree->ClientList[j].TxBytesBase,
                                               DscpTree->IsUpdated);
                             }
                         }
