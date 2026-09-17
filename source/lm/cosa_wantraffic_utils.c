@@ -850,13 +850,15 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                                 DscpTree->ClientList[j].IsUpdated = TRUE;
                                 DscpTree->IsUpdated = TRUE;
                                 count++;
-                                WTC_LOG_INFO("Mac = %s, rx = %lu, tx = %lu,"
+                                WTC_LOG_INFO("kvr exitsing Mac = %s, rx = %lu, tx = %lu,"
                                              "rxTot = %lu, txTot = %lu, Count = %d",
                                                    DscpTree->ClientList[j].Mac,
                                                    DscpTree->ClientList[j].RxBytes,
                                                    DscpTree->ClientList[j].TxBytes,
                                                    DscpTree->ClientList[j].RxBytesTot,
-                                                   DscpTree->ClientList[j].TxBytesTot, count);
+                                                   DscpTree->ClientList[j].TxBytesTot,
+                                                   DscpTree->ClientList[j].RxBytesBase, 
+                                                   DscpTree->ClientList[j].TxBytesBase,count);
 //kvr
 				WTC_LOG_INFO("Mac = %s , kvr Existing RxBytesBase = %lu,"
 					     "TxBytesBase = %lu",
@@ -918,7 +920,7 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                                 DscpTree->NumClients++;
                                 DscpTree->IsUpdated = TRUE;
 //kvr
-                                 WTC_LOG_INFO("Mac = %s , kvr New client RxBytesBase = %lu",
+                                 WTC_LOG_INFO("Mac = %s , kvr New client RxBytesBase = %lu,"
                                               "TxBytesBase = %lu",
                                                  DscpTree->ClientList[j].Mac,
                                                  DscpTree->ClientList[j].RxBytesBase,
