@@ -1514,8 +1514,10 @@ static PLmObjectHostIPAddress Add_Update_IPv4Address (PLmObjectHost pHost, char 
 {
 	int *num;
 	PLmObjectHostIPAddress pIpAddrList, pCur, pPre, *ppHeader;
+	struct in_addr address;
 
-    if(!pHost || !ipAddress || ipAddress[0] == '\0')
+    if(!pHost || !ipAddress || ipAddress[0] == '\0' ||
+       inet_pton(AF_INET, ipAddress, &address) != 1)
         return NULL;
 
 	num = &(pHost->numIPv4Addr);
@@ -1702,6 +1704,8 @@ PLmObjectHostIPAddress Host_AddIPAddress (PLmObjectHost pHost, char *ipAddress, 
     if(version == 4)
 	{
 		pCur = Add_Update_IPv4Address(pHost,ipAddress);
+        if(!pCur)
+            return NULL;
 		LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]) , ipAddress);
     }
 	else
