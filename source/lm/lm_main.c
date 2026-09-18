@@ -1515,6 +1515,9 @@ static PLmObjectHostIPAddress Add_Update_IPv4Address (PLmObjectHost pHost, char 
 	int *num;
 	PLmObjectHostIPAddress pIpAddrList, pCur, pPre, *ppHeader;
 
+    if(!pHost || !ipAddress || ipAddress[0] == '\0')
+        return NULL;
+
 	num = &(pHost->numIPv4Addr);
 	pIpAddrList = pHost->ipv4AddrArray;
 	ppHeader = &(pHost->ipv4AddrArray);
