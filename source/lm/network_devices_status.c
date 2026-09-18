@@ -40,6 +40,7 @@
 #include "safec_lib_common.h"
 #include "secure_wrapper.h"
 #include "lm_rbus_api.h"
+#include "syscfg/syscfg.h"
 
 static pthread_mutex_t ndsMutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t ndsCond = PTHREAD_COND_INITIALIZER;
@@ -71,11 +72,21 @@ void* StartNetworkDeviceStatusHarvesting( void *arg );
 #ifndef UTC_ENABLE
 static int _syscmd(FILE *f, char *retBuf, int retBufSize);
 #endif
-void add_to_list(PLmObjectHost host, struct networkdevicestatusdata **head);
+void add_to_list(PLmObjectHost host, struct networkdevicestatusdata **head, BOOL dhcpv4Enabled);
 static struct networkdevicestatusdata *headnode = NULL;
 static struct networkdevicestatusdata *headnodeextender = NULL;
 
 extern pthread_mutex_t LmHostObjectMutex;
+
+static BOOL NDS_IsDhcpAddressSource(PLmObjectHost host)
+{
+    if ((host == NULL) || (host->pStringParaValue[LM_HOST_AddressSource] == NULL))
+    {
+        return FALSE;
+    }
+
+    return (strstr(host->pStringParaValue[LM_HOST_AddressSource], "DHCP") != NULL);
+}
 
 // RDKB-9258 : set polling and reporting periods to NVRAM after TTL expiry
 extern ANSC_STATUS SetNDSPollingPeriodInNVRAM(ULONG pPollingVal);
@@ -509,7 +520,7 @@ static char* GetMLOBandsForHost(PLmObjectHost host)
     return mlo_bands;
 }
 
-char* NDS_GetIpAddress(PLmObjectHost host)
+char* NDS_GetIpAddress(PLmObjectHost host, BOOL dhcpv4Enabled)
 {
     PLmObjectHostIPAddress pIpAddrList;
     size_t ipv4_len;
@@ -519,14 +530,25 @@ char* NDS_GetIpAddress(PLmObjectHost host)
     char *pIpv4address = NULL;
     char *pIpv6addressindex1 = NULL;
     char *pIpv6addressindex3 = NULL;
+    BOOL dhcpSource = FALSE;
+    time_t now = 0;
 
     if (!host)
         return strdup("Unknown");
+
+    dhcpSource = NDS_IsDhcpAddressSource(host);
+    now = time(NULL);
 
     // By default PLmObjectHost pStringParaValue ipaddress holds ipv4 address.
     if(host->pStringParaValue[LM_HOST_IPAddressId])
     {
         pIpv4address = host->pStringParaValue[LM_HOST_IPAddressId];
+    }
+
+    if ((!dhcpv4Enabled) && dhcpSource &&
+        (host->LeaseTime != 0xFFFFFFFF) && (now >= (time_t)host->LeaseTime))
+    {
+        pIpv4address = NULL;
     }
 
     if ((!host->ipv6Active) && (!pIpv4address))
@@ -615,7 +637,7 @@ char* NDS_GetIpAddress(PLmObjectHost host)
     return strdup("Unknown");
 }
 
-void add_to_list(PLmObjectHost host, struct networkdevicestatusdata **head)
+void add_to_list(PLmObjectHost host, struct networkdevicestatusdata **head, BOOL dhcpv4Enabled)
 {
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s ENTER\n", __FUNCTION__ ));
 
@@ -699,7 +721,7 @@ void add_to_list(PLmObjectHost host, struct networkdevicestatusdata **head)
 	CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, HostName[%s] \n",ptr->hostname ));
 
     
-        ptr->ipaddress = NDS_GetIpAddress(host);;
+        ptr->ipaddress = NDS_GetIpAddress(host, dhcpv4Enabled);
 
         CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, IPAddress[%s] \n",ptr->ipaddress ));
 
@@ -794,6 +816,15 @@ void GetLMHostData()
 {
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s ENTER\n", __FUNCTION__ ));
     int i = 0;
+    char dhcpServerEnabled[16] = {0};
+    BOOL dhcpv4Enabled = TRUE;
+
+    if ((syscfg_get(NULL, "dhcp_server_enabled", dhcpServerEnabled, sizeof(dhcpServerEnabled)) == 0) &&
+        ((strcmp(dhcpServerEnabled, "0") == 0) || (strcasecmp(dhcpServerEnabled, "false") == 0)))
+    {
+        dhcpv4Enabled = FALSE;
+    }
+
     CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     pthread_mutex_lock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -831,16 +862,16 @@ void GetLMHostData()
             {
                 if(!strcasecmp(lmHosts.hostArray[i]->pStringParaValue[LM_HOST_X_RDKCENTRAL_COM_Parent], (const char *)getFullDeviceMac()))
                     {
-                        add_to_list(lmHosts.hostArray[i], &headnode);
+                        add_to_list(lmHosts.hostArray[i], &headnode, dhcpv4Enabled);
                     }
                 else
                     {
-                        add_to_list(lmHosts.hostArray[i], &headnodeextender);
+                        add_to_list(lmHosts.hostArray[i], &headnodeextender, dhcpv4Enabled);
                     }
             }
             else
             {
-                add_to_list(lmHosts.hostArray[i], &headnode);
+                add_to_list(lmHosts.hostArray[i], &headnode, dhcpv4Enabled);
             }
 
         }
