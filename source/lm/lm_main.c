@@ -1518,7 +1518,9 @@ static PLmObjectHostIPAddress Add_Update_IPv4Address (PLmObjectHost pHost, char 
 
     if(!pHost || !ipAddress || ipAddress[0] == '\0' ||
        inet_pton(AF_INET, ipAddress, &address) != 1)
+    {
         return NULL;
+    }
 
 	num = &(pHost->numIPv4Addr);
 	pIpAddrList = pHost->ipv4AddrArray;
@@ -1699,7 +1701,9 @@ PLmObjectHostIPAddress Host_AddIPAddress (PLmObjectHost pHost, char *ipAddress, 
     PLmObjectHostIPAddress pCur;
 
     if(!pHost || !ipAddress || ipAddress[0] == '\0')
+    {
 		return NULL;
+    }
 
     if(version == 4)
 	{
