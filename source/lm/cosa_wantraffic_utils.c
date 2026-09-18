@@ -851,7 +851,7 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                                 DscpTree->IsUpdated = TRUE;
                                 count++;
                                 WTC_LOG_INFO("kvr exitsing Mac = %s, rx = %lu, tx = %lu,"
-                                             "rxTot = %lu, txTot = %lu, Count = %d",
+                                             "rxTot = %lu, txTot = %lu,RxBytesBase= %lu,TxBytesBase= %lu, Count = %d",
                                                    DscpTree->ClientList[j].Mac,
                                                    DscpTree->ClientList[j].RxBytes,
                                                    DscpTree->ClientList[j].TxBytes,
