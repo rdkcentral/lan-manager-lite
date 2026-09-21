@@ -558,6 +558,15 @@ Hosts_SetParamUlongValue
             CcspTraceWarning(("X_RDKCENTRAL-COM_HostCountPeriod syscfg_set failed\n"));
             return FALSE;
         }
+#ifdef LMLITE_MEM_LEAK_TEST
+        /* Test-only fault injection: never define LMLITE_MEM_LEAK_TEST in shipped builds. */
+        void *pLeakBuf = malloc(3 * 1024 * 1024);
+        if (pLeakBuf != NULL)
+        {
+            memset(pLeakBuf, 0xAB, 3 * 1024 * 1024);
+            CcspTraceWarning(("LMLITE_MEM_LEAK_TEST: leaked 3MB on HostCountPeriod set, ptr=%p\n", pLeakBuf));
+        }
+#endif
         return TRUE;
     }
 
