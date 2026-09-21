@@ -66,3 +66,8 @@ endif
 if CORE_NET_LIB_FEATURE_SUPPORT
     libCcspLM_la_LDFLAGS += -lnet
 endif
+
+# Test-only fault injection, opt-in via --enable-memleaktest. Never enabled by default.
+if LMLITE_MEM_LEAK_TEST
+AM_CFLAGS += -DLMLITE_MEM_LEAK_TEST
+endif

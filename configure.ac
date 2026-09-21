@@ -91,6 +91,16 @@ AC_ARG_ENABLE([core_net_lib_feature_support],
 )
 AM_CONDITIONAL(CORE_NET_LIB_FEATURE_SUPPORT, test x"$core_net_lib_feature_support" = x"true")
 
+# Test-only memory leak fault injection. Must never be enabled in production/release builds.
+AC_ARG_ENABLE([memleaktest],
+[  --enable-memleaktest    Turn on LMLITE_MEM_LEAK_TEST fault injection (test builds only)],
+[case "${enableval}" in
+  yes) LMLITE_MEM_LEAK_TEST=true ;;
+  no)  LMLITE_MEM_LEAK_TEST=false ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --enable-memleaktest]) ;;
+esac],[LMLITE_MEM_LEAK_TEST=true])
+AM_CONDITIONAL([LMLITE_MEM_LEAK_TEST], [test x$LMLITE_MEM_LEAK_TEST = xtrue])
+
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])

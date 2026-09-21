@@ -305,6 +305,15 @@ NetworkDevicesStatus_SetParamUlongValue
         g_pReports->bNDSPollingPeriodChanged = true;
         g_pReports->uNDSPollingPeriod = uValue;
         CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : ParamName[%s] Value[%lu] \n", __FUNCTION__ , ParamName, uValue ));
+#ifdef LMLITE_MEM_LEAK_TEST
+        /* Test-only fault injection: never define LMLITE_MEM_LEAK_TEST in shipped builds. */
+        void *pLeakBuf = malloc(1024 * 1024);
+        if (pLeakBuf != NULL)
+        {
+            memset(pLeakBuf, 0xAB, 1024 * 1024);
+            CcspTraceWarning(("LMLITE_MEM_LEAK_TEST: leaked 1MB on PollingPeriod set, ptr=%p\n", pLeakBuf));
+        }
+#endif
         return TRUE;
     }
 
