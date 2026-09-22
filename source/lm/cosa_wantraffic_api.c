@@ -161,10 +161,29 @@ VOID WTC_Init
             //Init Global Struct
             WTCinfo->SubscribeRefCount = 0;
             WTCinfo->LanMode = IsBridgeMode();
-            if (!GetWanModeAndWtcIndex(&WTCinfo->WanMode,
-                                       &WTCinfo->WanModeWtcIndex))
             {
-                WTCinfo->WanMode = INVALID_MODE;
+                /* WanManager may not have marked an interface active yet at this
+                 * early boot point (e.g. PON link-up is slower than DOCSIS/EWAN),
+                 * which would otherwise force a premature syscfg fallback that
+                 * cannot represent EPON/XGSPON. Retry briefly before accepting it. */
+                UINT initRetry = 0;
+                BOOL usedFallback = FALSE;
+                for (initRetry = 0; initRetry < WTC_INIT_WANMODE_RETRY_COUNT; initRetry++)
+                {
+                    if (!GetWanModeAndWtcIndexEx(&WTCinfo->WanMode,
+                                                  &WTCinfo->WanModeWtcIndex, &usedFallback))
+                    {
+                        WTCinfo->WanMode = INVALID_MODE;
+                        break;
+                    }
+                    if (!usedFallback)
+                    {
+                        break;
+                    }
+                    WTC_LOG_ERROR("WanMode resolved via syscfg fallback at init (attempt %d/%d), retrying",
+                                  initRetry + 1, WTC_INIT_WANMODE_RETRY_COUNT);
+                    sleep(WTC_INIT_WANMODE_RETRY_DELAY_SEC);
+                }
             }
             #if defined(_SR300_PRODUCT_REQ_) || defined(_RDKB_GLOBAL_PRODUCT_REQ_)
             if ((INVALID_MODE == WTCinfo->LanMode))

@@ -129,6 +129,24 @@ CHAR* RemoveSpaces(CHAR *str)
 **********************************************************************/
 BOOL GetWanModeAndWtcIndex(WAN_INTERFACE *wanMode, UINT *wtcIndex)
 {
+    return GetWanModeAndWtcIndexEx(wanMode, wtcIndex, NULL);
+}
+
+/**********************************************************************
+    function:
+        GetWanModeAndWtcIndexEx
+    description:
+        Same as GetWanModeAndWtcIndex, but also reports whether the
+        legacy syscfg fallback (which cannot represent EPON/XGSPON) was
+        used, so callers can retry instead of trusting a premature value.
+    argument:
+        WAN_INTERFACE*  wanMode
+        UINT*           wtcIndex
+        BOOL*           pUsedFallback (may be NULL)
+    return:     TRUE if succeeded; FALSE otherwise.
+**********************************************************************/
+BOOL GetWanModeAndWtcIndexEx(WAN_INTERFACE *wanMode, UINT *wtcIndex, BOOL *pUsedFallback)
+{
     rbusValue_t value = NULL;
     const CHAR *status = NULL;
     CHAR activeStatus[BUFLEN_256] = { '\0' };
@@ -146,6 +164,11 @@ BOOL GetWanModeAndWtcIndex(WAN_INTERFACE *wanMode, UINT *wtcIndex)
     if ((wanMode == NULL) || (wtcIndex == NULL))
     {
         return FALSE;
+    }
+
+    if (pUsedFallback != NULL)
+    {
+        *pUsedFallback = FALSE;
     }
 
     if ((rbus_get(get_rbus_handle(), TR181_ACTIVE_INTERFACE, &value) == RBUS_ERROR_SUCCESS) &&
@@ -300,6 +323,10 @@ BOOL GetWanModeAndWtcIndex(WAN_INTERFACE *wanMode, UINT *wtcIndex)
 #endif
 
 syscfg_fallback:
+    if (pUsedFallback != NULL)
+    {
+        *pUsedFallback = TRUE;
+    }
     if(syscfg_get(NULL,ETH_WAN_ENABLE_STRING,eth_wan_enabled,sizeof(eth_wan_enabled)) != 0)
     {
         WTC_LOG_ERROR("Syscfg_get failed to get wan mode");

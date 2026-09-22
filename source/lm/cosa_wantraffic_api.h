@@ -103,6 +103,11 @@
 #define CLIENT_ALLOC_SLAB           10
 #define TR181_LANMODE               "Device.X_CISCO_COM_DeviceControl.LanManagementEntry.1.LanMode"
 #define TR181_WANMODE               "Device.X_RDKCENTRAL-COM_EthernetWAN.CurrentOperationalMode"
+/* Retry knobs for the boot-time WAN mode resolution in WTC_Init(), used to
+ * avoid latching onto the syscfg fallback (DOCSIS/EWAN only) before
+ * WanManager has finished marking a PON interface (EPON/XGSPON) active. */
+#define WTC_INIT_WANMODE_RETRY_COUNT     5
+#define WTC_INIT_WANMODE_RETRY_DELAY_SEC 1
 
 #define TR181_COUNTENABLE           "Device.X_RDK_WAN.Interface.1.Stats.DscpCountEnable"
 #define TR181_SLEEPINTERVAL         "Device.X_RDK_WAN.Interface.1.Stats.DscpCountInterval"
