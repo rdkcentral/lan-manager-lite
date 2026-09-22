@@ -150,6 +150,7 @@ static ULONG GetParamStringValue_common (char *pValue, ULONG *pUlSize, char *val
         }
 
         len = strnlen(value, *pUlSize); 
+	if (len >= *pUlSize)
         {
             *pUlSize = len + 1;
             rc = 1;
