@@ -1134,41 +1134,31 @@ static void Hosts_CleanExpiredDHCP(void)
     {
         PLmObjectHost pHost = lmHosts.hostArray[count];
         PLmObjectHostIPAddress pIPv4 = pHost ? pHost->ipv4AddrArray : NULL;
-        PLmObjectHostIPAddress pPrev = NULL;
         BOOL ipv4Removed = FALSE;
 
         while (pIPv4)
         {
             PLmObjectHostIPAddress pNext = pIPv4->pNext;
+            char *address = pIPv4->pStringParaValue[LM_HOST_IPAddress_IPAddressId];
             const char *source = pIPv4->pStringParaValue[LM_HOST_IPAddress_IPAddressSourceId];
 
-            if (source && (strcmp(source, LM_ADDRESS_SOURCE_DHCP_STR) == 0) &&
+            if (address && address[0] != '\0' && source &&
+                (strcmp(source, LM_ADDRESS_SOURCE_DHCP_STR) == 0) &&
                 (pIPv4->LeaseTime > 0) && (pIPv4->LeaseTime != 0xFFFFFFFF) &&
                 (currentTime >= (time_t)pIPv4->LeaseTime))
             {
                 const char *mac = pHost->pStringParaValue[LM_HOST_PhysAddressId] ? pHost->pStringParaValue[LM_HOST_PhysAddressId] : "Unknown";
                 const char *ip = pIPv4->pStringParaValue[LM_HOST_IPAddress_IPAddressId] ? pIPv4->pStringParaValue[LM_HOST_IPAddress_IPAddressId] : "Unknown";
-                int index;
 
                 CcspTraceWarning(("LAN DHCP disabled: clearing expired IPv4 %s for host %s\n", ip, mac));
 
-                if (pPrev)
-                    pPrev->pNext = pNext;
-                else
-                    pHost->ipv4AddrArray = pNext;
-
-                for (index = 0; index < LM_HOST_IPAddress_NumStringPara; index++)
-                {
-                    if (pIPv4->pStringParaValue[index])
-                        AnscFreeMemory(pIPv4->pStringParaValue[index]);
-                }
-                AnscFreeMemory(pIPv4);
+                pIPv4->pStringParaValue[LM_HOST_IPAddress_IPAddressId][0] = '\0';
+                if (source)
+                    pIPv4->pStringParaValue[LM_HOST_IPAddress_IPAddressSourceId][0] = '\0';
+                pIPv4->LeaseTime = 0;
+                pIPv4->active = FALSE;
                 pHost->numIPv4Addr--;
                 ipv4Removed = TRUE;
-            }
-            else
-            {
-                pPrev = pIPv4;
             }
 
             pIPv4 = pNext;
@@ -1176,18 +1166,20 @@ static void Hosts_CleanExpiredDHCP(void)
 
         if (ipv4Removed)
         {
-            pHost->ipv4Active = (pHost->ipv4AddrArray != NULL);
+            PLmObjectHostIPAddress pPrimary = LM_GetIPArr_FromIndex(pHost, 0, IP_V4);
+
+            pHost->ipv4Active = (pPrimary != NULL);
             if (pHost->pStringParaValue[LM_HOST_IPAddressId])
             {
                 AnscFreeMemory(pHost->pStringParaValue[LM_HOST_IPAddressId]);
                 pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
             }
 
-            if (pHost->ipv4AddrArray && pHost->ipv4AddrArray->pStringParaValue[LM_HOST_IPAddress_IPAddressId])
+            if (pPrimary)
             {
                 pHost->pStringParaValue[LM_HOST_IPAddressId] = AnscCloneString(
-                    pHost->ipv4AddrArray->pStringParaValue[LM_HOST_IPAddress_IPAddressId]);
-                pHost->LeaseTime = pHost->ipv4AddrArray->LeaseTime;
+                    pPrimary->pStringParaValue[LM_HOST_IPAddress_IPAddressId]);
+                pHost->LeaseTime = pPrimary->LeaseTime;
             }
             else
             {
@@ -1287,7 +1279,12 @@ static PLmObjectHost Hosts_AddHost (int instanceNum)
 static void Host_SetIPAddress (PLmObjectHostIPAddress pIP, int l3unReachableCnt, char *source)
 {
     pIP->l3unReachableCnt = l3unReachableCnt;
-    LM_SET_PSTRINGPARAVALUE(pIP->pStringParaValue[LM_HOST_IPAddress_IPAddressSourceId], source);
+    if (!pIP->pStringParaValue[LM_HOST_IPAddress_IPAddressSourceId] ||
+        strcmp(source, "NONE") != 0 ||
+        strcmp(pIP->pStringParaValue[LM_HOST_IPAddress_IPAddressSourceId], LM_ADDRESS_SOURCE_DHCP_STR) != 0)
+    {
+        LM_SET_PSTRINGPARAVALUE(pIP->pStringParaValue[LM_HOST_IPAddress_IPAddressSourceId], source);
+    }
 }
 
 void addHostsToPresenceTable(void)
@@ -1617,18 +1614,31 @@ static void Host_FreeMloLinks (PLmObjectHost pHost)
 static PLmObjectHostIPAddress Add_Update_IPv4Address (PLmObjectHost pHost, char *ipAddress)
 {
 	int *num;
-	PLmObjectHostIPAddress pIpAddrList, pCur, pPre, *ppHeader;
+    PLmObjectHostIPAddress pIpAddrList, pCur, pPre, pReusable, pReusablePre, *ppHeader;
 
 	num = &(pHost->numIPv4Addr);
 	pIpAddrList = pHost->ipv4AddrArray;
 	ppHeader = &(pHost->ipv4AddrArray);
 	pHost->ipv4Active = TRUE;
 	pPre = NULL;
+    pReusable = NULL;
+    pReusablePre = NULL;
 
    for(pCur = pIpAddrList; pCur != NULL; pPre = pCur, pCur = pCur->pNext){
-        if (strcasecmp(pCur->pStringParaValue[LM_HOST_IPAddress_IPAddressId], ipAddress) == 0){
+        char *address = pCur->pStringParaValue[LM_HOST_IPAddress_IPAddressId];
+        if (address && address[0] == '\0' && pReusable == NULL){
+            pReusable = pCur;
+            pReusablePre = pPre;
+        }
+        if (address && strcasecmp(address, ipAddress) == 0){
 			break;
         }
+    }
+    if (pCur == NULL && pReusable != NULL){
+        pCur = pReusable;
+        pPre = pReusablePre;
+        LanManager_CheckCloneCopy(&(pCur->pStringParaValue[LM_HOST_IPAddress_IPAddressId]), ipAddress);
+        (*num)++;
     }
 	if (pCur == NULL){
 		pCur = AnscAllocateMemory(sizeof(LmObjectHostIPAddress));
@@ -1885,7 +1895,15 @@ PLmObjectHostIPAddress LM_GetIPArr_FromIndex(PLmObjectHost pHost, ULONG nIndex, 
 		pIpAddrList = pHost->ipv6AddrArray;
 	}
 
-	for(pCur = pIpAddrList, i=0; (pCur != NULL) && (i < nIndex); pCur =	pCur->pNext,i++);
+    for(pCur = pIpAddrList, i=0; pCur != NULL; pCur = pCur->pNext)
+    {
+        char *address = pCur->pStringParaValue[LM_HOST_IPAddress_IPAddressId];
+        if (version == IP_V4 && (!address || address[0] == '\0'))
+            continue;
+        if (i == nIndex)
+            break;
+        i++;
+    }
 
 	return pCur;
 }
@@ -2079,7 +2097,12 @@ static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
     pDestHost->ipv4AddrAmount = pHost->numIPv4Addr;
     pDestHost->ipv6AddrAmount = pHost->numIPv6Addr;
     LM_ip_addr_t *pIp;
-    for(i=0, pIpSrc = pHost->ipv4AddrArray; pIpSrc != NULL && i < LM_MAX_IP_AMOUNT;i++, pIpSrc = pIpSrc->pNext){
+    for(i=0, pIpSrc = pHost->ipv4AddrArray; pIpSrc != NULL && i < LM_MAX_IP_AMOUNT; pIpSrc = pIpSrc->pNext){
+        if (!pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId] ||
+            pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId][0] == '\0')
+        {
+            continue;
+        }
         pIp = &(pDestHost->ipv4AddrList[i]);
         if(inet_pton(AF_INET, pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId],pIp->addr) != 1)
         {
@@ -2092,6 +2115,7 @@ static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
             pIp->LeaseTime = pIpSrc->LeaseTime;
         else
             pIp->LeaseTime = 0;
+        i++;
    }
     
     
@@ -3799,8 +3823,10 @@ int LM_get_host_info()
 		if((lmHosts.hostArray[i]->numIPv4Addr) && (lmHosts.hostArray[i]->pStringParaValue[LM_HOST_AddressSource] != NULL))
 		{
 			if(strstr(lmHosts.hostArray[i]->pStringParaValue[LM_HOST_AddressSource],LM_ADDRESS_SOURCE_DHCP_STR)	!= NULL){
+                PLmObjectHostIPAddress pIPv4 = LM_GetIPArr_FromIndex(lmHosts.hostArray[i], 0, IP_V4);
                 _get_dmbyname(g_DHCPv4ListNum, g_pDHCPv4List, &(lmHosts.hostArray[i]->pStringParaValue[LM_HOST_DHCPClientId]), lmHosts.hostArray[i]->pStringParaValue[LM_HOST_PhysAddressId]);
-                lmHosts.hostArray[i]->LeaseTime = lmHosts.hostArray[i]->ipv4AddrArray->LeaseTime;    		
+                if (pIPv4)
+                    lmHosts.hostArray[i]->LeaseTime = pIPv4->LeaseTime;
             }
 		}
 		
