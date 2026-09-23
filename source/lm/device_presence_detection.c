@@ -842,12 +842,8 @@ int sendIpv4ArpMessage(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient
                 // Copy source MAC address.
                 memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6 * sizeof (uint8_t));
 
-                // Report source MAC address to stdout.
-                printf ("MAC address for interface %s is ", interface);
-                for (int i=0; i<5; i++) {
-                    printf ("%02x:", src_mac[i]);
-                }
-                printf ("%02x\n", src_mac[5]);
+                // Report source MAC address using trace debug.
+                CcspTraceDebug(("%s:%d, MAC address for interface %s is %02x:%02x:%02x:%02x:%02x:%02x\n", __FUNCTION__, __LINE__, interface, src_mac[0], src_mac[1], src_mac[2], src_mac[3], src_mac[4], src_mac[5]));
 
                 // Find interface index from interface name and store index in
                 // struct sockaddr_ll device, which will be used as an argument of sendto().
