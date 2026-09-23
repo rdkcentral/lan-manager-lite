@@ -1152,9 +1152,7 @@ static void Hosts_CleanExpiredDHCP(void)
 
                 CcspTraceWarning(("LAN DHCP disabled: clearing expired IPv4 %s for host %s\n", ip, mac));
 
-                pIPv4->pStringParaValue[LM_HOST_IPAddress_IPAddressId][0] = '\0';
-                if (source)
-                    pIPv4->pStringParaValue[LM_HOST_IPAddress_IPAddressSourceId][0] = '\0';
+pIPv4->pStringParaValue[LM_HOST_IPAddress_IPAddressId][0] = '\0';
                 pIPv4->LeaseTime = 0;
                 pIPv4->active = FALSE;
                 pHost->numIPv4Addr--;
