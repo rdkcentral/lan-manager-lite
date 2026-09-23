@@ -1581,8 +1581,12 @@ memset(buf,0,sizeof(buf));
 int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
 {
     int count = 0;
+    char cHostFmt[32];
 
     CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Wait for dnsmasq to update hostname\n"));
+
+    /* Bound the %s width to the caller's buffer instead of a fixed literal, leaving room for the null terminator */
+    snprintf(cHostFmt, sizeof(cHostFmt), "%%*s %%17s %%63s %%%zus", (HostNameLen > 1) ? (HostNameLen - 1) : (size_t)1);
 
     while (1)
     {
@@ -1590,7 +1594,6 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
         char cBuf[256];
         char cMac[18];
         char cIp[64];
-        char cHostname[64];
         size_t len;
 
         sleep(HOST_NAME_RETRY_INTERVAL);
@@ -1606,20 +1609,11 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
             {
                 cMac[0] = '\0';
                 cIp[0] = '\0';
-                cHostname[0] = '\0';
 
-                if (sscanf(cBuf, "%*s %17s %63s %63s", cMac, cIp, cHostname) >= 3 &&
+                if (HostNameLen > 0 &&
+                    sscanf(cBuf, cHostFmt, cMac, cIp, HostName) >= 3 &&
                     strcasecmp(cMac, physAddress) == 0)
                 {
-                    if (HostNameLen > 0)
-                    {
-                        errno_t rc = strcpy_s(HostName, HostNameLen, cHostname);
-                        if (rc != EOK)
-                        {
-                            ERR_CHK(rc);
-                            HostName[0] = '\0';
-                        }
-                    }
                     break;
                 }
             }
