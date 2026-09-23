@@ -107,7 +107,7 @@
  * avoid latching onto the syscfg fallback (DOCSIS/EWAN only) before
  * WanManager has finished marking a PON interface (EPON/XGSPON) active. */
 #define WTC_INIT_WANMODE_RETRY_COUNT     10
-#define WTC_INIT_WANMODE_RETRY_DELAY_SEC 3
+#define WTC_INIT_WANMODE_RETRY_DELAY_SEC 5
 
 #define TR181_COUNTENABLE           "Device.X_RDK_WAN.Interface.1.Stats.DscpCountEnable"
 #define TR181_SLEEPINTERVAL         "Device.X_RDK_WAN.Interface.1.Stats.DscpCountInterval"
