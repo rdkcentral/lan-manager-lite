@@ -1115,7 +1115,6 @@ static BOOL LanMgr_IsLanDhcpv4Enabled(void)
     return TRUE;
 }
 
-/* Requirement: once LAN DHCP is disabled, expired DHCP lease's IPv4 address must be cleared from the host entry (host entry itself is kept) */
 static void Hosts_CleanExpiredDHCP(void)
 {
     int count, total_count;
@@ -1134,24 +1133,66 @@ static void Hosts_CleanExpiredDHCP(void)
     for(count=0 ; count < total_count; count++)
     {
         PLmObjectHost pHost = lmHosts.hostArray[count];
+        PLmObjectHostIPAddress pIPv4 = pHost ? pHost->ipv4AddrArray : NULL;
+        PLmObjectHostIPAddress pPrev = NULL;
+        BOOL ipv4Removed = FALSE;
 
-        if (pHost &&
-            pHost->pStringParaValue[LM_HOST_AddressSource] &&
-            (strcmp(pHost->pStringParaValue[LM_HOST_AddressSource], LM_ADDRESS_SOURCE_DHCP_STR) == 0) &&
-            (pHost->LeaseTime != 0xFFFFFFFF) && (currentTime >= (time_t)pHost->LeaseTime) &&
-            (pHost->numIPv4Addr > 0))
+        while (pIPv4)
         {
-            const char *mac = pHost->pStringParaValue[LM_HOST_PhysAddressId] ? pHost->pStringParaValue[LM_HOST_PhysAddressId] : "Unknown";
-            CcspTraceWarning(("LAN DHCP disabled: clearing expired IPv4 for host %s\n", mac));
-            Host_FreeIPAddress(pHost, 4);
-            pHost->ipv4Active = FALSE;
+            PLmObjectHostIPAddress pNext = pIPv4->pNext;
+            const char *source = pIPv4->pStringParaValue[LM_HOST_IPAddress_IPAddressSourceId];
 
+            if (source && (strcmp(source, LM_ADDRESS_SOURCE_DHCP_STR) == 0) &&
+                (pIPv4->LeaseTime > 0) && (pIPv4->LeaseTime != 0xFFFFFFFF) &&
+                (currentTime >= (time_t)pIPv4->LeaseTime))
+            {
+                const char *mac = pHost->pStringParaValue[LM_HOST_PhysAddressId] ? pHost->pStringParaValue[LM_HOST_PhysAddressId] : "Unknown";
+                const char *ip = pIPv4->pStringParaValue[LM_HOST_IPAddress_IPAddressId] ? pIPv4->pStringParaValue[LM_HOST_IPAddress_IPAddressId] : "Unknown";
+                int index;
+
+                CcspTraceWarning(("LAN DHCP disabled: clearing expired IPv4 %s for host %s\n", ip, mac));
+
+                if (pPrev)
+                    pPrev->pNext = pNext;
+                else
+                    pHost->ipv4AddrArray = pNext;
+
+                for (index = 0; index < LM_HOST_IPAddress_NumStringPara; index++)
+                {
+                    if (pIPv4->pStringParaValue[index])
+                        AnscFreeMemory(pIPv4->pStringParaValue[index]);
+                }
+                AnscFreeMemory(pIPv4);
+                pHost->numIPv4Addr--;
+                ipv4Removed = TRUE;
+            }
+            else
+            {
+                pPrev = pIPv4;
+            }
+
+            pIPv4 = pNext;
+        }
+
+        if (ipv4Removed)
+        {
+            pHost->ipv4Active = (pHost->ipv4AddrArray != NULL);
             if (pHost->pStringParaValue[LM_HOST_IPAddressId])
             {
                 AnscFreeMemory(pHost->pStringParaValue[LM_HOST_IPAddressId]);
                 pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
             }
 
+            if (pHost->ipv4AddrArray && pHost->ipv4AddrArray->pStringParaValue[LM_HOST_IPAddress_IPAddressId])
+            {
+                pHost->pStringParaValue[LM_HOST_IPAddressId] = AnscCloneString(
+                    pHost->ipv4AddrArray->pStringParaValue[LM_HOST_IPAddress_IPAddressId]);
+                pHost->LeaseTime = pHost->ipv4AddrArray->LeaseTime;
+            }
+            else
+            {
+                pHost->LeaseTime = 0;
+            }
         }
     }
 
