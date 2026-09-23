@@ -1144,7 +1144,7 @@ static void Hosts_CleanExpiredDHCP(void)
 
             if (address && address[0] != '\0' && source &&
                 (strcmp(source, LM_ADDRESS_SOURCE_DHCP_STR) == 0) &&
-                (pIPv4->LeaseTime > 0) && (pIPv4->LeaseTime != 0xFFFFFFFF) &&
+                (pIPv4->LeaseTime > 0) && (pIPv4->LeaseTime != -1) &&
                 (currentTime >= (time_t)pIPv4->LeaseTime))
             {
                 const char *mac = pHost->pStringParaValue[LM_HOST_PhysAddressId] ? pHost->pStringParaValue[LM_HOST_PhysAddressId] : "Unknown";
