@@ -1583,10 +1583,15 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
     int count = 0;
     char cHostFmt[32];
 
+    if (HostName == NULL || HostNameLen < 2)
+    {
+        CcspTraceWarning(("%s:%d,HostName length is invalid\n", __FILE__, __LINE__));
+        return 0;
+    }
+
     CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Wait for dnsmasq to update hostname\n"));
 
-    /* Bound the %s width to the caller's buffer instead of a fixed literal, leaving room for the null terminator */
-    snprintf(cHostFmt, sizeof(cHostFmt), "%%*s %%17s %%63s %%%zus", (HostNameLen > 1) ? (HostNameLen - 1) : (size_t)1);
+    snprintf(cHostFmt, sizeof(cHostFmt), "%%*s %%17s %%63s %%%zus", HostNameLen - 1);
 
     while (1)
     {
@@ -1610,8 +1615,7 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
                 cMac[0] = '\0';
                 cIp[0] = '\0';
 
-                if (HostNameLen > 0 &&
-                    sscanf(cBuf, cHostFmt, cMac, cIp, HostName) >= 3 &&
+                if (sscanf(cBuf, cHostFmt, cMac, cIp, HostName) >= 3 &&
                     strcasecmp(cMac, physAddress) == 0)
                 {
                     break;
