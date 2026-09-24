@@ -50,7 +50,7 @@
 #include <utapi/utapi_util.h>
 #endif
 
-#if defined(_SR300_PRODUCT_REQ_) || defined(_RDKB_GLOBAL_PRODUCT_REQ_)
+#ifdef WAN_TRAFFIC_COUNT_SUPPORT
 #include <cosa_wantraffic_api.h>
 #include <cosa_wantraffic_utils.h>
 extern pstWTCInfo_t WTCinfo;
@@ -594,31 +594,26 @@ static void eventReceiveHandler(
 		       			CcspTraceError(("ReportSourceNDT value is NULL\n"));
 				}
 
-                    #ifdef _SR300_PRODUCT_REQ_
-                    if((strstr(newActiveInterface, "WANOE") != NULL) || 
-                        (strstr(newActiveInterface, "DSL") != NULL ) ||
-                         (strstr(newActiveInterface, "ADSL") != NULL )) 
+                    #ifdef WAN_TRAFFIC_COUNT_SUPPORT
+                    CcspTraceInfo(("newActiveInterface is : %s\n", newActiveInterface));
+                    if(WTCinfo)
                     {
-                        CcspTraceInfo(("newActiveInterface is : %s\n", newActiveInterface));
-                        if(WTCinfo)
+                        pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
+                        if (!GetWanModeAndWtcIndex(&WTCinfo->WanMode,
+                                                   &WTCinfo->WanModeWtcIndex))
                         {
-                            pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);    
-                            if (!GetWanModeAndWtcIndex(&WTCinfo->WanMode,
-                                                       &WTCinfo->WanModeWtcIndex))
-                            {
-                                CcspTraceError(("Unable to resolve WAN mode and WTC index\n"));
-                                pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
-                                return;
-                            }
-                            WTCinfo->WTCConfigFlag[WTCinfo->WanModeWtcIndex] |= WTC_WANMODE_CHANGE;
+                            CcspTraceError(("Unable to resolve WAN mode and WTC index\n"));
                             pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
-                            WTC_ApplyStateChange();
-                            CcspTraceInfo(("Setting WAN mode change!!!\n"));
+                            return;
                         }
-                        else
-                        {
-                            CcspTraceInfo(("WTCinfo is NULL!!!\n"));
-                        }
+                        WTCinfo->WTCConfigFlag[WTCinfo->WanModeWtcIndex] |= WTC_WANMODE_CHANGE;
+                        pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
+                        WTC_ApplyStateChange();
+                        CcspTraceInfo(("Setting WAN mode change!!!\n"));
+                    }
+                    else
+                    {
+                        CcspTraceInfo(("WTCinfo is NULL!!!\n"));
                     }
                     #endif
 		}
