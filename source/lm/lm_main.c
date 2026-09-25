@@ -2787,7 +2787,7 @@ static void Hosts_SyncArp (void)
 						  */
 						pIP = Host_AddIPv4Address(pHost, (char *)hosts[i].ipAddr);
 
-                        if (NULL != pIP)
+                        if (pIP != NULL)
                         {
                             Host_SetIPAddress(pIP, 0, "NONE");
                         }
