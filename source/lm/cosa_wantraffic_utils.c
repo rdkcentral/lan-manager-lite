@@ -73,13 +73,11 @@
 #include <stdbool.h>
 #include "utapi/utapi.h"
 #include "ansc_platform.h"
-#include "syscfg/syscfg.h"
 #include "safec_lib_common.h"
 #include "cosa_wantraffic_api.h"
 #include "cosa_wantraffic_utils.h"
 #include "lm_rbus_api.h"
 
-#define ETH_WAN_ENABLE_STRING    "eth_wan_enabled"
 
 static UINT EnabledDscpCount = 0;
 
@@ -123,29 +121,10 @@ CHAR* RemoveSpaces(CHAR *str)
     description:
         This function retrieves active WAN mode and corresponding WTC index.
     argument:
-        WAN_INTERFACE*  wanMode
         UINT*           wtcIndex
-    return:     TRUE if succeeded; FALSE otherwise.
+    return:     WAN mode, or INVALID_MODE if the mode is unavailable.
 **********************************************************************/
-BOOL GetWanModeAndWtcIndex(WAN_INTERFACE *wanMode, UINT *wtcIndex)
-{
-    return GetWanModeAndWtcIndexEx(wanMode, wtcIndex, NULL);
-}
-
-/**********************************************************************
-    function:
-        GetWanModeAndWtcIndexEx
-    description:
-        Same as GetWanModeAndWtcIndex, but also reports whether the
-        legacy syscfg fallback (which cannot represent EPON/XGSPON) was
-        used, so callers can retry instead of trusting a premature value.
-    argument:
-        WAN_INTERFACE*  wanMode
-        UINT*           wtcIndex
-        BOOL*           pUsedFallback (may be NULL)
-    return:     TRUE if succeeded; FALSE otherwise.
-**********************************************************************/
-BOOL GetWanModeAndWtcIndexEx(WAN_INTERFACE *wanMode, UINT *wtcIndex, BOOL *pUsedFallback)
+WAN_INTERFACE GetWanModeAndWtcIndex(UINT *wtcIndex)
 {
     rbusValue_t value = NULL;
     const CHAR *status = NULL;
@@ -157,19 +136,13 @@ BOOL GetWanModeAndWtcIndexEx(WAN_INTERFACE *wanMode, UINT *wtcIndex, BOOL *pUsed
     CHAR *nameContext = NULL;
     CHAR *activeFlag = NULL;
     WAN_INTERFACE activeMode = INVALID_MODE;
-    errno_t rc = -1;
-    INT ind = -1;
-    CHAR eth_wan_enabled[BUFLEN_64] = {'\0'};
 
-    if ((wanMode == NULL) || (wtcIndex == NULL))
+    if (wtcIndex == NULL)
     {
-        return FALSE;
+        return INVALID_MODE;
     }
 
-    if (pUsedFallback != NULL)
-    {
-        *pUsedFallback = FALSE;
-    }
+    *wtcIndex = 0;
 
     if ((rbus_get(get_rbus_handle(), TR181_ACTIVE_INTERFACE, &value) == RBUS_ERROR_SUCCESS) &&
         ((status = rbusValue_ToString(value, NULL, 0)) != NULL) &&
@@ -180,24 +153,24 @@ BOOL GetWanModeAndWtcIndexEx(WAN_INTERFACE *wanMode, UINT *wtcIndex, BOOL *pUsed
     }
     else
     {
-        WTC_LOG_ERROR("Failed to get %s; using syscfg fallback", TR181_ACTIVE_INTERFACE);
+        WTC_LOG_ERROR("Failed to get %s", TR181_ACTIVE_INTERFACE);
         if (value != NULL)
         {
             rbusValue_Release(value);
         }
-        goto syscfg_fallback;
+        return INVALID_MODE;
     }
 
     if ((rbus_get(get_rbus_handle(), TR181_AVAILABLE_INTERFACE, &value) != RBUS_ERROR_SUCCESS) ||
         ((status = rbusValue_ToString(value, NULL, 0)) == NULL) ||
         (strcpy_s(availableStatus, sizeof(availableStatus), status) != EOK))
     {
-        WTC_LOG_INFO("WanManager interface status unavailable; using syscfg fallback");
+        WTC_LOG_INFO("WanManager interface status unavailable");
         if (value != NULL)
         {
             rbusValue_Release(value);
         }
-        goto syscfg_fallback;
+        return INVALID_MODE;
     }
     rbusValue_Release(value);
     value = NULL;
@@ -236,15 +209,14 @@ BOOL GetWanModeAndWtcIndexEx(WAN_INTERFACE *wanMode, UINT *wtcIndex, BOOL *pUsed
 
     if (activeMode == INVALID_MODE)
     {
-        WTC_LOG_ERROR("No supported active WAN interface in %s; using syscfg fallback", activeStatus);
-        goto syscfg_fallback;
+        WTC_LOG_ERROR("No supported active WAN interface in %s", activeStatus);
+        return INVALID_MODE;
     }
 
 #if SUPPORTED_WAN_MODES == 1
-    *wanMode = activeMode;
     *wtcIndex = 0;
-    WTC_LOG_INFO("WanManager resolved WAN mode %d, WTC index %d", *wanMode, *wtcIndex);
-    return TRUE;
+    WTC_LOG_INFO("WanManager resolved WAN mode %d, WTC index %d", activeMode, *wtcIndex);
+    return activeMode;
 #else
     {
     CHAR availableStatusCopy[BUFLEN_256] = { '\0' };
@@ -253,12 +225,11 @@ BOOL GetWanModeAndWtcIndexEx(WAN_INTERFACE *wanMode, UINT *wtcIndex, BOOL *pUsed
     UINT index = 0;
     BOOL modePresent = FALSE;
 
-    *wanMode = activeMode;
     for (modeIndex = DOCSIS; modeIndex < WAN_INTERFACE_MAX; modeIndex++)
     {
         if (strcpy_s(availableStatusCopy, sizeof(availableStatusCopy), availableStatus) != EOK)
         {
-            return FALSE;
+            return INVALID_MODE;
         }
 
         modePresent = FALSE;
@@ -308,40 +279,23 @@ BOOL GetWanModeAndWtcIndexEx(WAN_INTERFACE *wanMode, UINT *wtcIndex, BOOL *pUsed
             {
                 WTC_LOG_ERROR("WTC index %d exceeds supported WAN modes %d",
                               index, SUPPORTED_WAN_MODES);
-                return FALSE;
+                return INVALID_MODE;
             }
             *wtcIndex = index;
-            WTC_LOG_INFO("WanManager resolved WAN mode %d, WTC index %d", *wanMode, *wtcIndex);
-            return TRUE;
+            WTC_LOG_INFO("WanManager resolved WAN mode %d, WTC index %d", activeMode, *wtcIndex);
+            return activeMode;
         }
         index++;
     }
 
     WTC_LOG_ERROR("Active WAN mode %d is not available in %s", activeMode, availableStatus);
-    return FALSE;
+    return INVALID_MODE;
     }
 #endif
 
-syscfg_fallback:
-    if (pUsedFallback != NULL)
-    {
-        *pUsedFallback = TRUE;
-    }
-    if(syscfg_get(NULL,ETH_WAN_ENABLE_STRING,eth_wan_enabled,sizeof(eth_wan_enabled)) != 0)
-    {
-        WTC_LOG_ERROR("Syscfg_get failed to get wan mode");
-        return FALSE;
-    }
-    rc = strcmp_s(eth_wan_enabled, strlen(eth_wan_enabled), "true", &ind);
-    ERR_CHK(rc);
-    *wanMode = ((rc == EOK) && (!ind)) ? EWAN : DOCSIS;
-#if SUPPORTED_WAN_MODES == 1
-    *wtcIndex = 0;
-#else
-    *wtcIndex = (*wanMode == DOCSIS) ? 0 : 1;
-#endif
-    WTC_LOG_INFO("Syscfg resolved WAN mode %d, WTC index %d", *wanMode, *wtcIndex);
-    return TRUE;
+    /* The legacy syscfg fallback is intentionally disabled. At boot, an
+     * unavailable mode remains INVALID_MODE until InterfaceActiveStatus arrives. */
+    return INVALID_MODE;
 }
 
 /**********************************************************************

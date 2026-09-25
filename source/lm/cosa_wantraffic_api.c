@@ -161,35 +161,12 @@ VOID WTC_Init
             //Init Global Struct
             WTCinfo->SubscribeRefCount = 0;
             WTCinfo->LanMode = IsBridgeMode();
+            WTCinfo->WanMode = GetWanModeAndWtcIndex(&WTCinfo->WanModeWtcIndex);
+            if (WTCinfo->WanMode == INVALID_MODE)
             {
-                /* WanManager may not have marked an interface active yet at this
-                 * early boot point (e.g. PON link-up is slower than DOCSIS/EWAN),
-                 * which would otherwise force a premature syscfg fallback that
-                 * cannot represent EPON/XGSPON. Retry briefly before accepting it. */
-                UINT initRetry = 0;
-                BOOL usedFallback = FALSE;
-                for (initRetry = 0; initRetry < WTC_INIT_WANMODE_RETRY_COUNT; initRetry++)
-                {
-                    if (!GetWanModeAndWtcIndexEx(&WTCinfo->WanMode,
-                                                  &WTCinfo->WanModeWtcIndex, &usedFallback))
-                    {
-                        WTCinfo->WanMode = INVALID_MODE;
-                        break;
-                    }
-                    if (!usedFallback)
-                    {
-                        break;
-                    }
-                    WTC_LOG_ERROR("WanMode resolved via syscfg fallback at init (attempt %d/%d), retrying",
-                                  initRetry + 1, WTC_INIT_WANMODE_RETRY_COUNT);
-                    sleep(WTC_INIT_WANMODE_RETRY_DELAY_SEC);
-                }
+                WTC_LOG_ERROR("Unable to resolve WAN mode during init; waiting for InterfaceActiveStatus");
             }
-            #if defined(_SR300_PRODUCT_REQ_) || defined(_RDKB_GLOBAL_PRODUCT_REQ_)
             if ((INVALID_MODE == WTCinfo->LanMode))
-            #else
-            if ((INVALID_MODE == WTCinfo->LanMode) || (INVALID_MODE == WTCinfo->WanMode))
-            #endif
             {
                 WTC_LOG_ERROR("INVALID LAN/WAN MODE %d/%d", WTCinfo->LanMode, WTCinfo->WanMode);
                 free(WTCinfo);
@@ -262,7 +239,8 @@ VOID WTC_Init
                 }
             }
 
-            if ( (!WTCinfo->LanMode) && (i == WTCinfo->WanModeWtcIndex) )
+              if ( (!WTCinfo->LanMode) && (WTCinfo->WanMode != INVALID_MODE) &&
+                  (i == WTCinfo->WanModeWtcIndex) )
             {
                 WTC_ApplyStateChange();
             }
@@ -377,8 +355,8 @@ VOID WTC_ApplyStateChange
                              , wanMode[index]
                              , WTC_ThreadStatusToStr(thrdStatus));
                 WTCinfo->WTCConfigFlag[index] &= ~WTC_WANMODE_CHANGE;
-                if (!GetWanModeAndWtcIndex(&WTCinfo->WanMode,
-                                           &WTCinfo->WanModeWtcIndex))
+                WTCinfo->WanMode = GetWanModeAndWtcIndex(&WTCinfo->WanModeWtcIndex);
+                if (WTCinfo->WanMode == INVALID_MODE)
                 {
                     WTC_LOG_ERROR("INVALID WAN MODE");
                     return;
@@ -432,7 +410,8 @@ VOID WTC_ApplyStateChange
         case WTC_THRD_RUNNING:
          {
             WTC_LOG_INFO("Thread in RUNNING state");
-            if (!GetWanModeAndWtcIndex(&mode, &i))
+            mode = GetWanModeAndWtcIndex(&i);
+            if (mode == INVALID_MODE)
             {
                 WTC_LOG_ERROR("INVALID WAN MODE");
                 WTC_SetThreadState(index,WTC_THRD_DISMISS);
@@ -1457,8 +1436,8 @@ static VOID* WTC_Thread()
             case WTC_THRD_SUSPEND:
                 WTC_DeInit(index, FALSE);
                 WTC_SetThreadStatus(index, WTC_THRD_SUSPENDED);
-                if (GetWanModeAndWtcIndex(&WTCinfo->WanMode,
-                                          &WTCinfo->WanModeWtcIndex))
+                WTCinfo->WanMode = GetWanModeAndWtcIndex(&WTCinfo->WanModeWtcIndex);
+                if (WTCinfo->WanMode != INVALID_MODE)
                 {
                     index = WTCinfo->WanModeWtcIndex;
                 }
@@ -1467,8 +1446,7 @@ static VOID* WTC_Thread()
             case WTC_THRD_DISMISS:
                 WTC_DeInit(index, TRUE);
                 WTC_SetThreadStatus(index, WTC_THRD_DISMISSED);
-                GetWanModeAndWtcIndex(&WTCinfo->WanMode,
-                                      &WTCinfo->WanModeWtcIndex);
+                WTCinfo->WanMode = GetWanModeAndWtcIndex(&WTCinfo->WanModeWtcIndex);
 
                 goto wtc_exit;
             default:
