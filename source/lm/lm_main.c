@@ -726,6 +726,36 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
                 }
                 else {
                     CcspTraceWarning(("<%s> IPAddress not found in lease file : IPAddress = %s, MAC Addr = %s \n",__FUNCTION__, pHost->pStringParaValue[LM_HOST_IPAddressId], pHost->pStringParaValue[LM_HOST_PhysAddressId]));
+                    CcspTraceWarning(("<%s> SETHU: IPAddress not found in lease file : IPAddress = %s, MAC Addr = %s \n",__FUNCTION__, pHost->pStringParaValue[LM_HOST_IPAddressId], pHost->pStringParaValue[LM_HOST_PhysAddressId]));
+#if defined (_CBR_PRODUCT_REQ_) || defined (_ONESTACK_PRODUCT_REQ_)
+                    char device_mode[32] = {0};
+                    char dhcp_server_enabled[32] = {0};
+
+                    CcspTraceWarning((" SETHU: _ONESTACK_PRODUCT_REQ_ \n"));
+#if defined (_ONESTACK_PRODUCT_REQ_)
+                    if(!syscfg_get( NULL, "devicemode", device_mode, sizeof(device_mode)))
+                    {
+                        CcspTraceWarning((" SETHU: devicemode: %s\n", device_mode));
+                        if(strncmp(device_mode, "business", strlen("business")) == 0)
+                        {
+#endif
+                            if(!syscfg_get( NULL, "dhcp_server_enabled", dhcp_server_enabled, sizeof(dhcp_server_enabled)))
+                            {
+                                CcspTraceWarning((" SETHU: dhcp_server_enabled: %s\n", dhcp_server_enabled));
+                                if(strncmp(dhcp_server_enabled, "0", strlen("0")) == 0)
+                                {
+                                    free(pHost->pStringParaValue[LM_HOST_IPAddressId]);
+                                    pHost->pStringParaValue[LM_HOST_IPAddressId] = NULL;
+                                    free(pHost->ipv4AddrArray);
+                                    pHost->ipv4AddrArray = NULL;
+                                    pHost->numIPv4Addr = 0;
+                                }
+                            }
+#if defined (_ONESTACK_PRODUCT_REQ_)
+                        }
+                    }
+#endif
+#endif
                 }
             }
         }
