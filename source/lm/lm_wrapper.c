@@ -1620,6 +1620,7 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
                 {
                     break;
                 }
+                HostName[0] = '\0';
             }
 
             fclose(fp);
