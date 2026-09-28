@@ -1581,13 +1581,24 @@ memset(buf,0,sizeof(buf));
 int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
 {
     int count = 0;
+    char cHostFmt[32];
+
+    if (HostName == NULL || HostNameLen < 2)
+    {
+        CcspTraceWarning(("%s:%d,HostName length is invalid\n", __FILE__, __LINE__));
+        return 0;
+    }
 
     CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Wait for dnsmasq to update hostname\n"));
 
+    snprintf(cHostFmt, sizeof(cHostFmt), "%%*s %%17s %%63s %%%zus", HostNameLen - 1);
+
     while (1)
     {
-        struct stat st;
         FILE *fp = NULL;
+        char cBuf[256];
+        char cMac[18];
+        char cIp[64];
         size_t len;
 
         sleep(HOST_NAME_RETRY_INTERVAL);
@@ -1596,16 +1607,22 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
 
         pthread_mutex_lock(&HostNameMutex);
 
-        if ((stat(DNSMASQ_LEASES_FILE, &st) == 0) &&
-            (st.st_size != 0) &&
-            ((fp = v_secure_popen("r", "grep -i %s " DNSMASQ_LEASES_FILE " | awk '{print $4}'", physAddress)) != NULL))
+        fp = fopen(DNSMASQ_LEASES_FILE, "r");
+        if (fp != NULL)
         {
-            while (fgets(HostName, HostNameLen, fp) != NULL)
+            while (fgets(cBuf, sizeof(cBuf), fp) != NULL)
             {
-                /* Read all lines */
+                cMac[0] = '\0';
+                cIp[0] = '\0';
+
+                if (sscanf(cBuf, cHostFmt, cMac, cIp, HostName) >= 3 &&
+                    strcasecmp(cMac, physAddress) == 0)
+                {
+                    break;
+                }
             }
 
-            v_secure_pclose(fp);
+            fclose(fp);
         }
 
         pthread_mutex_unlock(&HostNameMutex);
@@ -1618,7 +1635,13 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
             len--;
         }
 
-        if ((len == 0) || ((len == 1) && (HostName[0] == '*')))
+        if ((len == 1) && (HostName[0] == '*'))
+        {
+            CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Hostname unavailable ('*'), skipping retry\n"));
+            return 0;
+        }
+
+        if (len == 0)
         {
             if (++count > HOST_NAME_RETRY)
             {
