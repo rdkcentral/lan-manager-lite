@@ -1598,7 +1598,7 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
 
         if ((stat(DNSMASQ_LEASES_FILE, &st) == 0) &&
             (st.st_size != 0) &&
-            ((fp = v_secure_popen("r", "grep -i %s " DNSMASQ_LEASES_FILE " | awk '{print $4}'", physAddress)) != NULL))
+            ((fp = v_secure_popen("r", "grep -i %s " DNSMASQ_LEASES_FILE " | awk '$4 != \"*\" && $4 != \"\" {print $4; exit}'", physAddress)) != NULL))
         {
             while (fgets(HostName, HostNameLen, fp) != NULL)
             {
