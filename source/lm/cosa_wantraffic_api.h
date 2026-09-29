@@ -211,6 +211,8 @@ typedef struct _stClientInfo_t {
     ULONG                 TxBytes;
     ULONG                 RxBytesTot;
     ULONG                 TxBytesTot;
+    ULONG                 RxBytesBase;
+    ULONG                 TxBytesBase;
 } stClientInfo_t,  *pstClientInfo_t;
 
 typedef struct _stDSCPInfo_t  {
