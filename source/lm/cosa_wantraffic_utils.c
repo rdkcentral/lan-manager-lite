@@ -73,16 +73,11 @@
 #include <stdbool.h>
 #include "utapi/utapi.h"
 #include "ansc_platform.h"
-#include "syscfg/syscfg.h"
 #include "safec_lib_common.h"
 #include "cosa_wantraffic_api.h"
 #include "cosa_wantraffic_utils.h"
+#include "lm_rbus_api.h"
 
-#define ETH_WAN_ENABLE_STRING    "eth_wan_enabled"
-//this is to test FORCE MERGE
-#if defined(_SR300_PRODUCT_REQ_) || defined(_RDKB_GLOBAL_PRODUCT_REQ_)
-extern rbusHandle_t rbus_handle;
-#endif
 
 static UINT EnabledDscpCount = 0;
 
@@ -120,154 +115,187 @@ CHAR* RemoveSpaces(CHAR *str)
     str[j] = '\0';
     return str;
 }
-#if defined(_SR300_PRODUCT_REQ_) || defined(_RDKB_GLOBAL_PRODUCT_REQ_)
 /**********************************************************************
     function:
-        GetCurrentActiveInterface
+        GetWanModeAndWtcIndex
     description:
-        This function is called to get active interface from rbus
-    output argument:
-        CHAR*    str,    interface name which is active
-    return:
-        INT    status
-**********************************************************************/
-INT GetCurrentActiveInterface(CHAR *ifname)
-{
-    rbusValue_t value;
-    int rc = RBUS_ERROR_SUCCESS;
-    char* val = NULL, *token = NULL, c;
-
-    rc = rbus_get(rbus_handle, TR181_ACTIVE_INTERFACE, &value);
-
-    if(rc == RBUS_ERROR_SUCCESS)
-    {
-        val = rbusValue_ToString(value,0,0);
-        rbusValue_Release(value);
-        if(val)
-        {
-            if(strlen(val) > 0)
-            {
-                WTC_LOG_INFO("WAN Interfaces status = %s",val);
-            }
-            else
-            {
-                WTC_LOG_INFO("rbus val is empty for active interface");
-                return 0;
-            }
-        }
-        else
-        {
-            WTC_LOG_INFO("rbus val NULL for active interface");
-            return 0;
-        }
-    }
-    else
-    {
-        WTC_LOG_INFO("rbus get failed for %s", TR181_ACTIVE_INTERFACE);
-        return 0;
-    }
-
-   //DSL,1|WANOE,0|ADSL,0
-    token = strtok(val, "|"); 
-    while (token != NULL) 
-    {
-        c = token[strlen(token)-1]; // last char in token
-        if(c == '1') 
-        {
-            if((strlen(token)-2) < BUFLEN_64) 
-            {
-                strncpy(ifname, token, strlen(token)-2); 
-                WTC_LOG_INFO("Current active interface = %s",ifname);
-                return 1;
-            }
-            else
-            {
-                WTC_LOG_INFO("Active interface is invalid");
-                return 0;
-            }
-        }
-        token = strtok(NULL, "|");
-    }
-    
-    WTC_LOG_INFO("Getting current active interface failed");
-
-    return 0;
-
-}
-#endif
-/**********************************************************************
-    function:
-        GetEthWANIndex
-    description:
-        This function is called to retrieve the Wan mode
+        This function retrieves active WAN mode and corresponding WTC index.
     argument:
-        None
-    return:     WAN_INTERFACE if succeeded;
-                0 if error.
+        UINT*           wtcIndex
+    return:     WAN mode, or INVALID_MODE if the mode is unavailable.
 **********************************************************************/
-
-WAN_INTERFACE GetEthWANIndex(VOID)
+WAN_INTERFACE GetWanModeAndWtcIndex(UINT *wtcIndex)
 {
-    errno_t rc = -1;
-    INT ind = -1;
+    rbusValue_t value = NULL;
+    const CHAR *status = NULL;
+    CHAR activeStatus[BUFLEN_256] = { '\0' };
+    CHAR availableStatus[BUFLEN_256] = { '\0' };
+    CHAR *entry = NULL;
+    CHAR *entryContext = NULL;
+    CHAR *name = NULL;
+    CHAR *nameContext = NULL;
+    CHAR *activeFlag = NULL;
+    WAN_INTERFACE activeMode = INVALID_MODE;
 
-    #ifdef _SR300_PRODUCT_REQ_
-    /* Use wan manager data model and rbus APIS for sky platform
-    "Device.X_RDK_WanManager.InterfaceActiveStatus"
-    //DSL,0|WANOE,0|ADSL,0 -> Initial value
-    //DSL,1|WANOE,0|ADSL,0 -> when DSL is up(vdsl or adsl) -> Interface.1
-    //DSL,0|WANOE,1|ADSL,0 -> when WANoE is up -> Interface.2
-    */
-    CHAR active_interface_name[BUFLEN_64]={'\0'};
-    if(GetCurrentActiveInterface(active_interface_name) == 1)
+    if (wtcIndex == NULL)
     {
-
-        rc = strcmp_s(active_interface_name, strlen(active_interface_name), "WANOE", &ind);
-        ERR_CHK(rc);
-        if ((rc == EOK) && (!ind))
-        {
-            WTC_LOG_INFO("EWAN Mode");
-            return EWAN;
-        }
-        else
-        {
-            WTC_LOG_INFO("DSL Mode");
-            return DSL;
-        }
-    }
-    else 
-    {
-        WTC_LOG_INFO("Active interface is INVALID");
         return INVALID_MODE;
     }
-    // other platforms which uses ETH_WAN_ENABLE_STRING
-    #else
-    CHAR eth_wan_enabled[BUFLEN_64]={'\0'};
-    if(syscfg_get(NULL,ETH_WAN_ENABLE_STRING,eth_wan_enabled,sizeof(eth_wan_enabled)) == 0 )
+
+    *wtcIndex = 0;
+
+    if ((rbus_get(get_rbus_handle(), TR181_ACTIVE_INTERFACE, &value) == RBUS_ERROR_SUCCESS) &&
+        ((status = rbusValue_ToString(value, NULL, 0)) != NULL) &&
+        (strcpy_s(activeStatus, sizeof(activeStatus), status) == EOK))
     {
-        rc = strcmp_s(eth_wan_enabled, strlen(eth_wan_enabled), "true", &ind);
-        ERR_CHK(rc);
-        if ((rc == EOK) && (!ind))
-        {
-            WTC_LOG_INFO("EWAN Mode");
-#if  defined (_SCER11BEL_PRODUCT_REQ_) || defined (_SCXF11BFL_PRODUCT_REQ_)
-            return EWAN - 1;
-#else
-            return EWAN;
-#endif
-        }
-        else
-        {
-            WTC_LOG_INFO("DOCSIS Mode");
-            return DOCSIS;
-        }
+        rbusValue_Release(value);
+        value = NULL;
     }
     else
     {
-        WTC_LOG_ERROR("Syscfg_get failed to get wan mode");
+        WTC_LOG_ERROR("Failed to get %s", TR181_ACTIVE_INTERFACE);
+        if (value != NULL)
+        {
+            rbusValue_Release(value);
+        }
         return INVALID_MODE;
     }
-    #endif
+
+    if ((rbus_get(get_rbus_handle(), TR181_AVAILABLE_INTERFACE, &value) != RBUS_ERROR_SUCCESS) ||
+        ((status = rbusValue_ToString(value, NULL, 0)) == NULL) ||
+        (strcpy_s(availableStatus, sizeof(availableStatus), status) != EOK))
+    {
+        WTC_LOG_INFO("WanManager interface status unavailable");
+        if (value != NULL)
+        {
+            rbusValue_Release(value);
+        }
+        return INVALID_MODE;
+    }
+    rbusValue_Release(value);
+    value = NULL;
+
+    entry = strtok_r(activeStatus, "|", &entryContext);
+    while (entry != NULL)
+    {
+        name = strtok_r(entry, ",", &nameContext);
+        activeFlag = strtok_r(NULL, ",", &nameContext);
+        if ((name != NULL) && (activeFlag != NULL) && (strcmp(activeFlag, "1") == 0))
+        {
+            if ((strcmp(name, "DOCSIS") == 0) || (strcmp(name, "DSL") == 0) ||
+                (strcmp(name, "ADSL") == 0))
+            {
+                activeMode = DOCSIS;
+            }
+            else if (strcmp(name, "WANOE") == 0)
+            {
+                activeMode = EWAN;
+            }
+            else if (strcmp(name, "EPON") == 0)
+            {
+                activeMode = EPON;
+            }
+            else if (strcmp(name, "XGSPON") == 0)
+            {
+                activeMode = XGSPON;
+            }
+            if (activeMode != INVALID_MODE)
+            {
+                break;
+            }
+        }
+        entry = strtok_r(NULL, "|", &entryContext);
+    }
+
+    if (activeMode == INVALID_MODE)
+    {
+        WTC_LOG_ERROR("No supported active WAN interface in %s", activeStatus);
+        return INVALID_MODE;
+    }
+
+#if SUPPORTED_WAN_MODES == 1
+    *wtcIndex = 0;
+    WTC_LOG_INFO("WanManager resolved WAN mode %d, WTC index %d", activeMode, *wtcIndex);
+    return activeMode;
+#else
+    {
+    CHAR availableStatusCopy[BUFLEN_256] = { '\0' };
+    WAN_INTERFACE availableMode = INVALID_MODE;
+    UINT modeIndex = 0;
+    UINT index = 0;
+    BOOL modePresent = FALSE;
+
+    for (modeIndex = DOCSIS; modeIndex < WAN_INTERFACE_MAX; modeIndex++)
+    {
+        if (strcpy_s(availableStatusCopy, sizeof(availableStatusCopy), availableStatus) != EOK)
+        {
+            return INVALID_MODE;
+        }
+
+        modePresent = FALSE;
+        entryContext = NULL;
+        entry = strtok_r(availableStatusCopy, "|", &entryContext);
+        while (entry != NULL)
+        {
+            name = strtok_r(entry, ",", &nameContext);
+            availableMode = INVALID_MODE;
+            if (name != NULL)
+            {
+                if ((strcmp(name, "DOCSIS") == 0) || (strcmp(name, "DSL") == 0) ||
+                    (strcmp(name, "ADSL") == 0))
+                {
+                    availableMode = DOCSIS;
+                }
+                else if (strcmp(name, "WANOE") == 0)
+                {
+                    availableMode = EWAN;
+                }
+                else if (strcmp(name, "EPON") == 0)
+                {
+                    availableMode = EPON;
+                }
+                else if (strcmp(name, "XGSPON") == 0)
+                {
+                    availableMode = XGSPON;
+                }
+            }
+
+            if (availableMode == (WAN_INTERFACE)modeIndex)
+            {
+                modePresent = TRUE;
+                break;
+            }
+            entry = strtok_r(NULL, "|", &entryContext);
+        }
+
+        if (!modePresent)
+        {
+            continue;
+        }
+
+        if ((WAN_INTERFACE)modeIndex == activeMode)
+        {
+            if (index >= SUPPORTED_WAN_MODES)
+            {
+                WTC_LOG_ERROR("WTC index %d exceeds supported WAN modes %d",
+                              index, SUPPORTED_WAN_MODES);
+                return INVALID_MODE;
+            }
+            *wtcIndex = index;
+            WTC_LOG_INFO("WanManager resolved WAN mode %d, WTC index %d", activeMode, *wtcIndex);
+            return activeMode;
+        }
+        index++;
+    }
+
+    WTC_LOG_ERROR("Active WAN mode %d is not available in %s", activeMode, availableStatus);
+    return INVALID_MODE;
+    }
+#endif
+
+    /* The legacy syscfg fallback is intentionally disabled. At boot, an
+     * unavailable mode remains INVALID_MODE until InterfaceActiveStatus arrives. */
+    return INVALID_MODE;
 }
 
 /**********************************************************************
