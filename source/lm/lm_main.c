@@ -1514,6 +1514,13 @@ static PLmObjectHostIPAddress Add_Update_IPv4Address (PLmObjectHost pHost, char 
 {
 	int *num;
 	PLmObjectHostIPAddress pIpAddrList, pCur, pPre, *ppHeader;
+	struct in_addr address;
+
+    if(!pHost || !ipAddress || ipAddress[0] == '\0' ||
+       inet_pton(AF_INET, ipAddress, &address) != 1)
+    {
+        return NULL;
+    }
 
 	num = &(pHost->numIPv4Addr);
 	pIpAddrList = pHost->ipv4AddrArray;
@@ -1693,12 +1700,16 @@ PLmObjectHostIPAddress Host_AddIPAddress (PLmObjectHost pHost, char *ipAddress, 
 {
     PLmObjectHostIPAddress pCur;
 
-	if(!ipAddress)
+    if(!pHost || !ipAddress || ipAddress[0] == '\0')
+    {
 		return NULL;
+    }
 
     if(version == 4)
 	{
 		pCur = Add_Update_IPv4Address(pHost,ipAddress);
+        if(!pCur)
+            return NULL;
 		LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]) , ipAddress);
     }
 	else
@@ -1970,14 +1981,19 @@ static enum LM_ADDR_SOURCE _get_addr_source(char *source)
 
 static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
 {
-    int i;   
+    int i;
     PLmObjectHostIPAddress pIpSrc; 
-    pDestHost->ipv4AddrAmount = pHost->numIPv4Addr;
+    pDestHost->ipv4AddrAmount = 0;
     pDestHost->ipv6AddrAmount = pHost->numIPv6Addr;
     LM_ip_addr_t *pIp;
     for(i=0, pIpSrc = pHost->ipv4AddrArray; pIpSrc != NULL && i < LM_MAX_IP_AMOUNT;i++, pIpSrc = pIpSrc->pNext){
-        pIp = &(pDestHost->ipv4AddrList[i]);
-        if(inet_pton(AF_INET, pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId],pIp->addr) != 1)
+          if(!pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId] ||
+              pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId][0] == '\0')
+          {
+            continue;
+          }
+            pIp = &(pDestHost->ipv4AddrList[pDestHost->ipv4AddrAmount]);
+          if(inet_pton(AF_INET, pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId],pIp->addr) != 1)
         {
          CcspTraceWarning(("Invalid IP Address %s\n",pIpSrc->pStringParaValue[LM_HOST_IPAddress_IPAddressId]));
          continue;
@@ -1988,6 +2004,7 @@ static void _get_host_ipaddress(LM_host_t *pDestHost, PLmObjectHost pHost)
             pIp->LeaseTime = pIpSrc->LeaseTime;
         else
             pIp->LeaseTime = 0;
+        pDestHost->ipv4AddrAmount++;
    }
     
     
@@ -2770,7 +2787,10 @@ static void Hosts_SyncArp (void)
 						  */
 						pIP = Host_AddIPv4Address(pHost, (char *)hosts[i].ipAddr);
 
-                        Host_SetIPAddress(pIP, 0, "NONE");
+                        if (pIP != NULL)
+                        {
+                            Host_SetIPAddress(pIP, 0, "NONE");
+                        }
 
                         _getLanHostComments((char *)hosts[i].phyAddr, comments);
                         if ( comments[0] != 0 )
