@@ -145,8 +145,7 @@ WAN_INTERFACE GetWanModeAndWtcIndex(UINT *wtcIndex)
     *wtcIndex = 0;
 
     if ((rbus_get(get_rbus_handle(), TR181_ACTIVE_INTERFACE, &value) == RBUS_ERROR_SUCCESS) &&
-        ((status = rbusValue_ToString(value, NULL, 0)) != NULL) &&
-        (strcpy_s(activeStatus, sizeof(activeStatus), status) == EOK))
+        ((status = rbusValue_ToString(value, activeStatus, sizeof(activeStatus))) != NULL))
     {
         rbusValue_Release(value);
         value = NULL;
@@ -162,8 +161,7 @@ WAN_INTERFACE GetWanModeAndWtcIndex(UINT *wtcIndex)
     }
 
     if ((rbus_get(get_rbus_handle(), TR181_AVAILABLE_INTERFACE, &value) != RBUS_ERROR_SUCCESS) ||
-        ((status = rbusValue_ToString(value, NULL, 0)) == NULL) ||
-        (strcpy_s(availableStatus, sizeof(availableStatus), status) != EOK))
+        ((status = rbusValue_ToString(value, availableStatus, sizeof(availableStatus))) == NULL))
     {
         WTC_LOG_INFO("WanManager interface status unavailable");
         if (value != NULL)
