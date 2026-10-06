@@ -353,8 +353,8 @@ static void Host_FreeMloLinks (PLmObjectHost pHost);
 static void Hosts_SyncDHCP(void);
 static void Sendmsg_dnsmasq(BOOL enablePresenceFeature);
 static void Send_Eth_Host_Sync_Req(void);
-static void LM_lowpower_tick(bool wifi_present);
-static bool LM_count_active_wifi_hosts(void);
+static void lm_update_lowpower_state(bool wifi_present);
+static bool lm_is_active_wifi_clients_present(void);
 
 #if defined (CONFIG_SYSTEM_MOCA)
 static void Send_MoCA_Host_Sync_Req(void);
@@ -2821,19 +2821,21 @@ static void Hosts_SyncDHCP(void)
    Exit immediately when a WiFi client reappears. */
 #define LM_LOW_POWER_IDLE_SECS   (16 * 60)
 static pthread_mutex_t g_LowPowerMutex  = PTHREAD_MUTEX_INITIALIZER;
-static time_t          g_WiFiIdleSince  = 0;
-static BOOL            g_LowPowerActive = FALSE;
+static struct timespec g_WiFiIdleSince;
+static bool            g_WiFiIdleTracking = false;
+static bool            g_LowPowerActive = false;
 
 
-static bool LM_count_active_wifi_hosts(void)
+static bool lm_is_active_wifi_clients_present(void)
 {
     pthread_mutex_lock(&LmHostObjectMutex);
     for (int i = 0; i < lmHosts.numHost; i++) {
         PLmObjectHost pHost = lmHosts.hostArray[i];
         if (pHost && pHost->bBoolParaValue[LM_HOST_ActiveId])
         {
-            if(strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi") ||
-               pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId])
+            if ((pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
+                 strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
+                pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId])
             {
                 pthread_mutex_unlock(&LmHostObjectMutex);
                 return true;   
@@ -2845,36 +2847,41 @@ static bool LM_count_active_wifi_hosts(void)
 }
 
 /* stub — real platform hook to be wired in later */
-static void LM_enter_low_power_mode(void)
+static void lm_enter_low_power_mode(void)
 {
     CcspTraceWarning(("RDKB_LOWPOWER: entering low power mode (WiFi idle >= %d min)\n",
                       LM_LOW_POWER_IDLE_SECS / 60));
     /* TODO: lowPowerMode(true); */
 }
 
-static void LM_exit_low_power_mode(void)
+static void lm_exit_low_power_mode(void)
 {
     CcspTraceWarning(("RDKB_LOWPOWER: exiting low power mode\n"));
     /* TODO: lowPowerMode(false); */
 }
 
-static void LM_lowpower_tick(bool wifi_present)
+static void lm_update_lowpower_state(bool wifi_present)
 {
-    time_t now = time(NULL);
+    struct timespec now;
+    if (clock_gettime(CLOCK_BOOTTIME, &now) != 0) {
+        CcspTraceWarning(("RDKB_LOWPOWER: CLOCK_BOOTTIME read failed\n"));
+        return;
+    }
 
     pthread_mutex_lock(&g_LowPowerMutex);
     if (!wifi_present) {
-        if (g_WiFiIdleSince == 0) {
+        if (!g_WiFiIdleTracking) {
             g_WiFiIdleSince = now;
+            g_WiFiIdleTracking = true;
         } else if (!g_LowPowerActive &&
-                   (now - g_WiFiIdleSince) >= LM_LOW_POWER_IDLE_SECS) {
-            LM_enter_low_power_mode();
+               now.tv_sec >= g_WiFiIdleSince.tv_sec + LM_LOW_POWER_IDLE_SECS) {
+            lm_enter_low_power_mode();
             g_LowPowerActive = TRUE;
         }
     } else {
-        g_WiFiIdleSince = 0;
+        g_WiFiIdleTracking = false;
         if (g_LowPowerActive) {
-            LM_exit_low_power_mode();
+            lm_exit_low_power_mode();
             g_LowPowerActive = FALSE;
         }
     }
@@ -3037,7 +3044,7 @@ static void *Hosts_StatSyncThreadFunc(void *args)
             Hosts_SyncDHCP();
             Hosts_SyncArp();
             Add_IPv6_from_Dibbler();
-            LM_lowpower_tick(LM_count_active_wifi_hosts());
+            lm_update_lowpower_state(lm_is_active_wifi_clients_present());
         }
     }
     return NULL;
