@@ -355,6 +355,7 @@ static void Sendmsg_dnsmasq(BOOL enablePresenceFeature);
 static void Send_Eth_Host_Sync_Req(void);
 static void lm_update_lowpower_state(bool wifi_present);
 static bool lm_is_active_wifi_clients_present(void);
+static bool lm_is_lowpower_enabled(void);
 
 #if defined (CONFIG_SYSTEM_MOCA)
 static void Send_MoCA_Host_Sync_Req(void);
@@ -2826,6 +2827,30 @@ static bool            g_WiFiIdleTracking = false;
 static bool            g_LowPowerActive = false;
 
 
+/* Set from partners_defaults.json, so it only changes across a reboot. */
+static bool lm_is_lowpower_enabled(void)
+{
+    static int enabled = -1;
+
+    if (enabled < 0)
+    {
+        char buf[8] = {0};
+        int ret = syscfg_get(NULL, "lpm_enable", buf, sizeof(buf));
+
+        if (ret != 0)
+        {
+            CcspTraceWarning(("RDKB_LOWPOWER: syscfg_get for lpm_enable failed (%d)\n", ret));
+        }
+        else
+        {
+            enabled = (0 == strcmp(buf, "true")) ? 1 : 0;
+        }
+    }
+
+    return (1 == enabled);
+}
+
+
 static bool lm_is_active_wifi_clients_present(void)
 {
     pthread_mutex_lock(&LmHostObjectMutex);
@@ -3044,7 +3069,10 @@ static void *Hosts_StatSyncThreadFunc(void *args)
             Hosts_SyncDHCP();
             Hosts_SyncArp();
             Add_IPv6_from_Dibbler();
-            lm_update_lowpower_state(lm_is_active_wifi_clients_present());
+            if (lm_is_lowpower_enabled())
+            {
+                lm_update_lowpower_state(lm_is_active_wifi_clients_present());
+            }
         }
     }
     return NULL;
