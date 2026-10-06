@@ -465,6 +465,8 @@ VOID WTC_ApplyStateChange
                                  , wanMode[index]
                                  , WTC_ThreadStatusToStr(thrdStatus));
                     WTC_SetThreadState(index,WTC_THRD_DISMISS);
+                    WTCinfo->WanMode = mode;
+                    WTCinfo->WanModeWtcIndex = i;
                 }
                 WTCinfo->WTCConfigFlag[index] &= ~WTC_WANMODE_CHANGE;
             }

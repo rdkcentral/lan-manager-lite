@@ -599,6 +599,13 @@ static void eventReceiveHandler(
                     if(WTCinfo)
                     {
                         pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
+                        WTCinfo->WanMode = GetWanModeAndWtcIndex(&WTCinfo->WanModeWtcIndex);
+                        if (WTCinfo->WanMode == INVALID_MODE)
+                        {
+                            CcspTraceError(("Unable to resolve WAN mode and WTC index\n"));
+                            pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
+                            return;
+                        }
                         WTCinfo->WTCConfigFlag[WTCinfo->WanModeWtcIndex] |= WTC_WANMODE_CHANGE;
                         pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
                         WTC_ApplyStateChange();
