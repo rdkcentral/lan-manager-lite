@@ -2898,12 +2898,17 @@ static void lm_update_lowpower_state(bool wifi_present)
         if (!g_WiFiIdleTracking) {
             g_WiFiIdleSince = now;
             g_WiFiIdleTracking = true;
+            CcspTraceWarning(("RDKB_LOWPOWER: WiFi idle detected; %d min timer started\n",
+                              LM_LOW_POWER_IDLE_SECS / 60));
         } else if (!g_LowPowerActive &&
                now.tv_sec >= g_WiFiIdleSince.tv_sec + LM_LOW_POWER_IDLE_SECS) {
             lm_enter_low_power_mode();
             g_LowPowerActive = TRUE;
         }
     } else {
+        if (g_WiFiIdleTracking && !g_LowPowerActive) {
+            CcspTraceWarning(("RDKB_LOWPOWER: WiFi client detected; idle timer reset before LPM\n"));
+        }
         g_WiFiIdleTracking = false;
         if (g_LowPowerActive) {
             lm_exit_low_power_mode();
