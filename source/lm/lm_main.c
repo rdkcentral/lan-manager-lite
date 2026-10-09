@@ -353,6 +353,8 @@ static void Host_FreeMloLinks (PLmObjectHost pHost);
 static void Hosts_SyncDHCP(void);
 static void Sendmsg_dnsmasq(BOOL enablePresenceFeature);
 static void Send_Eth_Host_Sync_Req(void);
+static bool lm_is_lowpower_enabled(void);
+static void lm_publish_active_wifi_clients_state(void);
 
 #if defined (CONFIG_SYSTEM_MOCA)
 static void Send_MoCA_Host_Sync_Req(void);
@@ -2815,6 +2817,86 @@ static void Hosts_SyncDHCP(void)
     lm_wrapper_get_dhcpv4_reserved();
 }
 
+/* Enter low-power after WiFi has been idle for LM_LOW_POWER_IDLE_SECS.
+   Exit immediately when a WiFi client reappears. */
+#define LM_LOW_POWER_IDLE_SECS   (16 * 60)
+static pthread_mutex_t g_LowPowerMutex  = PTHREAD_MUTEX_INITIALIZER;
+static struct timespec g_WiFiIdleSince;
+static bool            g_WiFiIdleTracking = false;
+static bool            g_LowPowerActive = false;
+
+
+/* Set from partners_defaults.json, so it only changes across a reboot. */
+static bool lm_is_lowpower_enabled(void)
+{
+    static int enabled = -1;
+
+    if (enabled < 0)
+    {
+        char buf[8] = {0};
+        int ret = syscfg_get(NULL, "lpm_enable", buf, sizeof(buf));
+
+        if (ret != 0)
+        {
+            CcspTraceWarning(("RDKB_LOWPOWER: syscfg_get for lpm_enable failed (%d)\n", ret));
+        }
+        else
+        {
+            enabled = (0 == strcmp(buf, "true")) ? 1 : 0;
+        }
+    }
+
+    return (1 == enabled);
+}
+
+bool lm_get_active_wifi_clients_present(void)
+{
+    bool current = false;
+
+    pthread_mutex_lock(&LmHostObjectMutex);
+    for (int i = 0; i < lmHosts.numHost; i++) {
+        PLmObjectHost pHost = lmHosts.hostArray[i];
+        if (pHost && pHost->bBoolParaValue[LM_HOST_ActiveId])
+        {
+            if ((pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
+                 strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
+                pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId])
+            {
+                current = true;
+                break;
+            }
+        }
+    }
+    pthread_mutex_unlock(&LmHostObjectMutex);
+
+    return current;
+}
+
+static void lm_publish_active_wifi_clients_state(void)
+{
+    static bool lastPublished = false;
+    static bool hasPublishedValue = false;
+    bool current;
+
+    /* Publish only when at least one subscriber is present */
+    if (!hasActiveWifiClientsSubscribers())
+    {
+        return;
+    }
+
+    current = lm_get_active_wifi_clients_present();
+
+    /* Publish only the initial state and subsequent changes */
+    if (!hasPublishedValue || current != lastPublished)
+    {
+        if (publishActiveWifiClientsEvent(current) == RBUS_ERROR_SUCCESS)
+        {
+            lastPublished = current;
+            hasPublishedValue = true;
+        }
+    }
+}
+
 static void *Hosts_LoggingThread(void *args)
 {
     UNREFERENCED_PARAMETER(args);
@@ -2971,6 +3053,10 @@ static void *Hosts_StatSyncThreadFunc(void *args)
             Hosts_SyncDHCP();
             Hosts_SyncArp();
             Add_IPv6_from_Dibbler();
+            if (lm_is_lowpower_enabled())
+            {
+                lm_publish_active_wifi_clients_state();
+            }
         }
     }
     return NULL;
@@ -3398,6 +3484,10 @@ if(checkRbusEnabled()) {
         if(regLMLiteDataModel() == 0)
         {
             CcspTraceInfo((" %s: lmLite Data Model registered successfully\n", __FUNCTION__));
+            if (regActiveWifiClientsEvent() != 0)
+            {
+                CcspTraceError((" %s: ActiveWiFiClientsPresent event registration failed\n", __FUNCTION__));
+            }
             /* Load initial value from PSM */
             int ret = 0;
             char *tmpchar = NULL;

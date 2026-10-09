@@ -45,6 +45,27 @@ rbusError_t lmliteRbusInit(char const* pRbusComponentName);
 
 #define LMLITE_MLO_RFC_PARAM "Device.DeviceInfo.X_RDKCENTRAL-COM_Report.NetworkDevicesStatus.MloRfcEnable"
 
+#define LMLITE_ACTIVE_WIFI_CLIENTS_EVENT "Device.X_RDKCENTRAL-COM_LM.ActiveWiFiClientsPresent"
+
+/**
+ * @brief Register the ActiveWiFiClientsPresent RBUS event element
+ * @return 0 for success, -1 for failure
+ */
+int regActiveWifiClientsEvent(void);
+
+/**
+ * @brief Publish the ActiveWiFiClientsPresent RBUS event
+ * @param[in] active Current active Wi-Fi client presence state
+ * @return RBUS_ERROR_SUCCESS on success (or no subscribers), rbusError_t otherwise
+ */
+rbusError_t publishActiveWifiClientsEvent(bool active);
+
+/**
+ * @brief Check whether the ActiveWiFiClientsPresent event has subscribers
+ * @return true if at least one subscriber is present, false otherwise
+ */
+bool hasActiveWifiClientsSubscribers(void);
+
 /**
  * @brief Get MLO RFC enable status
  * @return true if MLO lmLite is enabled, false otherwise

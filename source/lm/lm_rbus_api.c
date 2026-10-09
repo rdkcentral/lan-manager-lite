@@ -40,7 +40,16 @@
 #include <string.h>
 #include <stdbool.h>
 
+#define WIFI_CLIENTS_DATA_ELEM_COUNT  sizeof(dataElements)/sizeof(dataElements[0])
+
 static rbusHandle_t rbus_handle;
+
+/* Provided by lm_main.c: returns current active Wi-Fi client presence state */
+extern bool lm_get_active_wifi_clients_present(void);
+
+/* Tracks active subscribers for the ActiveWiFiClientsPresent event */
+static int g_activeWifiClientsSubscribers = 0;
+static pthread_mutex_t g_activeWifiClientsSubMutex = PTHREAD_MUTEX_INITIALIZER;
 
 pthread_mutex_t g_mloRfcMutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -394,6 +403,166 @@ int regLMLiteDataModel(void)
         return -1;
     }
     return 0;
+}
+
+/**
+ * @brief RBUS Get handler for the ActiveWiFiClientsPresent event parameter
+ */
+static rbusError_t lmLiteActiveWifiClientsGetHandler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t* opts)
+{
+    (void)handle;
+    (void)opts;
+
+    const char *propertyName;
+    propertyName = rbusProperty_GetName(property);
+    if (propertyName == NULL)
+    {
+        CcspTraceError(("%s: Unable to handle get request for property\n", __FUNCTION__));
+        return RBUS_ERROR_INVALID_INPUT;
+    }
+
+    if (strcmp(propertyName, LMLITE_ACTIVE_WIFI_CLIENTS_EVENT) != 0)
+    {
+        CcspTraceError(("%s: Unexpected parameter %s\n", __FUNCTION__, propertyName));
+        return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
+    }
+
+    bool active = lm_get_active_wifi_clients_present();
+
+    rbusValue_t value;
+    rbusValue_Init(&value);
+    rbusValue_SetBoolean(value, active);
+    rbusProperty_SetValue(property, value);
+    rbusValue_Release(value);
+
+    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s: %s value fetched is %s\n", __FUNCTION__, propertyName, active ? "true" : "false"));
+    return RBUS_ERROR_SUCCESS;
+}
+
+/**
+ * @brief RBUS Event subscribe handler for the ActiveWiFiClientsPresent event
+ */
+static rbusError_t lmLiteActiveWifiClientsEventSubHandler(rbusHandle_t handle, rbusEventSubAction_t action,
+                                                          const char *eventName, rbusFilter_t filter,
+                                                          int32_t interval, bool *autoPublish)
+{
+    (void)handle;
+    (void)filter;
+    (void)interval;
+
+    if (autoPublish != NULL)
+    {
+        *autoPublish = false;
+    }
+
+    if (eventName == NULL)
+    {
+        CcspTraceError(("%s: eventName is NULL\n", __FUNCTION__));
+        return RBUS_ERROR_INVALID_INPUT;
+    }
+
+    if (strcmp(eventName, LMLITE_ACTIVE_WIFI_CLIENTS_EVENT) != 0)
+    {
+        CcspTraceError(("%s: Unexpected event %s\n", __FUNCTION__, eventName));
+        return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
+    }
+
+    pthread_mutex_lock(&g_activeWifiClientsSubMutex);
+    if (action == RBUS_EVENT_ACTION_SUBSCRIBE)
+    {
+        g_activeWifiClientsSubscribers++;
+    }
+    else if (g_activeWifiClientsSubscribers > 0)
+    {
+        g_activeWifiClientsSubscribers--;
+    }
+    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s: %s for event %s, subscribers=%d\n", __FUNCTION__,
+                            (action == RBUS_EVENT_ACTION_SUBSCRIBE) ? "subscribe" : "unsubscribe",
+                            eventName, g_activeWifiClientsSubscribers));
+    pthread_mutex_unlock(&g_activeWifiClientsSubMutex);
+    return RBUS_ERROR_SUCCESS;
+}
+
+/**
+ * @brief Check whether the ActiveWiFiClientsPresent event has subscribers
+ */
+bool hasActiveWifiClientsSubscribers(void)
+{
+    bool hasSubscribers;
+    pthread_mutex_lock(&g_activeWifiClientsSubMutex);
+    hasSubscribers = (g_activeWifiClientsSubscribers > 0);
+    pthread_mutex_unlock(&g_activeWifiClientsSubMutex);
+    return hasSubscribers;
+}
+
+/**
+ * @brief Register the ActiveWiFiClientsPresent RBUS event element
+ */
+int regActiveWifiClientsEvent(void)
+{
+    rbusError_t ret = RBUS_ERROR_SUCCESS;
+
+    if (rbus_handle == NULL)
+    {
+        CcspTraceError((" %s: rbus handle is NULL\n", __FUNCTION__));
+        return -1;
+    }
+
+    rbusDataElement_t dataElements[1] = {
+      {LMLITE_ACTIVE_WIFI_CLIENTS_EVENT, RBUS_ELEMENT_TYPE_EVENT, {lmLiteActiveWifiClientsGetHandler, NULL, NULL, NULL, lmLiteActiveWifiClientsEventSubHandler, NULL}}
+    };
+
+    ret = rbus_regDataElements(rbus_handle, WIFI_CLIENTS_DATA_ELEM_COUNT, dataElements);
+    if (ret != RBUS_ERROR_SUCCESS)
+    {
+        CcspTraceError((" %s: rbus_regDataElements failed for %s with error %d\n", __FUNCTION__, LMLITE_ACTIVE_WIFI_CLIENTS_EVENT, ret));
+        return -1;
+    }
+    CcspTraceInfo(("Registered event %s\n", LMLITE_ACTIVE_WIFI_CLIENTS_EVENT));
+    return 0;
+}
+
+/**
+ * @brief Publish the ActiveWiFiClientsPresent RBUS event
+ */
+rbusError_t publishActiveWifiClientsEvent(bool active)
+{
+    rbusEvent_t event;
+    rbusObject_t data;
+    rbusValue_t value;
+    rbusError_t rc = RBUS_ERROR_SUCCESS;
+
+    if (rbus_handle == NULL)
+    {
+        CcspTraceError((" %s: rbus handle is NULL\n", __FUNCTION__));
+        return RBUS_ERROR_NOT_INITIALIZED;
+    }
+
+    rbusValue_Init(&value);
+    rbusValue_SetBoolean(value, active);
+
+    rbusObject_Init(&data, NULL);
+    rbusObject_SetValue(data, LMLITE_ACTIVE_WIFI_CLIENTS_EVENT, value);
+
+    event.name = LMLITE_ACTIVE_WIFI_CLIENTS_EVENT;
+    event.data = data;
+    event.type = RBUS_EVENT_VALUE_CHANGED;
+
+    rc = rbusEvent_Publish(rbus_handle, &event);
+
+    rbusValue_Release(value);
+    rbusObject_Release(data);
+
+    if (rc == RBUS_ERROR_NOSUBSCRIBERS)
+    {
+        CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s: no subscribers for %s\n", __FUNCTION__, LMLITE_ACTIVE_WIFI_CLIENTS_EVENT));
+        rc = RBUS_ERROR_SUCCESS;
+    }
+    else if (rc != RBUS_ERROR_SUCCESS)
+    {
+        CcspTraceError((" %s: rbusEvent_Publish failed for %s, err %d\n", __FUNCTION__, LMLITE_ACTIVE_WIFI_CLIENTS_EVENT, rc));
+    }
+    return rc;
 }
 
 char* GetRbusString(const char* param)

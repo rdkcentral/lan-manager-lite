@@ -324,6 +324,8 @@ PLmObjectHostIPAddress Host_AddIPAddress (PLmObjectHost pHost, char *ipAddress, 
 
 void Hosts_PollHost (void);
 
+bool lm_get_active_wifi_clients_present(void);
+
 void LM_main (void);
 
 int LM_get_online_device (void);
