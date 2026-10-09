@@ -65,6 +65,7 @@
 #ifndef  _LM_MAIN_H_
 #define  _LM_MAIN_H_
 
+#include <stdbool.h>
 #include "lm_api.h"
 #include "network_devices_interface.h"
 

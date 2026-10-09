@@ -2817,15 +2817,6 @@ static void Hosts_SyncDHCP(void)
     lm_wrapper_get_dhcpv4_reserved();
 }
 
-/* Enter low-power after WiFi has been idle for LM_LOW_POWER_IDLE_SECS.
-   Exit immediately when a WiFi client reappears. */
-#define LM_LOW_POWER_IDLE_SECS   (16 * 60)
-static pthread_mutex_t g_LowPowerMutex  = PTHREAD_MUTEX_INITIALIZER;
-static struct timespec g_WiFiIdleSince;
-static bool            g_WiFiIdleTracking = false;
-static bool            g_LowPowerActive = false;
-
-
 /* Set from partners_defaults.json, so it only changes across a reboot. */
 static bool lm_is_lowpower_enabled(void)
 {
