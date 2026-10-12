@@ -530,11 +530,12 @@ int regActiveWifiClientsEvent(void)
 /**
  * @brief Publish the ActiveWiFiClientsPresent RBUS event
  */
-rbusError_t publishActiveWifiClientsEvent(bool active)
+rbusError_t publishActiveWifiClientsEvent(bool active, bool previous)
 {
     rbusEvent_t event;
     rbusObject_t data;
     rbusValue_t value;
+    rbusValue_t oldValue;
     rbusError_t rc = RBUS_ERROR_SUCCESS;
 
     if (rbus_handle == NULL)
@@ -546,8 +547,13 @@ rbusError_t publishActiveWifiClientsEvent(bool active)
     rbusValue_Init(&value);
     rbusValue_SetBoolean(value, active);
 
+    rbusValue_Init(&oldValue);
+    rbusValue_SetBoolean(oldValue, previous);
+
     rbusObject_Init(&data, NULL);
-    rbusObject_SetValue(data, LMLITE_ACTIVE_WIFI_CLIENTS_EVENT, value);
+    /* RBUS_EVENT_VALUE_CHANGED requires "value" and "oldValue" properties */
+    rbusObject_SetValue(data, "value", value);
+    rbusObject_SetValue(data, "oldValue", oldValue);
 
     event.name = LMLITE_ACTIVE_WIFI_CLIENTS_EVENT;
     event.data = data;
@@ -558,6 +564,7 @@ rbusError_t publishActiveWifiClientsEvent(bool active)
     rc = rbusEvent_Publish(rbus_handle, &event);
 
     rbusValue_Release(value);
+    rbusValue_Release(oldValue);
     rbusObject_Release(data);
 
     if (rc == RBUS_ERROR_NOSUBSCRIBERS)

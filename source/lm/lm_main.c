@@ -2891,7 +2891,7 @@ static void lm_publish_active_wifi_clients_state(void)
 
         CcspTraceInfo(("RDKB_LOWPOWER: %s: Publishing active Wi-Fi client state=%s\n",
                        __FUNCTION__, current ? "true" : "false"));
-        publishStatus = publishActiveWifiClientsEvent(current);
+        publishStatus = publishActiveWifiClientsEvent(current, hasPublishedValue ? lastPublished : !current);
         if (publishStatus == RBUS_ERROR_SUCCESS)
         {
             lastPublished = current;

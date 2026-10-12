@@ -55,10 +55,11 @@ int regActiveWifiClientsEvent(void);
 
 /**
  * @brief Publish the ActiveWiFiClientsPresent RBUS event
- * @param[in] active Current active Wi-Fi client presence state
+ * @param[in] active   Current (new) active Wi-Fi client presence state
+ * @param[in] previous Previous active Wi-Fi client presence state
  * @return RBUS_ERROR_SUCCESS on success (or no subscribers), rbusError_t otherwise
  */
-rbusError_t publishActiveWifiClientsEvent(bool active);
+rbusError_t publishActiveWifiClientsEvent(bool active, bool previous);
 
 /**
  * @brief Check whether the ActiveWiFiClientsPresent event has subscribers
