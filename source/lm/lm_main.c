@@ -2817,6 +2817,11 @@ static void Hosts_SyncDHCP(void)
     lm_wrapper_get_dhcpv4_reserved();
 }
 
+/* Enter low-power after WiFi has been idle for LM_LOW_POWER_IDLE_SECS.
+   Exit immediately when a WiFi client reappears. */
+#define LM_LOW_POWER_IDLE_SECS   (16 * 60)
+
+
 /* Set from partners_defaults.json, so it only changes across a reboot. */
 static bool lm_is_lowpower_enabled(void)
 {
@@ -2853,6 +2858,7 @@ bool lm_get_active_wifi_clients_present(void)
                  strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
                 pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId])
             {
+                CcspTraceInfo(("RDKB_LOWPOWER: %s: Active Wi-Fi client is present\n", __FUNCTION__));
                 current = true;
                 break;
             }
@@ -2872,6 +2878,7 @@ static void lm_publish_active_wifi_clients_state(void)
     /* Publish only when at least one subscriber is present */
     if (!hasActiveWifiClientsSubscribers())
     {
+        CcspTraceInfo(("RDKB_LOWPOWER: %s: No active Wi-Fi client subscribers; skipping publish\n", __FUNCTION__));
         return;
     }
 
@@ -2880,11 +2887,27 @@ static void lm_publish_active_wifi_clients_state(void)
     /* Publish only the initial state and subsequent changes */
     if (!hasPublishedValue || current != lastPublished)
     {
-        if (publishActiveWifiClientsEvent(current) == RBUS_ERROR_SUCCESS)
+        rbusError_t publishStatus;
+
+        CcspTraceInfo(("RDKB_LOWPOWER: %s: Publishing active Wi-Fi client state=%s\n",
+                       __FUNCTION__, current ? "true" : "false"));
+        publishStatus = publishActiveWifiClientsEvent(current);
+        if (publishStatus == RBUS_ERROR_SUCCESS)
         {
             lastPublished = current;
             hasPublishedValue = true;
+            CcspTraceInfo(("RDKB_LOWPOWER: %s: Active Wi-Fi client state published successfully\n", __FUNCTION__));
         }
+        else
+        {
+            CcspTraceError(("RDKB_LOWPOWER: %s: Failed to publish active Wi-Fi client state, error=%d\n",
+                            __FUNCTION__, publishStatus));
+        }
+    }
+    else
+    {
+        CcspTraceDebug(("RDKB_LOWPOWER: %s: Active Wi-Fi client state unchanged=%s; skipping publish\n",
+                        __FUNCTION__, current ? "true" : "false"));
     }
 }
 

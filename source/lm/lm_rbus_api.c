@@ -435,7 +435,7 @@ static rbusError_t lmLiteActiveWifiClientsGetHandler(rbusHandle_t handle, rbusPr
     rbusProperty_SetValue(property, value);
     rbusValue_Release(value);
 
-    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s: %s value fetched is %s\n", __FUNCTION__, propertyName, active ? "true" : "false"));
+    CcspTraceInfo(("RDKB_LOWPOWER: %s: %s value fetched is %s\n", __FUNCTION__, propertyName, active ? "true" : "false"));
     return RBUS_ERROR_SUCCESS;
 }
 
@@ -476,9 +476,9 @@ static rbusError_t lmLiteActiveWifiClientsEventSubHandler(rbusHandle_t handle, r
     {
         g_activeWifiClientsSubscribers--;
     }
-    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s: %s for event %s, subscribers=%d\n", __FUNCTION__,
-                            (action == RBUS_EVENT_ACTION_SUBSCRIBE) ? "subscribe" : "unsubscribe",
-                            eventName, g_activeWifiClientsSubscribers));
+    CcspTraceInfo(("RDKB_LOWPOWER: %s: %s for event %s, subscribers=%d\n", __FUNCTION__,
+                   (action == RBUS_EVENT_ACTION_SUBSCRIBE) ? "subscribe" : "unsubscribe",
+                   eventName, g_activeWifiClientsSubscribers));
     pthread_mutex_unlock(&g_activeWifiClientsSubMutex);
     return RBUS_ERROR_SUCCESS;
 }
@@ -489,9 +489,13 @@ static rbusError_t lmLiteActiveWifiClientsEventSubHandler(rbusHandle_t handle, r
 bool hasActiveWifiClientsSubscribers(void)
 {
     bool hasSubscribers;
+    int subscriberCount;
     pthread_mutex_lock(&g_activeWifiClientsSubMutex);
-    hasSubscribers = (g_activeWifiClientsSubscribers > 0);
+    subscriberCount = g_activeWifiClientsSubscribers;
+    hasSubscribers = (subscriberCount > 0);
     pthread_mutex_unlock(&g_activeWifiClientsSubMutex);
+    CcspTraceInfo(("RDKB_LOWPOWER: %s: ActiveWiFiClientsPresent subscribers=%d, present=%s\n",
+                   __FUNCTION__, subscriberCount, hasSubscribers ? "true" : "false"));
     return hasSubscribers;
 }
 
@@ -508,6 +512,7 @@ int regActiveWifiClientsEvent(void)
         return -1;
     }
 
+    CcspTraceInfo(("RDKB_LOWPOWER: Registering event %s\n", LMLITE_ACTIVE_WIFI_CLIENTS_EVENT));
     rbusDataElement_t dataElements[1] = {
       {LMLITE_ACTIVE_WIFI_CLIENTS_EVENT, RBUS_ELEMENT_TYPE_EVENT, {lmLiteActiveWifiClientsGetHandler, NULL, NULL, NULL, lmLiteActiveWifiClientsEventSubHandler, NULL}}
     };
@@ -518,7 +523,7 @@ int regActiveWifiClientsEvent(void)
         CcspTraceError((" %s: rbus_regDataElements failed for %s with error %d\n", __FUNCTION__, LMLITE_ACTIVE_WIFI_CLIENTS_EVENT, ret));
         return -1;
     }
-    CcspTraceInfo(("Registered event %s\n", LMLITE_ACTIVE_WIFI_CLIENTS_EVENT));
+    CcspTraceInfo(("RDKB_LOWPOWER: Registered event %s\n", LMLITE_ACTIVE_WIFI_CLIENTS_EVENT));
     return 0;
 }
 
@@ -548,6 +553,8 @@ rbusError_t publishActiveWifiClientsEvent(bool active)
     event.data = data;
     event.type = RBUS_EVENT_VALUE_CHANGED;
 
+    CcspTraceInfo(("RDKB_LOWPOWER: %s: Publishing %s=%s\n", __FUNCTION__, LMLITE_ACTIVE_WIFI_CLIENTS_EVENT,
+                   active ? "true" : "false"));
     rc = rbusEvent_Publish(rbus_handle, &event);
 
     rbusValue_Release(value);
@@ -555,12 +562,16 @@ rbusError_t publishActiveWifiClientsEvent(bool active)
 
     if (rc == RBUS_ERROR_NOSUBSCRIBERS)
     {
-        CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, %s: no subscribers for %s\n", __FUNCTION__, LMLITE_ACTIVE_WIFI_CLIENTS_EVENT));
+        CcspTraceInfo(("RDKB_LOWPOWER: %s: no subscribers for %s\n", __FUNCTION__, LMLITE_ACTIVE_WIFI_CLIENTS_EVENT));
         rc = RBUS_ERROR_SUCCESS;
     }
     else if (rc != RBUS_ERROR_SUCCESS)
     {
-        CcspTraceError((" %s: rbusEvent_Publish failed for %s, err %d\n", __FUNCTION__, LMLITE_ACTIVE_WIFI_CLIENTS_EVENT, rc));
+        CcspTraceError((" RDKB_LOWPOWER: %s: rbusEvent_Publish failed for %s, err %d\n", __FUNCTION__, LMLITE_ACTIVE_WIFI_CLIENTS_EVENT, rc));
+    }
+    else
+    {
+        CcspTraceInfo(("RDKB_LOWPOWER: %s: Published %s successfully\n", __FUNCTION__, LMLITE_ACTIVE_WIFI_CLIENTS_EVENT));
     }
     return rc;
 }
