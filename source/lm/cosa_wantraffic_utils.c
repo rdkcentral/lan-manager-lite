@@ -734,9 +734,13 @@ static pstDSCPInfo_t DeleteDisabledDscp(pstDSCPInfo_t DscpTree, pstDSCPInfo_t* i
 **********************************************************************/
 static pstDSCPInfo_t DeleteDisabledClients(pstDSCPInfo_t DscpTree)
 {
-    UINT index = DscpTree->NumClients;
+    int index = DscpTree->NumClients;
     errno_t rc = -1;
-    for(UINT i=0; i<index; i++)
+    /* CID 559949 Overflowed constant (INTEGER_OVERFLOW) */
+    /* Changed UINT i=0 to int i=0 */
+    /* When i=0, and i-- causes underflow. unsigned integer is defined to wrap around module 2^n,*/
+    /* where n is bit width. As a result, i becomes 4294967295 ((0-1) mod 2^32 = 2^32 -1 = 4294967295)*/
+    for(int i=0; i<index; i++)
     {
         if (DscpTree->ClientList[i].IsUpdated == FALSE)
         {
