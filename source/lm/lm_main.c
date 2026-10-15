@@ -2821,6 +2821,11 @@ static void Hosts_SyncDHCP(void)
    Exit immediately when a WiFi client reappears. */
 #define LM_LOW_POWER_IDLE_SECS   (16 * 60)
 
+/* AccessPoint instances of mesh_backhaul_2g/5g (same as MeshAgent) */
+#ifndef LM_MESH_BHAUL_AP_LIST
+#define LM_MESH_BHAUL_AP_LIST    {13, 14}
+#endif
+
 
 /* Set from partners_defaults.json, so it only changes across a reboot. */
 static bool lm_is_lowpower_enabled(void)
@@ -2845,6 +2850,46 @@ static bool lm_is_lowpower_enabled(void)
     return (1 == enabled);
 }
 
+/* Pods on mesh backhaul VAPs are not reported to LM Lite by OneWifi, so query OneWifi directly. */
+static bool lm_get_active_pods_present(void)
+{
+    static const int bhaulApList[] = LM_MESH_BHAUL_AP_LIST;
+    rbusHandle_t handle = get_rbus_handle();
+    char param[96];
+
+    if (handle == NULL)
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < sizeof(bhaulApList) / sizeof(bhaulApList[0]); i++)
+    {
+        rbusValue_t value = NULL;
+        uint32_t count = 0;
+
+        snprintf(param, sizeof(param), "Device.WiFi.AccessPoint.%d.AssociatedDeviceNumberOfEntries", bhaulApList[i]);
+        if (rbus_get(handle, param, &value) != RBUS_ERROR_SUCCESS)
+        {
+            CcspTraceWarning(("RDKB_LOWPOWER: %s: rbus_get failed for %s\n", __FUNCTION__, param));
+            continue;
+        }
+        if (rbusValue_GetType(value) == RBUS_UINT32)
+        {
+            count = rbusValue_GetUInt32(value);
+        }
+        rbusValue_Release(value);
+
+        if (count > 0)
+        {
+            CcspTraceInfo(("RDKB_LOWPOWER: %s: %u pod(s) connected on AccessPoint.%d\n",
+                           __FUNCTION__, count, bhaulApList[i]));
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool lm_get_active_wifi_clients_present(void)
 {
     bool current = false;
@@ -2865,6 +2910,11 @@ bool lm_get_active_wifi_clients_present(void)
         }
     }
     pthread_mutex_unlock(&LmHostObjectMutex);
+
+    if (!current)
+    {
+        current = lm_get_active_pods_present();
+    }
 
     return current;
 }
