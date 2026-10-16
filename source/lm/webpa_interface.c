@@ -598,14 +598,19 @@ static void eventReceiveHandler(
                     CcspTraceInfo(("newActiveInterface is : %s\n", newActiveInterface));
                     if(WTCinfo)
                     {
+                        WAN_INTERFACE candidateMode;
+                        UINT candidateIndex;
+
                         pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
-                        WTCinfo->WanMode = GetWanModeAndWtcIndex(&WTCinfo->WanModeWtcIndex);
-                        if (WTCinfo->WanMode == INVALID_MODE)
+                        candidateMode = GetWanModeAndWtcIndex(&candidateIndex);
+                        if (candidateMode == INVALID_MODE)
                         {
                             CcspTraceError(("Unable to resolve WAN mode and WTC index\n"));
                             pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
                             return;
                         }
+                        WTCinfo->WanMode = candidateMode;
+                        WTCinfo->WanModeWtcIndex = candidateIndex;
                         WTCinfo->WTCConfigFlag[WTCinfo->WanModeWtcIndex] |= WTC_WANMODE_CHANGE;
                         pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
                         WTC_ApplyStateChange();
