@@ -289,20 +289,28 @@ VOID WTC_ApplyStateChange(VOID);
 
 
 /**********************************************************************
-    function:
-        WTC_GetCount
-    description:
-        This function is called to get the Wan traffic counts.
-**********************************************************************/
-VOID WTC_GetCount(CHAR* pValue, ULONG* pUlSize, BOOL countPerInterval,
-                                pstWanTrafficCountInfo_t WAN_Traffic);
+     function:
+         WTC_GetCount
+     description:
+         This function is called to get the Wan traffic counts.
+ **********************************************************************/
+ VOID WTC_GetCount(CHAR* pValue, ULONG* pUlSize, BOOL countPerInterval,
+                                 pstWanTrafficCountInfo_t WAN_Traffic);
 
 /**********************************************************************
-    function:
-        WTC_EventPublish
-    description:
-        This function is called to publish the evenst to Rbus
-**********************************************************************/
-rbusError_t WTC_EventPublish(eWTCEvent_t wtcEvent, CHAR* data, INT index);
+     function:
+         WTC_HandoffRow
+     description:
+         This function is called to perform atomic row handoff during WAN mode transitions.
+ **********************************************************************/
+ VOID WTC_HandoffRow(UINT oldIndex, UINT newIndex);
+
+/**********************************************************************
+     function:
+         WTC_EventPublish
+     description:
+         This function is called to publish the evenst to Rbus
+ **********************************************************************/
+ rbusError_t WTC_EventPublish(eWTCEvent_t wtcEvent, CHAR* data, INT index);
 
 #endif
