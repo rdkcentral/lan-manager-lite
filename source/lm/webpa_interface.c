@@ -50,9 +50,8 @@
 #include <utapi/utapi_util.h>
 #endif
 
-#ifdef WAN_TRAFFIC_COUNT_SUPPORT
+#if defined(_SR300_PRODUCT_REQ_) || defined(_RDKB_GLOBAL_PRODUCT_REQ_)
 #include <cosa_wantraffic_api.h>
-#include <cosa_wantraffic_utils.h>
 extern pstWTCInfo_t WTCinfo;
 #endif
 
@@ -594,31 +593,49 @@ static void eventReceiveHandler(
 		       			CcspTraceError(("ReportSourceNDT value is NULL\n"));
 				}
 
-                    #ifdef WAN_TRAFFIC_COUNT_SUPPORT
-                    CcspTraceInfo(("newActiveInterface is : %s\n", newActiveInterface));
-                    if(WTCinfo)
+                    #ifdef _SR300_PRODUCT_REQ_
+                    if((strstr(newActiveInterface, "WANOE") != NULL) || 
+                        (strstr(newActiveInterface, "DSL") != NULL ) ||
+                         (strstr(newActiveInterface, "ADSL") != NULL )) 
                     {
-                        WAN_INTERFACE candidateMode;
-                        UINT candidateIndex;
-
-                        pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
-                        candidateMode = GetWanModeAndWtcIndex(&candidateIndex);
-                        if (candidateMode == INVALID_MODE)
+                        CcspTraceInfo(("newActiveInterface is : %s\n", newActiveInterface));
+                        if(WTCinfo)
                         {
-                            CcspTraceError(("Unable to resolve WAN mode and WTC index\n"));
+                            pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);    
+                            // Capture old row index BEFORE updating WanMode
+                            UINT oldIndex = (WTCinfo->WanMode > 0) ? (WTCinfo->WanMode - 1) : 0;
+                            if((strstr(newActiveInterface, "WANOE")))
+#if  defined (_SCER11BEL_PRODUCT_REQ_) || defined (_SCXF11BFL_PRODUCT_REQ_)
+                                WTCinfo->WanMode = EWAN - 1;
+#else
+                                WTCinfo->WanMode = EWAN;
+#endif
+                            else
+                                WTCinfo->WanMode = DSL;
+                            // Capture old row index before mode change
+                            UINT oldIndex = WTCinfo->WanMode - 1;
+                            WTCinfo->WTCConfigFlag[WTCinfo->WanMode-1] |= WTC_WANMODE_CHANGE;
+                            WTCinfo->WanModeInitialized = TRUE;  // Mark initialization complete
+                            pthread_cond_broadcast(&WTCinfo->WanModeResolvedCondVar);  // Signal waiting threads
+                            // Perform atomic row handoff if transitioning between modes
+                            if (oldIndex < SUPPORTED_WAN_MODES)
+                            {
+                                UINT newIndex = WTCinfo->WanMode - 1;
+                                if (newIndex < SUPPORTED_WAN_MODES && newIndex != oldIndex)
+                                {
+                                    WTC_HandoffRow(oldIndex, newIndex);
+                                }
+                            }
+                            WTCinfo->WanModeInitialized = TRUE;  // Mark initialization complete
+                            pthread_cond_broadcast(&WTCinfo->WanModeResolvedCondVar);  // Signal waiting threads
                             pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
-                            return;
+                            WTC_ApplyStateChange();
+                            CcspTraceInfo(("Setting WAN mode change!!!\n"));
                         }
-                        WTCinfo->WanMode = candidateMode;
-                        WTCinfo->WanModeWtcIndex = candidateIndex;
-                        WTCinfo->WTCConfigFlag[WTCinfo->WanModeWtcIndex] |= WTC_WANMODE_CHANGE;
-                        pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
-                        WTC_ApplyStateChange();
-                        CcspTraceInfo(("Setting WAN mode change!!!\n"));
-                    }
-                    else
-                    {
-                        CcspTraceInfo(("WTCinfo is NULL!!!\n"));
+                        else
+                        {
+                            CcspTraceInfo(("WTCinfo is NULL!!!\n"));
+                        }
                     }
                     #endif
 		}
