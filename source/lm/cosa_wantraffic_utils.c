@@ -909,8 +909,11 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                                          CliList->DSCP_Element[DscpTree->Dscp].Client[i].mac,
                                          sizeof(DscpTree->ClientList[j].Mac) - 1);
                                 DscpTree->ClientList[j].Mac[sizeof(DscpTree->ClientList[j].Mac) - 1] = '\0';
-                                DscpTree->ClientList[j].RxBytes = 0;
-                                DscpTree->ClientList[j].TxBytes = 0;
+                                // Initialize RxBytes and TxBytes to the first sample value to avoid cold-start data loss
+                                DscpTree->ClientList[j].RxBytes = 
+                                          CliList->DSCP_Element[DscpTree->Dscp].Client[i].rxBytes;
+                                DscpTree->ClientList[j].TxBytes = 
+                                          CliList->DSCP_Element[DscpTree->Dscp].Client[i].txBytes;
                                 DscpTree->ClientList[j].RxBytesTot =
                                           CliList->DSCP_Element[DscpTree->Dscp].Client[i].rxBytes;
                                 DscpTree->ClientList[j].TxBytesTot =
