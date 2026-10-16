@@ -208,6 +208,20 @@ INT GetCurrentActiveInterface(CHAR *ifname)
 
 WAN_INTERFACE GetEthWANIndex(VOID)
 {
+    // FIX Single-Row: For single-row platforms (SUPPORTED_WAN_MODES == 1),
+    // skip dynamic mode resolution and return fixed mode immediately.
+    // Platforms XER10/XF10 only have one WAN mode, no mode switching needed.
+#if (SUPPORTED_WAN_MODES == 1)
+#if defined (_SCER11BEL_PRODUCT_REQ_) || defined (_SCXF11BFL_PRODUCT_REQ_)
+        WTC_LOG_INFO("Single-row platform: returning EWAN - 1");
+        return EWAN - 1;
+#else
+        WTC_LOG_INFO("Single-row platform: returning DOCSIS");
+        return DOCSIS;
+#endif
+#endif
+
+    // Multi-row platforms: use dynamic mode resolution
     errno_t rc = -1;
     INT ind = -1;
 
@@ -895,10 +909,15 @@ pstDSCPInfo_t InsertClient(pstDSCPInfo_t DscpTree, pDSCP_list_t CliList)
                                          CliList->DSCP_Element[DscpTree->Dscp].Client[i].mac,
                                          sizeof(DscpTree->ClientList[j].Mac) - 1);
                                 DscpTree->ClientList[j].Mac[sizeof(DscpTree->ClientList[j].Mac) - 1] = '\0';
-                                DscpTree->ClientList[j].RxBytes = 0;
-                                DscpTree->ClientList[j].TxBytes = 0;
-                                DscpTree->ClientList[j].RxBytesTot = 0;
-                                DscpTree->ClientList[j].TxBytesTot = 0;
+                                // Initialize RxBytes and TxBytes to the first sample value to avoid cold-start data loss
+                                DscpTree->ClientList[j].RxBytes = 
+                                          CliList->DSCP_Element[DscpTree->Dscp].Client[i].rxBytes;
+                                DscpTree->ClientList[j].TxBytes = 
+                                          CliList->DSCP_Element[DscpTree->Dscp].Client[i].txBytes;
+                                DscpTree->ClientList[j].RxBytesTot =
+                                          CliList->DSCP_Element[DscpTree->Dscp].Client[i].rxBytes;
+                                DscpTree->ClientList[j].TxBytesTot =
+                                          CliList->DSCP_Element[DscpTree->Dscp].Client[i].txBytes;
                                 DscpTree->ClientList[j].IsUpdated = TRUE;
                                 DscpTree->NumClients++;
                                 DscpTree->IsUpdated = TRUE;

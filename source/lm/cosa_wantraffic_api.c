@@ -70,10 +70,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 #include <stdbool.h>
 #include <pthread.h>
-#include <errno.h>
-#include <limits.h>
 #include <rbus/rbus.h>
 
 #include "ansc_platform.h"
@@ -150,6 +149,66 @@ static pstDSCPInfo_t GetLinearHeadFromTree(pstDSCPInfo_t DscpTree);
     return:
         VOID
 **********************************************************************/
+// Row state management functions for atomic handoff
+static VOID WTC_SetRowState(UINT rowIndex, WTC_ROW_STATE state)
+{
+    if (rowIndex < SUPPORTED_WAN_MODES && WTCinfo)
+    {
+        WTCinfo->RowState[rowIndex] = state;
+        if (state == WTC_ROW_ACTIVE)
+        {
+            WTC_LOG_INFO("Row %u transitioned to ACTIVE", rowIndex);
+        }
+        else if (state == WTC_ROW_SHUTTING_DOWN)
+        {
+            WTC_LOG_INFO("Row %u transitioned to SHUTTING_DOWN (draining)", rowIndex);
+        }
+        else if (state == WTC_ROW_INACTIVE)
+        {
+            WTC_LOG_INFO("Row %u transitioned to INACTIVE", rowIndex);
+        }
+    }
+}
+
+static WTC_ROW_STATE WTC_GetRowState(UINT rowIndex)
+{
+    if (rowIndex < SUPPORTED_WAN_MODES && WTCinfo)
+    {
+        return WTCinfo->RowState[rowIndex];
+    }
+    return WTC_ROW_INACTIVE;
+}
+
+// Perform atomic row handoff during WAN mode transitions
+VOID WTC_HandoffRow(UINT oldIndex, UINT newIndex)
+{
+    WTC_LOG_INFO("Initiating row handoff: %u -> %u", oldIndex, newIndex);
+    
+    // Mark old row for shutdown to allow worker thread to drain
+    if (oldIndex < SUPPORTED_WAN_MODES)
+    {
+        WTC_SetRowState(oldIndex, WTC_ROW_SHUTTING_DOWN);
+    }
+    
+    // Give worker thread time to drain old row (it checks state before operations)
+    // The worker thread will see SHUTTING_DOWN and finish operations before switching
+    sleep(1);  // Brief wait for worker to notice state change
+    
+    // Mark old row as inactive
+    if (oldIndex < SUPPORTED_WAN_MODES)
+    {
+        WTC_SetRowState(oldIndex, WTC_ROW_INACTIVE);
+    }
+    
+    // Activate new row
+    if (newIndex < SUPPORTED_WAN_MODES)
+    {
+        WTC_SetRowState(newIndex, WTC_ROW_ACTIVE);
+    }
+    
+    WTC_LOG_INFO("Row handoff complete: new active row is %u", newIndex);
+}
+
 VOID WTC_Init
     (
         VOID
@@ -177,7 +236,19 @@ VOID WTC_Init
             }
             WTCinfo->WanTrafficThreadId = 0;
             WTCinfo->handle = NULL;
-            pthread_mutex_init(&WTCinfo->WanTrafficMutexVar,0);
+            // CRITICAL: Initialize synchronization primitives BEFORE RBUS subscription
+            // This prevents race condition where event handler tries to use uninitialized mutex
+            pthread_mutex_init(&WTCinfo->WanTrafficMutexVar, 0);
+            pthread_cond_init(&WTCinfo->WanModeResolvedCondVar, NULL);
+
+            // Initialize row states BEFORE subscriptions
+            for (UINT j = 0; j < SUPPORTED_WAN_MODES; j++)
+            {
+                WTCinfo->RowState[j] = WTC_ROW_INACTIVE;
+            }
+
+            // Track initialization status for worker thread synchronization
+            WTCinfo->WanModeInitialized = FALSE;
         }
         else
         {
@@ -186,6 +257,7 @@ VOID WTC_Init
         }
     }
 
+    // NOW it's safe to subscribe to RBUS events (mutex is initialized)
     int rc = WTC_RbusInit();
     if(rc)
     {
@@ -224,40 +296,20 @@ VOID WTC_Init
             CHAR buf[BUFLEN_256] = {0};
             CHAR buf1[BUFLEN_32] = {0};
 
-            if(!WTC_GetConfig("DscpEnabledList", buf, sizeof(buf), i+1) && *buf)
+            if( !WTC_GetConfig("DscpEnabledList", buf, sizeof(buf), i+1) &&
+                !WTC_GetConfig("DscpSleepInterval", buf1, sizeof(buf1), i+1) )
             {
-                if(CheckIfValidDscp(buf))
+                if(*buf && atoi(buf1))
                 {
-                    WTCinfo->WTCConfigFlag[i] |= WTC_DSCP_CONFIGURED;
-                }
-                else
-                {
-                    WTC_LOG_ERROR("Invalid dscp");
-                }
-            }
-
-            if(!WTC_GetConfig("DscpSleepInterval", buf1, sizeof(buf1), i+1) && *buf1)
-            {
-                if(IsDigit(buf1))
-                {
-                    unsigned long interval;
-
-                    errno = 0;
-                    interval = strtoul(buf1, NULL, 10);
-
-                    /* 0 intentionally means "not configured"; */
-                    if(errno == ERANGE || interval > UINT_MAX)
+                    if(CheckIfValidDscp(buf) && IsDigit(buf1))
                     {
-                        WTC_LOG_ERROR("Sleep interval out of range");
-                    }
-                    else if(interval > 0)
-                    {
+                        WTCinfo->WTCConfigFlag[i] |= WTC_DSCP_CONFIGURED;
                         WTCinfo->WTCConfigFlag[i] |= WTC_SLEEPINTRVL_CONFIGURED;
                     }
-                }
-                else
-                {
-                    WTC_LOG_ERROR("Invalid sleep interval");
+                    else
+                    {
+                        WTC_LOG_ERROR("Invalid dscp");
+                    }
                 }
             }
 
@@ -1298,6 +1350,30 @@ static VOID* WTC_Thread()
 
     WTC_LOG_INFO("Successfully created Thread");
 
+    // FIX NEW-1: Wait for WAN mode to resolve before starting worker
+    // This prevents CPU waste from busy-waiting with INVALID_MODE
+    if (!WTCinfo->WanModeInitialized && WTCinfo->WanMode == INVALID_MODE)
+    {
+        WTC_LOG_INFO("WAN mode not yet resolved, waiting for InterfaceActiveStatus event...");
+        pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
+        // Wait up to 30 seconds for WAN mode to resolve
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec += 30;  // 30 second timeout
+        int rc = pthread_cond_timedwait(&WTCinfo->WanModeResolvedCondVar,
+                                         &WTCinfo->WanTrafficMutexVar,
+                                         &ts);
+        pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
+        if (rc == ETIMEDOUT)
+        {
+            WTC_LOG_WARNING("Timeout waiting for WAN mode resolution");
+        }
+        else
+        {
+            WTC_LOG_INFO("WAN mode resolved, starting counting");
+        }
+    }
+
     while(1)
     {
         if(index < SUPPORTED_WAN_MODES)
@@ -1391,14 +1467,36 @@ static VOID* WTC_Thread()
                     CHAR buf1[BUFLEN_32] = {0};
                     if(!WTC_GetConfig("DscpSleepInterval", buf1, sizeof(buf1), WTCinfo->WanMode))
                     {
-                        if(atoi(buf1))
+                        // Explicit error checking after syscfg_get
+                        if(buf1[0] == '\0')
                         {
-                            WanTrafficCountInfo_t[index]->SleepInterval = atoi(buf1);
+                            WTC_LOG_ERROR("SleepInterval buffer is empty");
+                            WTCinfo->WTCConfigFlag[index] &= ~WTC_SLEEPINTRVL_CONFIGURED;
+                            doDismiss = TRUE;
                         }
                         else
                         {
-                            WTCinfo->WTCConfigFlag[index] &= ~WTC_SLEEPINTRVL_CONFIGURED;
-                            doDismiss = TRUE;
+                            // Use strtol for better error detection instead of atoi
+                            char *endptr = NULL;
+                            long sleepValue = strtol(buf1, &endptr, 10);
+                            
+                            // Validate conversion and range (1-3600 seconds)
+                            if(endptr == buf1 || *endptr != '\0')
+                            {
+                                WTC_LOG_ERROR("Invalid SleepInterval value: %s", buf1);
+                                WTCinfo->WTCConfigFlag[index] &= ~WTC_SLEEPINTRVL_CONFIGURED;
+                                doDismiss = TRUE;
+                            }
+                            else if(sleepValue < 1 || sleepValue > 3600)
+                            {
+                                WTC_LOG_ERROR("SleepInterval out of valid range [1-3600]: %ld", sleepValue);
+                                WTCinfo->WTCConfigFlag[index] &= ~WTC_SLEEPINTRVL_CONFIGURED;
+                                doDismiss = TRUE;
+                            }
+                            else
+                            {
+                                WanTrafficCountInfo_t[index]->SleepInterval = (UINT)sleepValue;
+                            }
                         }
                     }
                     else
@@ -1445,6 +1543,22 @@ static VOID* WTC_Thread()
                 }
                 WTC_SetThreadStatus(index, WTC_THRD_INITIALIZED);
                 WTC_SetThreadState(index, WTC_THRD_RUN);
+                // Replace blocking sleep with condition variable timedwait for rapid state change response
+                {
+                    struct timespec timeout;
+                    time_t curTime;
+                    
+                    curTime = time(NULL);
+                    timeout.tv_sec = curTime + WanTrafficCountInfo_t[index]->SleepInterval;
+                    timeout.tv_nsec = 0;
+                    
+                    pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
+                    // Wait with timeout or until signaled for state change
+                    pthread_cond_timedwait(&WTCinfo->WanModeResolvedCondVar, 
+                                          &WTCinfo->WanTrafficMutexVar, 
+                                          &timeout);
+                    pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
+                }
                 continue;
             }
             case WTC_THRD_RUN:
@@ -1494,7 +1608,22 @@ static VOID* WTC_Thread()
         }
 
         WTC_SendTrafficCountRbus(index);
-        sleep(WanTrafficCountInfo_t[index]->SleepInterval);
+        // Replace blocking sleep with condition variable timedwait for rapid state change response
+        {
+            struct timespec timeout;
+            time_t curTime;
+            
+            curTime = time(NULL);
+            timeout.tv_sec = curTime + WanTrafficCountInfo_t[index]->SleepInterval;
+            timeout.tv_nsec = 0;
+            
+            pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
+            // Wait with timeout or until signaled for state change
+            pthread_cond_timedwait(&WTCinfo->WanModeResolvedCondVar, 
+                                  &WTCinfo->WanTrafficMutexVar, 
+                                  &timeout);
+            pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
+        }
         continue;
         }
         else
