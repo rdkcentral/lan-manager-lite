@@ -612,8 +612,6 @@ static void eventReceiveHandler(
 #endif
                             else
                                 WTCinfo->WanMode = DSL;
-                            // Capture old row index before mode change
-                            UINT oldIndex = WTCinfo->WanMode - 1;
                             WTCinfo->WTCConfigFlag[WTCinfo->WanMode-1] |= WTC_WANMODE_CHANGE;
                             WTCinfo->WanModeInitialized = TRUE;  // Mark initialization complete
                             pthread_cond_broadcast(&WTCinfo->WanModeResolvedCondVar);  // Signal waiting threads
