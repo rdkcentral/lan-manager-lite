@@ -180,7 +180,7 @@ static WTC_ROW_STATE WTC_GetRowState(UINT rowIndex)
 }
 
 // Perform atomic row handoff during WAN mode transitions
-static VOID WTC_HandoffRow(UINT oldIndex, UINT newIndex)
+VOID WTC_HandoffRow(UINT oldIndex, UINT newIndex)
 {
     WTC_LOG_INFO("Initiating row handoff: %u -> %u", oldIndex, newIndex);
     
@@ -209,7 +209,7 @@ static VOID WTC_HandoffRow(UINT oldIndex, UINT newIndex)
     WTC_LOG_INFO("Row handoff complete: new active row is %u", newIndex);
 }
 
-VOID WTC_InitVOID WTC_Init
+VOID WTC_Init
     (
         VOID
     )
@@ -1467,14 +1467,36 @@ static VOID* WTC_Thread()
                     CHAR buf1[BUFLEN_32] = {0};
                     if(!WTC_GetConfig("DscpSleepInterval", buf1, sizeof(buf1), WTCinfo->WanMode))
                     {
-                        if(atoi(buf1))
+                        // Explicit error checking after syscfg_get
+                        if(buf1[0] == '\0')
                         {
-                            WanTrafficCountInfo_t[index]->SleepInterval = atoi(buf1);
+                            WTC_LOG_ERROR("SleepInterval buffer is empty");
+                            WTCinfo->WTCConfigFlag[index] &= ~WTC_SLEEPINTRVL_CONFIGURED;
+                            doDismiss = TRUE;
                         }
                         else
                         {
-                            WTCinfo->WTCConfigFlag[index] &= ~WTC_SLEEPINTRVL_CONFIGURED;
-                            doDismiss = TRUE;
+                            // Use strtol for better error detection instead of atoi
+                            char *endptr = NULL;
+                            long sleepValue = strtol(buf1, &endptr, 10);
+                            
+                            // Validate conversion and range (1-3600 seconds)
+                            if(endptr == buf1 || *endptr != '\0')
+                            {
+                                WTC_LOG_ERROR("Invalid SleepInterval value: %s", buf1);
+                                WTCinfo->WTCConfigFlag[index] &= ~WTC_SLEEPINTRVL_CONFIGURED;
+                                doDismiss = TRUE;
+                            }
+                            else if(sleepValue < 1 || sleepValue > 3600)
+                            {
+                                WTC_LOG_ERROR("SleepInterval out of valid range [1-3600]: %ld", sleepValue);
+                                WTCinfo->WTCConfigFlag[index] &= ~WTC_SLEEPINTRVL_CONFIGURED;
+                                doDismiss = TRUE;
+                            }
+                            else
+                            {
+                                WanTrafficCountInfo_t[index]->SleepInterval = (UINT)sleepValue;
+                            }
                         }
                     }
                     else
@@ -1521,7 +1543,22 @@ static VOID* WTC_Thread()
                 }
                 WTC_SetThreadStatus(index, WTC_THRD_INITIALIZED);
                 WTC_SetThreadState(index, WTC_THRD_RUN);
-                sleep(WanTrafficCountInfo_t[index]->SleepInterval);
+                // Replace blocking sleep with condition variable timedwait for rapid state change response
+                {
+                    struct timespec timeout;
+                    time_t curTime;
+                    
+                    curTime = time(NULL);
+                    timeout.tv_sec = curTime + WanTrafficCountInfo_t[index]->SleepInterval;
+                    timeout.tv_nsec = 0;
+                    
+                    pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
+                    // Wait with timeout or until signaled for state change
+                    pthread_cond_timedwait(&WTCinfo->WanModeResolvedCondVar, 
+                                          &WTCinfo->WanTrafficMutexVar, 
+                                          &timeout);
+                    pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
+                }
                 continue;
             }
             case WTC_THRD_RUN:
@@ -1571,7 +1608,22 @@ static VOID* WTC_Thread()
         }
 
         WTC_SendTrafficCountRbus(index);
-        sleep(WanTrafficCountInfo_t[index]->SleepInterval);
+        // Replace blocking sleep with condition variable timedwait for rapid state change response
+        {
+            struct timespec timeout;
+            time_t curTime;
+            
+            curTime = time(NULL);
+            timeout.tv_sec = curTime + WanTrafficCountInfo_t[index]->SleepInterval;
+            timeout.tv_nsec = 0;
+            
+            pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
+            // Wait with timeout or until signaled for state change
+            pthread_cond_timedwait(&WTCinfo->WanModeResolvedCondVar, 
+                                  &WTCinfo->WanTrafficMutexVar, 
+                                  &timeout);
+            pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
+        }
         continue;
         }
         else
