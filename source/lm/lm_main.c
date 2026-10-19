@@ -2817,9 +2817,6 @@ static void Hosts_SyncDHCP(void)
     lm_wrapper_get_dhcpv4_reserved();
 }
 
-/* Enter low-power after WiFi has been idle for LM_LOW_POWER_IDLE_SECS.
-   Exit immediately when a WiFi client reappears. */
-#define LM_LOW_POWER_IDLE_SECS   (16 * 60)
 
 /* AccessPoint instances of mesh_backhaul_2g/5g (same as MeshAgent) */
 #ifndef LM_MESH_BHAUL_AP_LIST
