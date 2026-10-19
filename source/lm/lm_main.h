@@ -325,7 +325,9 @@ PLmObjectHostIPAddress Host_AddIPAddress (PLmObjectHost pHost, char *ipAddress, 
 
 void Hosts_PollHost (void);
 
+#ifdef LPM_MANAGER_SUPPORT
 bool lm_get_active_wifi_clients_present(void);
+#endif
 
 void LM_main (void);
 

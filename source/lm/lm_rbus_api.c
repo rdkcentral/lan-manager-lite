@@ -40,9 +40,10 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define WIFI_CLIENTS_DATA_ELEM_COUNT  sizeof(dataElements)/sizeof(dataElements[0])
-
 static rbusHandle_t rbus_handle;
+
+#ifdef LPM_MANAGER_SUPPORT
+#define WIFI_CLIENTS_DATA_ELEM_COUNT  sizeof(dataElements)/sizeof(dataElements[0])
 
 /* Provided by lm_main.c: returns current active Wi-Fi client presence state */
 extern bool lm_get_active_wifi_clients_present(void);
@@ -50,6 +51,7 @@ extern bool lm_get_active_wifi_clients_present(void);
 /* Tracks active subscribers for the ActiveWiFiClientsPresent event */
 static int g_activeWifiClientsSubscribers = 0;
 static pthread_mutex_t g_activeWifiClientsSubMutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
 
 pthread_mutex_t g_mloRfcMutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -405,6 +407,7 @@ int regLMLiteDataModel(void)
     return 0;
 }
 
+#ifdef LPM_MANAGER_SUPPORT
 /**
  * @brief RBUS Get handler for the ActiveWiFiClientsPresent event parameter
  */
@@ -582,6 +585,7 @@ rbusError_t publishActiveWifiClientsEvent(bool active, bool previous)
     }
     return rc;
 }
+#endif /* LPM_MANAGER_SUPPORT */
 
 char* GetRbusString(const char* param)
 {

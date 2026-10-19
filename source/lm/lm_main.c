@@ -353,8 +353,10 @@ static void Host_FreeMloLinks (PLmObjectHost pHost);
 static void Hosts_SyncDHCP(void);
 static void Sendmsg_dnsmasq(BOOL enablePresenceFeature);
 static void Send_Eth_Host_Sync_Req(void);
+#ifdef LPM_MANAGER_SUPPORT
 static bool lm_is_lowpower_enabled(void);
 static void lm_publish_active_wifi_clients_state(void);
+#endif
 
 #if defined (CONFIG_SYSTEM_MOCA)
 static void Send_MoCA_Host_Sync_Req(void);
@@ -2817,7 +2819,7 @@ static void Hosts_SyncDHCP(void)
     lm_wrapper_get_dhcpv4_reserved();
 }
 
-
+#ifdef LPM_MANAGER_SUPPORT
 /* AccessPoint instances of mesh_backhaul_2g/5g (same as MeshAgent) */
 #ifndef LM_MESH_BHAUL_AP_LIST
 #define LM_MESH_BHAUL_AP_LIST    {13, 14}
@@ -2957,6 +2959,7 @@ static void lm_publish_active_wifi_clients_state(void)
                         __FUNCTION__, current ? "true" : "false"));
     }
 }
+#endif /* LPM_MANAGER_SUPPORT */
 
 static void *Hosts_LoggingThread(void *args)
 {
@@ -3114,10 +3117,12 @@ static void *Hosts_StatSyncThreadFunc(void *args)
             Hosts_SyncDHCP();
             Hosts_SyncArp();
             Add_IPv6_from_Dibbler();
+#ifdef LPM_MANAGER_SUPPORT
             if (lm_is_lowpower_enabled())
             {
                 lm_publish_active_wifi_clients_state();
             }
+#endif
         }
     }
     return NULL;
@@ -3545,10 +3550,12 @@ if(checkRbusEnabled()) {
         if(regLMLiteDataModel() == 0)
         {
             CcspTraceInfo((" %s: lmLite Data Model registered successfully\n", __FUNCTION__));
+#ifdef LPM_MANAGER_SUPPORT
             if (regActiveWifiClientsEvent() != 0)
             {
                 CcspTraceError((" %s: ActiveWiFiClientsPresent event registration failed\n", __FUNCTION__));
             }
+#endif
             /* Load initial value from PSM */
             int ret = 0;
             char *tmpchar = NULL;
