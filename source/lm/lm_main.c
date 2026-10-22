@@ -2909,7 +2909,31 @@ bool lm_get_active_wifi_clients_present(void)
         }
     }
     pthread_mutex_unlock(&LmHostObjectMutex);
+    /* Check XHS WiFi clients as well when RESOURCE_OPTIMIZATION disabled.
+     * With RESOURCE_OPTIMIZATION disabled, Wifi_ServerSyncHost() stores 
+     * SSID 3/4 clients in XlmHosts
+    */
+#if !defined (RESOURCE_OPTIMIZATION)
+    if (!current)
+    {
+        pthread_mutex_lock(&XLmHostObjectMutex);
+        for (int i = 0; i < XlmHosts.numHost; i++)
+        {
+            PLmObjectHost pHost = XlmHosts.hostArray[i];
 
+            if (pHost && pHost->bBoolParaValue[LM_HOST_ActiveId] &&
+                ((pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
+                  strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
+                 pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId]))
+            {
+                CcspTraceInfo(("RDKB_LOWPOWER: %s: Active XHS Wi-Fi client is present\n", __FUNCTION__));
+                current = true;
+                break;
+            }
+        }
+        pthread_mutex_unlock(&XLmHostObjectMutex);
+    }
+#endif
     if (!current)
     {
         current = lm_get_active_pods_present();
