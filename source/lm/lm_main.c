@@ -353,6 +353,10 @@ static void Host_FreeMloLinks (PLmObjectHost pHost);
 static void Hosts_SyncDHCP(void);
 static void Sendmsg_dnsmasq(BOOL enablePresenceFeature);
 static void Send_Eth_Host_Sync_Req(void);
+#ifdef LPM_MANAGER_SUPPORT
+static bool lm_is_lowpower_enabled(void);
+static void lm_publish_active_wifi_clients_state(void);
+#endif
 
 #if defined (CONFIG_SYSTEM_MOCA)
 static void Send_MoCA_Host_Sync_Req(void);
@@ -2815,6 +2819,172 @@ static void Hosts_SyncDHCP(void)
     lm_wrapper_get_dhcpv4_reserved();
 }
 
+#ifdef LPM_MANAGER_SUPPORT
+/* AccessPoint instances of mesh_backhaul_2g/5g (same as MeshAgent) */
+#ifndef LM_MESH_BHAUL_AP_LIST
+#define LM_MESH_BHAUL_AP_LIST    {13, 14}
+#endif
+
+
+/* Set from partners_defaults.json, so it only changes across a reboot. */
+static bool lm_is_lowpower_enabled(void)
+{
+    static int enabled = -1;
+
+    if (enabled < 0)
+    {
+        char buf[8] = {0};
+        int ret = syscfg_get(NULL, "lpm_enable", buf, sizeof(buf));
+
+        if (ret != 0)
+        {
+            CcspTraceWarning(("RDKB_LOWPOWER: syscfg_get for lpm_enable failed (%d)\n", ret));
+        }
+        else
+        {
+            enabled = (0 == strcmp(buf, "true")) ? 1 : 0;
+        }
+    }
+
+    return (1 == enabled);
+}
+
+/* Pods on mesh backhaul VAPs are not reported to LM Lite by OneWifi, so query OneWifi directly. */
+static bool lm_get_active_pods_present(void)
+{
+    static const int bhaulApList[] = LM_MESH_BHAUL_AP_LIST;
+    rbusHandle_t handle = get_rbus_handle();
+    char param[96];
+
+    if (handle == NULL)
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < sizeof(bhaulApList) / sizeof(bhaulApList[0]); i++)
+    {
+        rbusValue_t value = NULL;
+        uint32_t count = 0;
+
+        snprintf(param, sizeof(param), "Device.WiFi.AccessPoint.%d.AssociatedDeviceNumberOfEntries", bhaulApList[i]);
+        if (rbus_get(handle, param, &value) != RBUS_ERROR_SUCCESS)
+        {
+            CcspTraceWarning(("RDKB_LOWPOWER: %s: rbus_get failed for %s\n", __FUNCTION__, param));
+            continue;
+        }
+        if (rbusValue_GetType(value) == RBUS_UINT32)
+        {
+            count = rbusValue_GetUInt32(value);
+        }
+        rbusValue_Release(value);
+
+        if (count > 0)
+        {
+            CcspTraceInfo(("RDKB_LOWPOWER: %s: %u pod(s) connected on AccessPoint.%d\n",
+                           __FUNCTION__, count, bhaulApList[i]));
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lm_get_active_wifi_clients_present(void)
+{
+    bool current = false;
+
+    pthread_mutex_lock(&LmHostObjectMutex);
+    for (int i = 0; i < lmHosts.numHost; i++) {
+        PLmObjectHost pHost = lmHosts.hostArray[i];
+        if (pHost && pHost->bBoolParaValue[LM_HOST_ActiveId])
+        {
+            if ((pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
+                 strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
+                pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId])
+            {
+                CcspTraceInfo(("RDKB_LOWPOWER: %s: Active Wi-Fi client is present\n", __FUNCTION__));
+                current = true;
+                break;
+            }
+        }
+    }
+    pthread_mutex_unlock(&LmHostObjectMutex);
+    /* Check XHS WiFi clients as well when RESOURCE_OPTIMIZATION disabled.
+     * With RESOURCE_OPTIMIZATION disabled, Wifi_ServerSyncHost() stores 
+     * SSID 3/4 clients in XlmHosts
+    */
+#if !defined (RESOURCE_OPTIMIZATION)
+    if (!current)
+    {
+        pthread_mutex_lock(&XLmHostObjectMutex);
+        for (int i = 0; i < XlmHosts.numHost; i++)
+        {
+            PLmObjectHost pHost = XlmHosts.hostArray[i];
+
+            if (pHost && pHost->bBoolParaValue[LM_HOST_ActiveId] &&
+                ((pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
+                  strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
+                 pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId]))
+            {
+                CcspTraceInfo(("RDKB_LOWPOWER: %s: Active XHS Wi-Fi client is present\n", __FUNCTION__));
+                current = true;
+                break;
+            }
+        }
+        pthread_mutex_unlock(&XLmHostObjectMutex);
+    }
+#endif
+    if (!current)
+    {
+        current = lm_get_active_pods_present();
+    }
+
+    return current;
+}
+
+static void lm_publish_active_wifi_clients_state(void)
+{
+    static bool lastPublished = false;
+    static bool hasPublishedValue = false;
+    bool current;
+
+    /* Publish only when at least one subscriber is present */
+    if (!hasActiveWifiClientsSubscribers())
+    {
+        CcspTraceInfo(("RDKB_LOWPOWER: %s: No active Wi-Fi client subscribers; skipping publish\n", __FUNCTION__));
+        return;
+    }
+
+    current = lm_get_active_wifi_clients_present();
+
+    /* Publish only the initial state and subsequent changes */
+    if (!hasPublishedValue || current != lastPublished)
+    {
+        rbusError_t publishStatus;
+
+        CcspTraceInfo(("RDKB_LOWPOWER: %s: Publishing active Wi-Fi client state=%s\n",
+                       __FUNCTION__, current ? "true" : "false"));
+        publishStatus = publishActiveWifiClientsEvent(current, hasPublishedValue ? lastPublished : !current);
+        if (publishStatus == RBUS_ERROR_SUCCESS)
+        {
+            lastPublished = current;
+            hasPublishedValue = true;
+            CcspTraceInfo(("RDKB_LOWPOWER: %s: Active Wi-Fi client state published successfully\n", __FUNCTION__));
+        }
+        else
+        {
+            CcspTraceError(("RDKB_LOWPOWER: %s: Failed to publish active Wi-Fi client state, error=%d\n",
+                            __FUNCTION__, publishStatus));
+        }
+    }
+    else
+    {
+        CcspTraceDebug(("RDKB_LOWPOWER: %s: Active Wi-Fi client state unchanged=%s; skipping publish\n",
+                        __FUNCTION__, current ? "true" : "false"));
+    }
+}
+#endif /* LPM_MANAGER_SUPPORT */
+
 static void *Hosts_LoggingThread(void *args)
 {
     UNREFERENCED_PARAMETER(args);
@@ -2971,6 +3141,12 @@ static void *Hosts_StatSyncThreadFunc(void *args)
             Hosts_SyncDHCP();
             Hosts_SyncArp();
             Add_IPv6_from_Dibbler();
+#ifdef LPM_MANAGER_SUPPORT
+            if (lm_is_lowpower_enabled())
+            {
+                lm_publish_active_wifi_clients_state();
+            }
+#endif
         }
     }
     return NULL;
@@ -3398,6 +3574,12 @@ if(checkRbusEnabled()) {
         if(regLMLiteDataModel() == 0)
         {
             CcspTraceInfo((" %s: lmLite Data Model registered successfully\n", __FUNCTION__));
+#ifdef LPM_MANAGER_SUPPORT
+            if (regActiveWifiClientsEvent() != 0)
+            {
+                CcspTraceError((" %s: ActiveWiFiClientsPresent event registration failed\n", __FUNCTION__));
+            }
+#endif
             /* Load initial value from PSM */
             int ret = 0;
             char *tmpchar = NULL;
