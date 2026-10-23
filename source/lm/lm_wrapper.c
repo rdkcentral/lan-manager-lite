@@ -293,6 +293,7 @@ void remove_Mac_to_band_mapping(char *macstring)
 	if(curr && !strcmp(curr->macAddress,macstring))
 	{       tmp=curr;
                 curr=curr->next;
+		Mac_to_band_mapping[hashindex] = curr;
 		free(tmp);
 		tmp=NULL;
 		//CcspTraceWarning(("Wifi band %d \n",curr->band));
