@@ -355,7 +355,9 @@ static void Sendmsg_dnsmasq(BOOL enablePresenceFeature);
 static void Send_Eth_Host_Sync_Req(void);
 #ifdef LPM_MANAGER_SUPPORT
 static bool lm_is_lowpower_enabled(void);
-static void lm_publish_active_wifi_clients_state(void);
+static bool lm_get_active_pods_present(void);
+static void lm_publish_active_wifi_clients_state(bool active);
+static pthread_mutex_t LpmPublishMutex = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
 #if defined (CONFIG_SYSTEM_MOCA)
@@ -627,6 +629,57 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
         getIPAddress(pHost->pStringParaValue[LM_HOST_PhysAddressId], IPAddress);
         LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]) , IPAddress);
     }
+#ifdef LPM_MANAGER_SUPPORT
+	if (lm_is_lowpower_enabled() &&
+	    ((pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
+	      strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
+	     pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId]))
+	{
+		if (state)
+		{
+			lm_publish_active_wifi_clients_state(true);
+		}
+		else
+		{
+			int remainingWifiClients = 0;
+			for (int i = 0; i < lmHosts.numHost; i++)
+			{
+				PLmObjectHost host = lmHosts.hostArray[i];
+				if (host && host != pHost && host->bBoolParaValue[LM_HOST_ActiveId] &&
+					((host->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
+					  strstr(host->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
+					 host->bBoolParaValue[LM_HOST_X_RDK_MldClientId]))
+				{
+					remainingWifiClients++;
+					break;
+				}
+			}
+#if !defined (RESOURCE_OPTIMIZATION)
+			if (remainingWifiClients == 0)
+			{
+				pthread_mutex_lock(&XLmHostObjectMutex);
+				for (int i = 0; i < XlmHosts.numHost; i++)
+				{
+					PLmObjectHost host = XlmHosts.hostArray[i];
+					if (host && host->bBoolParaValue[LM_HOST_ActiveId] &&
+						((host->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
+						  strstr(host->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
+						 host->bBoolParaValue[LM_HOST_X_RDK_MldClientId]))
+					{
+						remainingWifiClients++;
+						break;
+					}
+				}
+				pthread_mutex_unlock(&XLmHostObjectMutex);
+			}
+#endif
+			if (remainingWifiClients == 0)
+			{
+				lm_publish_active_wifi_clients_state(lm_get_active_pods_present());
+			}
+		}
+	}
+#endif
 /*
 		getAddressSource(pHost->pStringParaValue[LM_HOST_PhysAddressId], addressSource);
 		if ( (pHost->pStringParaValue[LM_HOST_AddressSource]) && (strlen(addressSource)))	
@@ -2942,34 +2995,35 @@ bool lm_get_active_wifi_clients_present(void)
     return current;
 }
 
-static void lm_publish_active_wifi_clients_state(void)
+static void lm_publish_active_wifi_clients_state(bool active)
 {
     static bool lastPublished = false;
     static bool hasPublishedValue = false;
-    bool current;
 
-    /* Publish only when at least one subscriber is present */
     if (!hasActiveWifiClientsSubscribers())
     {
         CcspTraceInfo(("RDKB_LOWPOWER: %s: No active Wi-Fi client subscribers; skipping publish\n", __FUNCTION__));
         return;
     }
 
-    current = lm_get_active_wifi_clients_present();
-
-    /* Publish only the initial state and subsequent changes */
-    if (!hasPublishedValue || current != lastPublished)
+    pthread_mutex_lock(&LpmPublishMutex);
+    if (!hasActiveWifiClientsSubscribers())
     {
-        rbusError_t publishStatus;
+        pthread_mutex_unlock(&LpmPublishMutex);
+        return;
+    }
 
-        CcspTraceInfo(("RDKB_LOWPOWER: %s: Publishing active Wi-Fi client state=%s\n",
-                       __FUNCTION__, current ? "true" : "false"));
-        publishStatus = publishActiveWifiClientsEvent(current, hasPublishedValue ? lastPublished : !current);
+    if (!hasPublishedValue || active != lastPublished)
+    {
+        bool previous = hasPublishedValue ? lastPublished : !active;
+        CcspTraceWarning(("RDKB_LOWPOWER: %s: Publishing active Wi-Fi client state=%s, previous=%s\n",
+                          __FUNCTION__, active ? "true" : "false", previous ? "true" : "false"));
+        rbusError_t publishStatus = publishActiveWifiClientsEvent(active, previous);
         if (publishStatus == RBUS_ERROR_SUCCESS)
         {
-            lastPublished = current;
+            lastPublished = active;
             hasPublishedValue = true;
-            CcspTraceInfo(("RDKB_LOWPOWER: %s: Active Wi-Fi client state published successfully\n", __FUNCTION__));
+            CcspTraceWarning(("RDKB_LOWPOWER: %s: Active Wi-Fi client state publish succeeded\n", __FUNCTION__));
         }
         else
         {
@@ -2977,12 +3031,9 @@ static void lm_publish_active_wifi_clients_state(void)
                             __FUNCTION__, publishStatus));
         }
     }
-    else
-    {
-        CcspTraceDebug(("RDKB_LOWPOWER: %s: Active Wi-Fi client state unchanged=%s; skipping publish\n",
-                        __FUNCTION__, current ? "true" : "false"));
-    }
+    pthread_mutex_unlock(&LpmPublishMutex);
 }
+
 #endif /* LPM_MANAGER_SUPPORT */
 
 static void *Hosts_LoggingThread(void *args)
@@ -3142,10 +3193,12 @@ static void *Hosts_StatSyncThreadFunc(void *args)
             Hosts_SyncArp();
             Add_IPv6_from_Dibbler();
 #ifdef LPM_MANAGER_SUPPORT
+            /* Event-driven LPM publication replaces this periodic call.
             if (lm_is_lowpower_enabled())
             {
                 lm_publish_active_wifi_clients_state();
             }
+            */
 #endif
         }
     }
@@ -3969,6 +4022,9 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
 			Xlm_wrapper_get_info(pHost);
 
 			pthread_mutex_lock(&XLmHostObjectMutex);
+#ifdef LPM_MANAGER_SUPPORT
+            BOOL wasActive = pHost->bBoolParaValue[LM_HOST_ActiveId];
+#endif
             /* reset MLO link table before repopulating */
             Host_FreeMloLinks(pHost);
 
@@ -4081,6 +4137,12 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
 			}
 
 			pthread_mutex_unlock(&XLmHostObjectMutex);
+#ifdef LPM_MANAGER_SUPPORT
+            if (wasActive != (BOOL)Status && lm_is_lowpower_enabled())
+            {
+                lm_publish_active_wifi_clients_state(lm_get_active_wifi_clients_present());
+            }
+#endif
 		}
 #endif
 	}
