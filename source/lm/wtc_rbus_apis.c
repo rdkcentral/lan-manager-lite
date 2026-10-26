@@ -259,7 +259,7 @@ BOOL Stats_GetParamStringValue
     }
     else if (strcmp(ParamName, "DscpCountPerInterval") == 0)
     {
-        if(WTCinfo->WanMode != INVALID_MODE && client->InstanceNum == WTCinfo->WanModeWtcIndex + 1)
+        if(client->InstanceNum == WTCinfo->WanMode)
         {
             WTC_GetCount(pValue, pUlSize, TRUE, client);
             if(RBUS_ERROR_SUCCESS == WTC_EventPublish(WTC_COUNTPERINTERVAL, pValue, client->InstanceNum))
@@ -273,14 +273,13 @@ BOOL Stats_GetParamStringValue
         }
         else
         {
-            WTC_LOG_INFO("WTC stats skipped: instance=%d, active WTC index=%d, \
-                          WAN mode=%d", client->InstanceNum,
-                          WTCinfo->WanModeWtcIndex, WTCinfo->WanMode);
+            WTC_LOG_INFO("client->InstanceNum != WTCinfo->WanMode, \
+                                    Do not call GetWantrafficCount");
         }
     }
     else if (strcmp(ParamName, "DscpCountTotal") == 0)
     {
-        if(WTCinfo->WanMode != INVALID_MODE && client->InstanceNum == WTCinfo->WanModeWtcIndex + 1)
+        if(client->InstanceNum == WTCinfo->WanMode)
         {
             WTC_GetCount(pValue, pUlSize, FALSE, client);
             if(RBUS_ERROR_SUCCESS == WTC_EventPublish(WTC_COUNTTOTAL, pValue, client->InstanceNum))
@@ -294,9 +293,8 @@ BOOL Stats_GetParamStringValue
         }
         else
         {
-            WTC_LOG_INFO("WTC stats skipped: instance=%d, active WTC index=%d, \
-                          WAN mode=%d", client->InstanceNum,
-                          WTCinfo->WanModeWtcIndex, WTCinfo->WanMode);
+            WTC_LOG_INFO("client->InstanceNum != WTCinfo->WanMode, \
+                                    Do not call GetWantrafficCount");
         }
     }
     else
@@ -384,7 +382,6 @@ BOOL Stats_SetParamStringValue
       )
 {
     pstWanTrafficCountInfo_t client = (pstWanTrafficCountInfo_t) hInsContext;
-    WAN_INTERFACE mode;
 
     if (!hInsContext)
     {
@@ -392,6 +389,7 @@ BOOL Stats_SetParamStringValue
         return FALSE;
     }
 
+    //WTCinfo->WanMode = GetEthWANIndex();
     if (strcmp(ParamName, "DscpCountEnable") == 0)
     {
         if(!CheckIfValidDscp(pString))
@@ -413,8 +411,7 @@ BOOL Stats_SetParamStringValue
             WTC_LOG_ERROR("WTC_DCSPCOUNTENABLE WTC_EventPublish FAILURE");
         }
         client->IsDscpListSet = TRUE;
-        mode = WTCinfo->WanMode;
-        if(mode != INVALID_MODE && client->InstanceNum == WTCinfo->WanModeWtcIndex + 1 && !IsBridgeMode())
+        if(client->InstanceNum == GetEthWANIndex() && !IsBridgeMode())
         {
             WTC_LOG_INFO("WanMode = %d & !BridgeMode, Set Input change flag\
                                   Call WTC_ApplyStateChange", WTCinfo->WanMode);
@@ -449,7 +446,6 @@ BOOL Stats_SetParamUlongValue
       )
 {
     pstWanTrafficCountInfo_t client = (pstWanTrafficCountInfo_t) hInsContext;
-    WAN_INTERFACE mode;
 
     if (!hInsContext)
     {
@@ -484,8 +480,7 @@ BOOL Stats_SetParamUlongValue
             WTC_LOG_ERROR("WTC_COUNTINTERVAL WTC_EventPublish FAILURE");
         }
 
-        mode = WTCinfo->WanMode;
-        if(mode != INVALID_MODE && client->InstanceNum == WTCinfo->WanModeWtcIndex + 1 && !IsBridgeMode())
+        if(client->InstanceNum == GetEthWANIndex() && !IsBridgeMode())
         {
             WTC_LOG_INFO("Sleep Interval isset and not in bridge mode.\
                           Set Input change flag & Call WTC_ApplyStateChange");
