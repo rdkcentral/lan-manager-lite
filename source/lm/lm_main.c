@@ -3184,7 +3184,8 @@ static void *Hosts_StatSyncThreadFunc(void *args)
                 if (!activeWifiClientsPresent)
                 {
                     activeWifiClientsPresent = lm_get_active_pods_present();
-                    lm_publish_active_wifi_clients_state(activeWifiClientsPresent);
+                    if (activeWifiClientsPresent)
+                        lm_publish_active_wifi_clients_state(true);
                 }
                 
             }
