@@ -640,11 +640,11 @@ static void lm_update_active_wifi_client_count(PLmObjectHost pHost, BOOL state)
         pthread_mutex_unlock(&ActiveWifiClientCountMutex);
 
         CcspTraceInfo(("RDKB_LOWPOWER: ACTIVE_WIFI_CLIENTS_COUNT : %d \n", count));
-+       if (count == 0)
+        if (count == 0)
         {
             lm_publish_active_wifi_clients_state(lm_get_active_pods_present());
         }else {
-+           lm_publish_active_wifi_clients_state(state);
+            lm_publish_active_wifi_clients_state(state);
         }
     }
 }
