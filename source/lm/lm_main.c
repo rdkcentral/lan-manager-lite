@@ -228,6 +228,10 @@ extern char dev_Mode[20] ;
 #endif
 
 int g_Client_Poll_interval;
+#ifdef LPM_MANAGER_SUPPORT
+static int g_ActiveWifiClientCount = 0;
+static pthread_mutex_t ActiveWifiClientCountMutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
 
 /* Presence Notification - Payload */
 typedef struct {
@@ -611,6 +615,44 @@ static void get_vendor_class_id (char* physAddress, char* vendor_class)
 }
 #endif
 
+#ifdef LPM_MANAGER_SUPPORT
+static void lm_update_active_wifi_client_count(PLmObjectHost pHost, BOOL state)
+{
+    if (pHost && pHost->bBoolParaValue[LM_HOST_ActiveId] &&
+        ((pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
+          strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
+         pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId]))
+    {
+        bool countWasZero = false;
+        int count;
+
+        CcspTraceWarning(("RDKB_LOWPOWER: Updating the active WIFI Client count\n"));
+        pthread_mutex_lock(&ActiveWifiClientCountMutex);
+        if (state)
+        {
+            g_ActiveWifiClientCount++;
+        }
+        else if (g_ActiveWifiClientCount > 0)
+        {
+            g_ActiveWifiClientCount--;
+        }
+        else
+        {
+            countWasZero = true;
+        }
+        count = g_ActiveWifiClientCount;
+        pthread_mutex_unlock(&ActiveWifiClientCountMutex);
+
+        if (countWasZero)
+        {
+            CcspTraceWarning(("RDKB_LOWPOWER: No ACTIVE_WIFI_CLIENTS_COUNT Present \n"));
+            lm_publish_active_wifi_clients_state(lm_get_active_pods_present());
+        }
+        CcspTraceWarning(("RDKB_LOWPOWER: ACTIVE_WIFI_CLIENTS_COUNT : %d \n", count));
+    }
+}
+#endif
+
 #define LM_SET_ACTIVE_STATE_TIME(x, y) LM_SET_ACTIVE_STATE_TIME_(__LINE__, x, y)
 static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
         UNREFERENCED_PARAMETER(line);
@@ -629,64 +671,6 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
         getIPAddress(pHost->pStringParaValue[LM_HOST_PhysAddressId], IPAddress);
         LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]) , IPAddress);
     }
-#ifdef LPM_MANAGER_SUPPORT
-	if (lm_is_lowpower_enabled() &&
-	    ((pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
-	      strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
-	     pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId]))
-	{
-		if (state)
-		{
-			lm_publish_active_wifi_clients_state(true);
-		}
-		else
-		{
-			int remainingWifiClients = 0;
-			for (int i = 0; i < lmHosts.numHost; i++)
-			{
-				PLmObjectHost host = lmHosts.hostArray[i];
-				if (host && host != pHost && host->bBoolParaValue[LM_HOST_ActiveId] &&
-					((host->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
-					  strstr(host->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
-					 host->bBoolParaValue[LM_HOST_X_RDK_MldClientId]))
-				{
-					remainingWifiClients++;
-					break;
-				}
-			}
-#if !defined (RESOURCE_OPTIMIZATION)
-			if (remainingWifiClients == 0)
-			{
-				pthread_mutex_lock(&XLmHostObjectMutex);
-				for (int i = 0; i < XlmHosts.numHost; i++)
-				{
-					PLmObjectHost host = XlmHosts.hostArray[i];
-					if (host && host->bBoolParaValue[LM_HOST_ActiveId] &&
-						((host->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
-						  strstr(host->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
-						 host->bBoolParaValue[LM_HOST_X_RDK_MldClientId]))
-					{
-						remainingWifiClients++;
-						break;
-					}
-				}
-				pthread_mutex_unlock(&XLmHostObjectMutex);
-			}
-#endif
-			if (remainingWifiClients == 0)
-			{
-				lm_publish_active_wifi_clients_state(lm_get_active_pods_present());
-			}
-		}
-	}
-#endif
-/*
-		getAddressSource(pHost->pStringParaValue[LM_HOST_PhysAddressId], addressSource);
-		if ( (pHost->pStringParaValue[LM_HOST_AddressSource]) && (strlen(addressSource)))	
-		{
-   		       LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AddressSource]) , addressSource);
-		}
-*/
 	if(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL)
 	{
 		if((strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId],"WiFi"))) 
@@ -786,8 +770,12 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
                 }
             }
         }
+
         pHost->bBoolParaValue[LM_HOST_ActiveId] = state;
         pHost->activityChangeTime = time((time_t*)NULL);
+#ifdef LPM_MANAGER_SUPPORT
+        lm_update_active_wifi_client_count(pHost, state);
+#endif
 		logOnlineDevicesCount();
 
 	}
@@ -3193,12 +3181,18 @@ static void *Hosts_StatSyncThreadFunc(void *args)
             Hosts_SyncArp();
             Add_IPv6_from_Dibbler();
 #ifdef LPM_MANAGER_SUPPORT
-            /* Event-driven LPM publication replaces this periodic call.
             if (lm_is_lowpower_enabled())
             {
-                lm_publish_active_wifi_clients_state();
+                pthread_mutex_lock(&ActiveWifiClientCountMutex);
+                bool activeWifiClientsPresent = (g_ActiveWifiClientCount > 0);
+                pthread_mutex_unlock(&ActiveWifiClientCountMutex);
+
+                if (!activeWifiClientsPresent)
+                {
+                    activeWifiClientsPresent = lm_get_active_pods_present();
+                }
+                lm_publish_active_wifi_clients_state(activeWifiClientsPresent);
             }
-            */
 #endif
         }
     }
