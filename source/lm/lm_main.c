@@ -618,7 +618,7 @@ static void get_vendor_class_id (char* physAddress, char* vendor_class)
 #ifdef LPM_MANAGER_SUPPORT
 static void lm_update_active_wifi_client_count(PLmObjectHost pHost, BOOL state)
 {
-    if (pHost && pHost->bBoolParaValue[LM_HOST_ActiveId] &&
+    if (pHost &&
         ((pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
           strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
          pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId]))
