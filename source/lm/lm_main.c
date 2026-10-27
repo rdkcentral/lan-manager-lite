@@ -623,7 +623,6 @@ static void lm_update_active_wifi_client_count(PLmObjectHost pHost, BOOL state)
           strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
          pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId]))
     {
-        bool countWasZero = false;
         int count;
 
         CcspTraceWarning(("RDKB_LOWPOWER: Updating the active WIFI Client count\n"));
@@ -636,19 +635,17 @@ static void lm_update_active_wifi_client_count(PLmObjectHost pHost, BOOL state)
         {
             g_ActiveWifiClientCount--;
         }
-        else
-        {
-            countWasZero = true;
-        }
+    
         count = g_ActiveWifiClientCount;
         pthread_mutex_unlock(&ActiveWifiClientCountMutex);
 
-        if (countWasZero)
+        CcspTraceInfo(("RDKB_LOWPOWER: ACTIVE_WIFI_CLIENTS_COUNT : %d \n", count));
++       if (count == 0)
         {
-            CcspTraceWarning(("RDKB_LOWPOWER: No ACTIVE_WIFI_CLIENTS_COUNT Present \n"));
             lm_publish_active_wifi_clients_state(lm_get_active_pods_present());
+        }else {
++           lm_publish_active_wifi_clients_state(state);
         }
-        CcspTraceWarning(("RDKB_LOWPOWER: ACTIVE_WIFI_CLIENTS_COUNT : %d \n", count));
     }
 }
 #endif
@@ -3183,8 +3180,10 @@ static void *Hosts_StatSyncThreadFunc(void *args)
 #ifdef LPM_MANAGER_SUPPORT
             if (lm_is_lowpower_enabled())
             {
+                CcspTraceWarning(("RDKB_LOWPOWER: %s \n", __FUNCTION__));
                 pthread_mutex_lock(&ActiveWifiClientCountMutex);
                 bool activeWifiClientsPresent = (g_ActiveWifiClientCount > 0);
+                CcspTraceWarning(("RDKB_LOWPOWER: g_ActiveWifiClientCount = %d\n", g_ActiveWifiClientCount));
                 pthread_mutex_unlock(&ActiveWifiClientCountMutex);
 
                 if (!activeWifiClientsPresent)
@@ -4130,13 +4129,11 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
 				}
 			}
 
-			pthread_mutex_unlock(&XLmHostObjectMutex);
 #ifdef LPM_MANAGER_SUPPORT
-            if (wasActive != (BOOL)Status && lm_is_lowpower_enabled())
-            {
-                lm_publish_active_wifi_clients_state(lm_get_active_wifi_clients_present());
-            }
+            CcspTraceWarning(("RDKB_LOWPOWER: %s \n", __FUNCTION__));
+            lm_publish_active_wifi_clients_state(pHost,wasActive);
 #endif
+        pthread_mutex_unlock(&XLmHostObjectMutex);
 		}
 #endif
 	}
