@@ -4131,7 +4131,7 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
 
 #ifdef LPM_MANAGER_SUPPORT
             CcspTraceWarning(("RDKB_LOWPOWER: %s \n", __FUNCTION__));
-            lm_publish_active_wifi_clients_state(pHost,wasActive);
+            lm_publish_active_wifi_clients_state(wasActive);
 #endif
         pthread_mutex_unlock(&XLmHostObjectMutex);
 		}
