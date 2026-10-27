@@ -2985,15 +2985,10 @@ static void lm_publish_active_wifi_clients_state(bool active)
     static bool lastPublished = false;
     static bool hasPublishedValue = false;
 
-    if (!hasActiveWifiClientsSubscribers())
-    {
-        CcspTraceInfo(("RDKB_LOWPOWER: %s: No active Wi-Fi client subscribers; skipping publish\n", __FUNCTION__));
-        return;
-    }
-
     pthread_mutex_lock(&LpmPublishMutex);
     if (!hasActiveWifiClientsSubscribers())
     {
+        CcspTraceInfo(("RDKB_LOWPOWER: %s: No active Wi-Fi client subscribers; skipping publish\n", __FUNCTION__));
         pthread_mutex_unlock(&LpmPublishMutex);
         return;
     }
@@ -3189,8 +3184,9 @@ static void *Hosts_StatSyncThreadFunc(void *args)
                 if (!activeWifiClientsPresent)
                 {
                     activeWifiClientsPresent = lm_get_active_pods_present();
+                    lm_publish_active_wifi_clients_state(activeWifiClientsPresent);
                 }
-                lm_publish_active_wifi_clients_state(activeWifiClientsPresent);
+                
             }
 #endif
         }
