@@ -1697,7 +1697,7 @@ Host_GetParamStringValue
         if(strcmp(ParamName, "AddressSource") == 0)
         {
             getAddressSource(pHost->pStringParaValue[LM_HOST_PhysAddressId], pValue);
-            LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AddressSource]) , pValue);
+            LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AddressSource]) , pValue);/*High_016*/
             pthread_mutex_unlock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             return 0;
@@ -1714,8 +1714,8 @@ Host_GetParamStringValue
             }
             else if (pHost->pStringParaValue[LM_HOST_IPAddressId])
             {
-                AnscCopyString(pHost->pStringParaValue[LM_HOST_IPAddressId],pValue) ;
-            }
+                 LanManager_CheckCloneCopy(&pHost->pStringParaValue[LM_HOST_IPAddressId], pValue); 
+	    }
             pthread_mutex_unlock(&LmHostObjectMutex);
             CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
             return 0;
