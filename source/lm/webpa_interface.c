@@ -520,7 +520,7 @@ char* get_ActiveInterface(char *interface) {
     token = strtok(interface, "|"); // spliting with delimiter "|"
     while (token != NULL) {
         CcspTraceDebug(("token : %s\n", token));
-        token_len = strlen(token);
+        token_len = strlen(token);/*Cri_001 & High_002*/
         c = token[token_len - 1]; // last char in token
         if(c == '1') { // checking last char in token is '1', means it is active interface
             if (token_len < 3 || token[token_len - 2] != ',') {
