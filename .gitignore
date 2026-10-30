@@ -24,3 +24,5 @@ missing
 Makefile
 Makefile.in
 stamp-h1
+*.swp*
+*.swp
