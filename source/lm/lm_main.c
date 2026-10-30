@@ -3148,6 +3148,11 @@ static void *Hosts_StatSyncThreadFunc(void *args)
             acquirePresencelocks();
             CcspTraceDebug(("%s:%d, Acquired presence locks \n",__FUNCTION__,__LINE__));
             Hosts_RmHosts();
+#ifdef LPM_MANAGER_SUPPORT
+            pthread_mutex_lock(&ActiveWifiClientCountMutex);
+            g_ActiveWifiClientCount = 0;
+            pthread_mutex_unlock(&ActiveWifiClientCountMutex);
+#endif
             releasePresenceLocks();
             CcspTraceDebug(("%s:%d, released presence locks \n",__FUNCTION__,__LINE__));
             sleep(30);
