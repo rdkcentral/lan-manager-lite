@@ -25,7 +25,7 @@ static unsigned int countlines(char*);
     description:
         This function is called to retrieve Host string from Hosts table
         based on the input MAC address.
-    argument:   
+    argument:
                 char*                       value,
                 MAC Address
                 char*                       hostPath,
@@ -48,18 +48,18 @@ ANSC_STATUS CosaDmlGetHostPath(char *value, char *hostPath, ULONG hostPathSize)
         /*  <TR-069 Device:2.11 Root Object definition>
         Comma-separated list (maximum list length 1024) of strings.
         Each list item MUST be the path name of a row in the Hosts.Host table.
-        For example: Device.Hosts.Host.1,Device.Hosts.Host.5 */        
+        For example: Device.Hosts.Host.1,Device.Hosts.Host.5 */
         array_size = lmHosts.numHost;
         if (array_size)
-        { 
+        {
             for (i = 0; i < array_size; i++)
             {
                 hostPathLen = strlen(hostPath);
-                
+
                 if (strcmp(lmHosts.hostArray[i]->pStringParaValue[LM_HOST_PhysAddressId], value) == 0)
                 {
                     dmLen = strlen(lmHosts.hostArray[i]->objectName);
-                    
+
                     if ((hostPathLen + dmLen) < hostPathSize)
                     {
                         if (hostPathLen > 0)
@@ -68,7 +68,7 @@ ANSC_STATUS CosaDmlGetHostPath(char *value, char *hostPath, ULONG hostPathSize)
                             hostPathLen += 1;
                         }
                         /* The objectName includes '.' at the end and it must be removed before mapping to Host parameter */
-                    
+
                         strncat(hostPath,lmHosts.hostArray[i]->objectName,dmLen-1);
                         hostPathLen = hostPathLen + dmLen-1;
                     }
@@ -82,7 +82,7 @@ ANSC_STATUS CosaDmlGetHostPath(char *value, char *hostPath, ULONG hostPathSize)
             if ( retVal == ANSC_STATUS_SUCCESS )
             {
                 hostPath[hostPathLen] = '\0';
-            }           
+            }
         }
         else
         {
@@ -101,7 +101,7 @@ ANSC_STATUS CosaDmlGetHostPath(char *value, char *hostPath, ULONG hostPathSize)
         countlines
     description:
         This function is used to count the number of lines in the input file.
-    argument:   
+    argument:
                 char*                       filename,
                 File path
     return:     0 if file processing failed
@@ -134,7 +134,7 @@ static unsigned int countlines(char *filename)
         IsLeaseAvailable
     description:
         This function is checks of the lease availability of input mac.
-    argument:   
+    argument:
                 char*                       macaddr,
                 MAC Address
     return:     0 if the lease expired
@@ -144,13 +144,13 @@ int IsLeaseAvailable(char* macaddr)
 {
 
     int leaseAvailable = -1;
-    int array_size = lmHosts.numHost;  
+    int array_size = lmHosts.numHost;
     int i = 0;
-    
+
     if ( array_size && (macaddr != NULL) )
     {
         for (i = 0; i < array_size; i++)
-        {     
+        {
             if (strcmp(lmHosts.hostArray[i]->pStringParaValue[LM_HOST_PhysAddressId], macaddr) == 0)
             {
                 int leaseTimeRemaining = lmHosts.hostArray[i]->LeaseTime - time(NULL);
@@ -161,7 +161,7 @@ int IsLeaseAvailable(char* macaddr)
                 else
                 {
                     leaseAvailable = 0;
-                }  
+                }
                 break;
             }
         }
@@ -173,7 +173,7 @@ int IsLeaseAvailable(char* macaddr)
         CosaDmlGetManageableDevices
     description:
         This function returns the current list of Managed devices
-    argument:   
+    argument:
                 char*                       filename,
                 File path
                 ULONG*                      tableEntryCount
@@ -207,7 +207,8 @@ PCOSA_DML_MANG_DEV CosaDmlGetManageableDevices(ULONG *tableEntryCount, char *fil
     {
         char lineBuf[17 + 1 + 6 + 1 + 64 + 1 + 64 + 1 + 1 + 16];
 
-        while (fgets(lineBuf, sizeof(lineBuf), fp) != NULL)
+	/*High_001 & High_009*/
+        while ((MangDevIdx < lines) && fgets(lineBuf, sizeof(lineBuf), fp) != NULL)
         {
             char macAddrStr[MANG_DEV_MAC_STR_LEN + 1];
             char manufacturerOUI[MANG_DEV_MANUFACTURER_OUI_STR_LEN + 1];
@@ -228,7 +229,7 @@ PCOSA_DML_MANG_DEV CosaDmlGetManageableDevices(ULONG *tableEntryCount, char *fil
                     (len_manufacturerOUI == MANG_DEV_MANUFACTURER_OUI_STR_LEN) &&
                     (len_serialNumber > 0) && (len_serialNumber < MANG_DEV_SERIAL_NUMBER_STR_LEN))
                 {
-                    if (IsLeaseAvailable(macAddrStr))
+                    if (IsLeaseAvailable(macAddrStr) != 0)
                     {
                         memcpy(pMangDevTable[MangDevIdx].MacAddr, macAddrStr, len_macAddrStr + 1);
                         memcpy(pMangDevTable[MangDevIdx].ManufacturerOUI, manufacturerOUI, len_manufacturerOUI + 1);
@@ -264,11 +265,18 @@ void buildDhcpVendorClientsFile()
 {
     FILE *fpv4 = NULL;
     FILE *fp = NULL;
+    int fd = -1;
     char buffer[MAX_BUFFER_SIZE]="";
     fpv4 = fopen(DHCP_VENDOR_CLIENT_V4_PATH,"r");
     if ( fpv4 )
     {
-        fp = fopen(DHCP_VENDOR_CLIENT_ALL_PATH,"w");
+	/*High_014*/
+        fd = open(DHCP_VENDOR_CLIENT_ALL_PATH, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600);
+	if (fd >=0)
+	{
+    		fp = fdopen(fd, "w");
+	} 
+
         if ( fp )
         {
             while ( fgets(buffer, sizeof(buffer), fpv4) != NULL )
@@ -277,6 +285,10 @@ void buildDhcpVendorClientsFile()
             }
             fclose(fp);
         }
+	else if (fd >= 0)
+	{
+		close(fd);
+	}
         fclose(fpv4);
     }
     return;
