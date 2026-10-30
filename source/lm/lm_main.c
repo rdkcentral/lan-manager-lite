@@ -587,7 +587,7 @@ static void get_vendor_class_id (char* physAddress, char* vendor_class)
         while((fgets(buffer, sizeof(buffer), fpv)) != NULL)
         {
             memset(client_mac, 0, sizeof(client_mac));
-            sscanf(buffer, "%s", client_mac);
+	    sscanf(buffer, "%31s", client_mac);
             if (strcasecmp(physAddress, client_mac) == 0)
             {
                 tmp_vendor = strstr(buffer, " ");
