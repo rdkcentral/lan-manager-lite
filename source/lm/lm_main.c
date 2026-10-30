@@ -644,7 +644,7 @@ static void lm_update_active_wifi_client_count(PLmObjectHost pHost, BOOL state)
         {
             lm_publish_active_wifi_clients_state(lm_get_active_pods_present());
         }else {
-            lm_publish_active_wifi_clients_state(state);
+            lm_publish_active_wifi_clients_state(true);
         }
     }
 }
@@ -4128,7 +4128,10 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
 
 #ifdef LPM_MANAGER_SUPPORT
             CcspTraceWarning(("RDKB_LOWPOWER: %s \n", __FUNCTION__));
-            lm_publish_active_wifi_clients_state(wasActive);
+            if (wasActive != pHost->bBoolParaValue[LM_HOST_ActiveId])
+            {
+                lm_update_active_wifi_client_count(pHost, Status);
+            }
 #endif
         pthread_mutex_unlock(&XLmHostObjectMutex);
 		}
