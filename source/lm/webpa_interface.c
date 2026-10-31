@@ -602,6 +602,8 @@ static void eventReceiveHandler(
                         if(WTCinfo)
                         {
                             pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);    
+                            // Capture old row index BEFORE updating WanMode
+                            UINT oldIndex = (WTCinfo->WanMode > 0) ? (WTCinfo->WanMode - 1) : 0;
                             if((strstr(newActiveInterface, "WANOE")))
 #if  defined (_SCER11BEL_PRODUCT_REQ_) || defined (_SCXF11BFL_PRODUCT_REQ_)
                                 WTCinfo->WanMode = EWAN - 1;
@@ -611,6 +613,19 @@ static void eventReceiveHandler(
                             else
                                 WTCinfo->WanMode = DSL;
                             WTCinfo->WTCConfigFlag[WTCinfo->WanMode-1] |= WTC_WANMODE_CHANGE;
+                            WTCinfo->WanModeInitialized = TRUE;  // Mark initialization complete
+                            pthread_cond_broadcast(&WTCinfo->WanModeResolvedCondVar);  // Signal waiting threads
+                            // Perform atomic row handoff if transitioning between modes
+                            if (oldIndex < SUPPORTED_WAN_MODES)
+                            {
+                                UINT newIndex = WTCinfo->WanMode - 1;
+                                if (newIndex < SUPPORTED_WAN_MODES && newIndex != oldIndex)
+                                {
+                                    WTC_HandoffRow(oldIndex, newIndex);
+                                }
+                            }
+                            WTCinfo->WanModeInitialized = TRUE;  // Mark initialization complete
+                            pthread_cond_broadcast(&WTCinfo->WanModeResolvedCondVar);  // Signal waiting threads
                             pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
                             WTC_ApplyStateChange();
                             CcspTraceInfo(("Setting WAN mode change!!!\n"));
