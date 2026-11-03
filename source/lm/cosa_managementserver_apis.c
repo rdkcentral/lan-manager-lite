@@ -285,7 +285,7 @@ void buildDhcpVendorClientsFile()
             }
             fclose(fp);
         }
-	if (fd >= 0)
+	else if (fd >= 0)
 	{
 		close(fd);
 	}
