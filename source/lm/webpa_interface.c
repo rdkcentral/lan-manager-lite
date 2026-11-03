@@ -520,7 +520,7 @@ char* get_ActiveInterface(char *interface) {
     token = strtok(interface, "|"); // spliting with delimiter "|"
     while (token != NULL) {
         CcspTraceDebug(("token : %s\n", token));
-        token_len = strlen(token);/*Cri_001 & High_002*/
+        token_len = strlen(token);/*C001 & H002*/
         c = token[token_len - 1]; // last char in token
         if(c == '1') { // checking last char in token is '1', means it is active interface
             if (token_len < 3 || token[token_len - 2] != ',') {
@@ -529,8 +529,8 @@ char* get_ActiveInterface(char *interface) {
             }
 
             interface_len = token_len - 2;
-            if (interface_len >= sizeof(interfaceUp[0]) ||
-                n + 1 >= (int)(sizeof(interfaceUp) / sizeof(interfaceUp[0]))) {
+            if ((interface_len >= sizeof(interfaceUp[0])) ||
+                (n + 1 >= (int)(sizeof(interfaceUp) / sizeof(interfaceUp[0])))) {
                 snprintf(newSource, sizeof(newSource), "LMLite");
                 return newSource;
             }
@@ -558,14 +558,14 @@ char* get_ActiveInterface(char *interface) {
     } 
     if(strlen(activeInterface) > 0) {
             len = strlen(activeInterface);
-        activeInterface[len-1] = '\0';  // Removing the last comma
+	    activeInterface[len-1] = '\0';  // Removing the last comma
             CcspTraceDebug(("Active Interfaces: %s\n", activeInterface));
             snprintf(newSource, sizeof(newSource), "LMLite/%s", activeInterface); // Adding all active interfaces in newSource
             CcspTraceInfo(("Source with Active Interfaces : %s\n", newSource)); // For ex: Source with Active Interfaces : LMLite/DOCSIS1,ETH3,REMOTE_LTE1
     }
     else {
-        CcspTraceDebug(("activeInterface is null\n"));
-        snprintf(newSource, sizeof(newSource), "LMLite"); // If all interface status are '0', add "LMLite" to newSurce
+	    CcspTraceDebug(("activeInterface is null\n"));
+	    snprintf(newSource, sizeof(newSource), "LMLite"); // If all interface status are '0', add "LMLite" to newSurce
             CcspTraceInfo(("Source with Active Interfaces : %s\n", newSource));
     }
     return newSource;
