@@ -2109,7 +2109,8 @@ void *RecvIPv6clientNotifications(void *args)
 int Send_ipv6_neighbourdiscovery(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient, BOOL bSendProbe)
 {
     int i = 0;
-    char buf[64];
+    int ret = 0;
+    char buf[64] = {0};/*H005*/
     if (pobject)
     {
         for(i = 0; i<pobject->numOfDevice; i++)
@@ -2157,24 +2158,18 @@ int Send_ipv6_neighbourdiscovery(PLmDevicePresenceDetectionInfo pobject,BOOL bac
                     }
                 }
                 syscfg_get( NULL, "lan_ifname", buf, sizeof(buf));
-                CcspTraceDebug(("cmd = ndisc6 %s %s -r 1 -q", pobj->ipv6,buf));
-                char cLine[256] = {0};
-                snprintf (cLine, sizeof(cLine), "ndisc6 %s %s -r 1 -q", pobj->ipv6,buf);
-                FILE *fpPipe = popen(cLine, "r");
-                if(NULL == fpPipe)
+		if(0 == strlen(buf))
                 {
-                    CcspTraceError(("%s:%d, Failed to execute the command\n",__FUNCTION__,__LINE__));
+                    snprintf(buf,sizeof(buf),"%s","brlan0");
                 }
-                else
+                CcspTraceDebug(("cmd = ndisc6 %s %s -r 1 -q", pobj->ipv6,buf));
+		ret = v_secure_system("ndisc6 %s %s -r 1 -q", pobj->ipv6, buf);
+                if(ret != 0)
                 {
-                    pclose(fpPipe);
+                    CcspTraceError(("%s:%d, Failed to execute ndisc6, ret=%d\n",__FUNCTION__,__LINE__,ret));
                 }
                 if (TRUE == bSendProbe)
                 {
-                    if ( 0 == strlen(buf))
-                    {
-                        snprintf(buf,sizeof(buf),"%s","brlan0");
-                    }
                     sendProbeRequest (IPV6, pobj->ipv6, buf);
                 }
             }
