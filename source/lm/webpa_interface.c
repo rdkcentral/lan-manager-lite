@@ -515,18 +515,34 @@ char* get_ActiveInterface(char *interface) {
     char buffer[256] = { '\0' };
     int i;
     int len = 0;
+    size_t token_len;
+    size_t interface_len;
 
     token = strtok(interface, "|"); // spliting with delimiter "|"
     while (token != NULL) {
-	    CcspTraceDebug(("token : %s\n", token));
-	    c = token[strlen(token)-1]; // last char in token
-	    if(c == '1') { // checking last char in token is '1', means it is active interface
-		    n++;
-		    strncpy(interfaceUp[n], token, strlen(token)-2); // adding the active interfaces in InterfaceUp
-		    CcspTraceDebug(("InterfaceUp : %s\n", interfaceUp[n]));
+        CcspTraceDebug(("token : %s\n", token));
+        token_len = strlen(token);/*C001 & H002*/
+        c = token[token_len - 1]; // last char in token
+        if(c == '1') { // checking last char in token is '1', means it is active interface
+            if (token_len < 3 || token[token_len - 2] != ',') {
+                snprintf(newSource, sizeof(newSource), "LMLite");
+                return newSource;
             }
-	    token = strtok(NULL, "|");
-    } 	    
+
+            interface_len = token_len - 2;
+            if ((interface_len >= sizeof(interfaceUp[0])) ||
+                (n + 1 >= (int)(sizeof(interfaceUp) / sizeof(interfaceUp[0])))) {
+                snprintf(newSource, sizeof(newSource), "LMLite");
+                return newSource;
+            }
+
+            n++;
+            memcpy(interfaceUp[n], token, interface_len);
+            interfaceUp[n][interface_len] = '\0';
+            CcspTraceDebug(("InterfaceUp : %s\n", interfaceUp[n]));
+            }
+        token = strtok(NULL, "|");
+    }       
     
     for(i=0; i<=n; i++)
     {
