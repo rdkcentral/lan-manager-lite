@@ -194,6 +194,13 @@ typedef enum _eWTCConfig_t {
 /**********************************************************************
                STRUCTURE DEFINITIONS
 **********************************************************************/
+// Row state for atomic handoff during WAN mode transitions
+typedef enum {
+    WTC_ROW_INACTIVE = 0,      // Row not in use
+    WTC_ROW_ACTIVE = 1,        // Row actively counting
+    WTC_ROW_SHUTTING_DOWN = 2  // Row draining before switch
+} WTC_ROW_STATE;
+
 typedef struct _stWTCInfo_t {
     UCHAR                 WTCConfigFlag[SUPPORTED_WAN_MODES];
     BOOL                  LanMode;
@@ -201,7 +208,10 @@ typedef struct _stWTCInfo_t {
     UINT                  SubscribeRefCount;
     pthread_t             WanTrafficThreadId;
     pthread_mutex_t       WanTrafficMutexVar;
+    pthread_cond_t        WanModeResolvedCondVar;  // Signal when WAN mode resolves
     rbusHandle_t          handle;
+    BOOL                  WanModeInitialized;     // Track init completion
+    WTC_ROW_STATE         RowState[SUPPORTED_WAN_MODES];  // Track state of each row
 } stWTCInfo_t, *pstWTCInfo_t;
 
 typedef struct _stClientInfo_t {
@@ -279,20 +289,28 @@ VOID WTC_ApplyStateChange(VOID);
 
 
 /**********************************************************************
-    function:
-        WTC_GetCount
-    description:
-        This function is called to get the Wan traffic counts.
-**********************************************************************/
-VOID WTC_GetCount(CHAR* pValue, ULONG* pUlSize, BOOL countPerInterval,
-                                pstWanTrafficCountInfo_t WAN_Traffic);
+     function:
+         WTC_GetCount
+     description:
+         This function is called to get the Wan traffic counts.
+ **********************************************************************/
+ VOID WTC_GetCount(CHAR* pValue, ULONG* pUlSize, BOOL countPerInterval,
+                                 pstWanTrafficCountInfo_t WAN_Traffic);
 
 /**********************************************************************
-    function:
-        WTC_EventPublish
-    description:
-        This function is called to publish the evenst to Rbus
-**********************************************************************/
-rbusError_t WTC_EventPublish(eWTCEvent_t wtcEvent, CHAR* data, INT index);
+     function:
+         WTC_HandoffRow
+     description:
+         This function is called to perform atomic row handoff during WAN mode transitions.
+ **********************************************************************/
+ VOID WTC_HandoffRow(UINT oldIndex, UINT newIndex);
+
+/**********************************************************************
+     function:
+         WTC_EventPublish
+     description:
+         This function is called to publish the evenst to Rbus
+ **********************************************************************/
+ rbusError_t WTC_EventPublish(eWTCEvent_t wtcEvent, CHAR* data, INT index);
 
 #endif
