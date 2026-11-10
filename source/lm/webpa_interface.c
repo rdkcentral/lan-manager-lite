@@ -143,9 +143,46 @@ static int WebpaInterface_DiscoverComponent(char** pcomponentName, char** pcompo
 }
 #endif
 
+/*H015*/
+static bool webpa_backoff_sleep(int secs, webpa_cancel_fn cancelled)
+{
+    while (secs-- > 0)
+    {
+        if (cancelled && cancelled())
+            return false;
+        sleep(1);
+    }
+    return true;
+}
+
+/* Returns false if cancelled before the lock was acquired. */
+static bool webpa_lock(webpa_cancel_fn cancelled)
+{
+    if (cancelled == NULL)
+    {
+        pthread_mutex_lock(&webpa_mutex);
+        return true;
+    }
+
+    while (pthread_mutex_trylock(&webpa_mutex) != 0)
+    {
+        if (cancelled())
+            return false;
+        usleep(100000);
+    }
+    return true;
+}
+
 void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentType, char *payload, unsigned int payload_len)
 {
-    pthread_mutex_lock(&webpa_mutex);
+    sendWebpaMsgEx(serviceName, dest, trans_id, contentType, payload, payload_len, NULL);
+}
+
+void sendWebpaMsgEx(char *serviceName, char *dest, char *trans_id, char *contentType, char *payload, unsigned int payload_len, webpa_cancel_fn cancelled)
+{
+    if (!webpa_lock(cancelled))
+        return;
+
     wrp_msg_t *wrp_msg ;
     int retry_count = 0, backoffRetryTime = 0, c = 2;
     int sendStatus = -1;
@@ -201,7 +238,9 @@ void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentTy
 
         while(retry_count<=5)
         {
-            backoffRetryTime = (int) pow(2, c) -1;
+            if (cancelled && cancelled())
+                break;
+	    backoffRetryTime = (int) pow(2, c) -1;
 
             CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, retry_count : %d\n",retry_count));
             sendStatus = libparodus_send(client_instance, wrp_msg);
@@ -216,7 +255,8 @@ void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentTy
             {
                 CcspTraceError(("Failed to send message: '%s', retrying ....\n",libparodus_strerror(sendStatus)));
                 CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, backoffRetryTime %d seconds\n", backoffRetryTime));
-                sleep(backoffRetryTime);
+		if (!webpa_backoff_sleep(backoffRetryTime, cancelled))
+                    break;
                 c++;
                 retry_count++;
             }

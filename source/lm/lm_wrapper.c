@@ -144,7 +144,7 @@ static libnet_status file_append(const char *file_name ,const char *buf, size_t 
     int fd_out;
     /* O_NOFOLLOW rejects a planted symlink at a world-writable path such as /tmp. */
     /*H008*/
-    fd_out = open(file_name, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
+    fd_out = open(file_name, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, 0600);
     if (fd_out < 0) {
         perror("open failed");
         CcspTraceError(("%s Failed to open file %s\n", __FUNCTION__, file_name));

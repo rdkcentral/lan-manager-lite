@@ -44,6 +44,14 @@
  */
 void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentType, char *payload, unsigned int payload_len);
 
+/* Returns true when the caller wants the send/retry loop abandoned. */
+typedef bool (*webpa_cancel_fn)(void);
+
+/**
+ * @brief Same as sendWebpaMsg, but retries stop early once cancelled() returns true (NULL disables the check)
+ */
+void sendWebpaMsgEx(char *serviceName, char *dest, char *trans_id, char *contentType, char *payload, unsigned int payload_len, webpa_cancel_fn cancelled);
+
 /**
  * @brief To get device CM MAC by querying stack
  * @return deviceMAC
