@@ -20,6 +20,8 @@
 #ifndef WEB_INTERFACE_H_
 #define WEB_INTERFACE_H_
 
+#include <stdbool.h>
+
 #ifdef WAN_FAILOVER_SUPPORTED
 
 #include <stdio.h>

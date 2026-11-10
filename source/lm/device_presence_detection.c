@@ -2197,7 +2197,7 @@ int Send_ipv6_neighbourdiscovery(PLmDevicePresenceDetectionInfo pobject,BOOL bac
 			snprintf(buf,sizeof(buf),"%s","brlan0");
 		}
 		CcspTraceDebug(("cmd = ndisc6 %s %s -r 1 -q", pobj->ipv6,buf));
-		if (0 == if_nametoindex(buff))
+		if (0 == if_nametoindex(buf))
 		{
 			CcspTraceError(("%s:%d, Invalid lan interface name\n",__FUNCTION__,__LINE__));
 			continue;
