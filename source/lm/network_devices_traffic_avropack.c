@@ -28,6 +28,7 @@
 #include <trower-base64/base64.h>
 #include "webpa_interface.h"
 #include "network_devices_traffic_avropack.h"
+#include "network_devices_traffic.h"
 #include "ccsp_lmliteLog_wrapper.h"
 
 #ifdef MLT_ENABLED
@@ -54,6 +55,11 @@ uint8_t UUID_NDT[16] = {0x5f, 0xc8, 0x32, 0x1e, 0xd8, 0xbf, 0x45, 0xa7,
 
 static char *macStr = NULL;
 static char CpemacStr[ 32 ];
+
+static bool ndt_send_cancelled(void)
+{
+    return !GetNDTHarvestingStatus();
+}
 BOOL ndt_schema_file_parsed = FALSE;
 char *ndtschemabuffer = NULL;
 char *ndtschemaidbuffer = "5fc8321e-d8bf-45a7-8b3c-3dcdfd091092/1a73afad2380ee4730dacfcbf359222b";
@@ -560,7 +566,7 @@ void network_devices_traffic_report(struct networkdevicetrafficdata *head, struc
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, AvroSerializedBuf: %s\n", AvroSerializedBuf));
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, AvroSerializedSize: %d\n", (int)AvroSerializedSize));
   // Send data from LMLite to webpa using CCSP bus interface
-  sendWebpaMsg(serviceName, dest, trans_id, contentType, AvroSerializedBuf, AvroSerializedSize);
+  sendWebpaMsg(serviceName, dest, trans_id, contentType, AvroSerializedBuf, AvroSerializedSize, ndt_send_cancelled);
   #ifdef WAN_FAILOVER_SUPPORTED
   CcspTraceWarning(("NetworkDevicesTraffic report sent to Webpa, Destination=%s, Transaction-Id=%s, source=%s\n",dest,trans_id,ReportSourceNDT));
   #else

@@ -17,6 +17,8 @@
  * limitations under the License.
 */
 #define _GNU_SOURCE
+#include <errno.h>
+#include <unistd.h>
 #include "ssp_global.h"
 #include "stdlib.h"
 #include "ccsp_dm_api.h"
@@ -42,6 +44,7 @@
 #include "safec_lib_common.h"
 
 #define MAX_PARAMETERNAME_LEN   512
+#define WEBPA_CANCEL_POLL_USEC  100000
 
 #if defined(_SKY_HUB_COMMON_PRODUCT_REQ_) && !defined(_SCER11BEL_PRODUCT_REQ_)
 #include <utctx/utctx.h>
@@ -143,45 +146,31 @@ static int WebpaInterface_DiscoverComponent(char** pcomponentName, char** pcompo
 }
 #endif
 
-/*H015*/
-static bool webpa_backoff_sleep(int secs, webpa_cancel_fn cancelled)
+void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentType, char *payload, unsigned int payload_len, bool (*isCancelled)(void))
 {
-    while (secs-- > 0)
-    {
-        if (cancelled && cancelled())
-            return false;
-        sleep(1);
-    }
-    return true;
-}
-
-/* Returns false if cancelled before the lock was acquired. */
-static bool webpa_lock(webpa_cancel_fn cancelled)
-{
-    if (cancelled == NULL)
+    if (isCancelled == NULL)
     {
         pthread_mutex_lock(&webpa_mutex);
-        return true;
     }
-
-    while (pthread_mutex_trylock(&webpa_mutex) != 0)
+    else
     {
-        if (cancelled())
-            return false;
-        usleep(100000);
+        // Another reporter may hold the lock through its own long retry backoff.
+        int lockStatus;
+        while ((lockStatus = pthread_mutex_trylock(&webpa_mutex)) == EBUSY)
+        {
+            if (isCancelled())
+            {
+                CcspTraceWarning(("%s: cancelled while waiting for webpa lock, message dropped\n", __FUNCTION__));
+                return;
+            }
+            usleep(WEBPA_CANCEL_POLL_USEC);
+        }
+        if (lockStatus != 0)
+        {
+            CcspTraceError(("%s: failed to acquire webpa lock: %s, message dropped\n", __FUNCTION__, strerror(lockStatus)));
+            return;
+        }
     }
-    return true;
-}
-
-void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentType, char *payload, unsigned int payload_len)
-{
-    sendWebpaMsgEx(serviceName, dest, trans_id, contentType, payload, payload_len, NULL);
-}
-
-void sendWebpaMsgEx(char *serviceName, char *dest, char *trans_id, char *contentType, char *payload, unsigned int payload_len, webpa_cancel_fn cancelled)
-{
-    if (!webpa_lock(cancelled))
-        return;
 
     wrp_msg_t *wrp_msg ;
     int retry_count = 0, backoffRetryTime = 0, c = 2;
@@ -238,8 +227,11 @@ void sendWebpaMsgEx(char *serviceName, char *dest, char *trans_id, char *content
 
         while(retry_count<=5)
         {
-            if (cancelled && cancelled())
+            if (isCancelled && isCancelled())
+            {
+                CcspTraceWarning(("%s: cancelled, message dropped after %d retries\n", __FUNCTION__, retry_count));
                 break;
+            }
 	    backoffRetryTime = (int) pow(2, c) -1;
 
             CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, retry_count : %d\n",retry_count));
@@ -255,9 +247,17 @@ void sendWebpaMsgEx(char *serviceName, char *dest, char *trans_id, char *content
             {
                 CcspTraceError(("Failed to send message: '%s', retrying ....\n",libparodus_strerror(sendStatus)));
                 CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, backoffRetryTime %d seconds\n", backoffRetryTime));
-		if (!webpa_backoff_sleep(backoffRetryTime, cancelled))
-                    break;
-                c++;
+                if (isCancelled == NULL)
+                {
+                    sleep(backoffRetryTime);
+                }
+                else
+                {
+                    long waitedUsec;
+                    for (waitedUsec = 0; waitedUsec < (long)backoffRetryTime * 1000000L && !isCancelled(); waitedUsec += WEBPA_CANCEL_POLL_USEC)
+                        usleep(WEBPA_CANCEL_POLL_USEC);
+                }
+		c++;
                 retry_count++;
             }
         }

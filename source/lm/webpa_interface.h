@@ -20,8 +20,6 @@
 #ifndef WEB_INTERFACE_H_
 #define WEB_INTERFACE_H_
 
-#include <stdbool.h>
-
 #ifdef WAN_FAILOVER_SUPPORTED
 
 #include <stdio.h>
@@ -34,6 +32,9 @@
 #define LMLITE_INTERFACE_ACTIVESTATUS_PARAM "Device.X_RDK_WanManager.InterfaceActiveStatus"
 
 #endif
+
+#include <stdbool.h>
+
 /**
  * @brief To send message to webpa and further upstream
  *
@@ -43,17 +44,9 @@
  * @param[in] payload The actual message data
  * @param[in] contentType content type of message "application/json", "avro/binary"
  * @param[in] payload_len length of payload or message length
+ * @param[in] isCancelled Optional; when it returns true the lock wait / retries are abandoned. NULL keeps blocking behaviour.
  */
-void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentType, char *payload, unsigned int payload_len);
-
-/* Returns true when the caller wants the send/retry loop abandoned. */
-typedef bool (*webpa_cancel_fn)(void);
-
-/**
- * @brief Same as sendWebpaMsg, but retries stop early once cancelled() returns true (NULL disables the check)
- */
-void sendWebpaMsgEx(char *serviceName, char *dest, char *trans_id, char *contentType, char *payload, unsigned int payload_len, webpa_cancel_fn cancelled);
-
+void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentType, char *payload, unsigned int payload_len, bool (*isCancelled)(void));
 /**
  * @brief To get device CM MAC by querying stack
  * @return deviceMAC
