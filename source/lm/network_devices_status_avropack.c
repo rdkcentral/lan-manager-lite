@@ -750,7 +750,7 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, AvroSerializedBuf: %s\n", AvroSerializedBuf));
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, AvroSerializedSize: %d\n", (int)AvroSerializedSize));
   // Send data from LMLite to webpa using CCSP bus interface
-  sendWebpaMsg(serviceName, dest, trans_id, contentType, AvroSerializedBuf, AvroSerializedSize);
+  sendWebpaMsg(serviceName, dest, trans_id, contentType, AvroSerializedBuf, AvroSerializedSize, NULL);
 
   CcspTraceWarning(("NetworkDevicesStatus report sent to Webpa, Destination=%s, Transaction-Id=%s  \n",dest,trans_id));
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, After ND WebPA SEND message call\n"));
