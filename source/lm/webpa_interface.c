@@ -17,6 +17,8 @@
  * limitations under the License.
 */
 #define _GNU_SOURCE
+#include <errno.h>
+#include <unistd.h>
 #include "ssp_global.h"
 #include "stdlib.h"
 #include "ccsp_dm_api.h"
@@ -42,6 +44,7 @@
 #include "safec_lib_common.h"
 
 #define MAX_PARAMETERNAME_LEN   512
+#define WEBPA_CANCEL_POLL_USEC  100000
 
 #if defined(_SKY_HUB_COMMON_PRODUCT_REQ_) && !defined(_SCER11BEL_PRODUCT_REQ_)
 #include <utctx/utctx.h>
@@ -144,9 +147,32 @@ static int WebpaInterface_DiscoverComponent(char** pcomponentName, char** pcompo
 }
 #endif
 
-void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentType, char *payload, unsigned int payload_len)
+void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentType, char *payload, unsigned int payload_len, bool (*isCancelled)(void))
 {
-    pthread_mutex_lock(&webpa_mutex);
+    if (isCancelled == NULL)
+    {
+        pthread_mutex_lock(&webpa_mutex);
+    }
+    else
+    {
+        // Another reporter may hold the lock through its own long retry backoff.
+        int lockStatus;
+        while ((lockStatus = pthread_mutex_trylock(&webpa_mutex)) == EBUSY)
+        {
+            if (isCancelled())
+            {
+                CcspTraceWarning(("%s: cancelled while waiting for webpa lock, message dropped\n", __FUNCTION__));
+                return;
+            }
+            usleep(WEBPA_CANCEL_POLL_USEC);
+        }
+        if (lockStatus != 0)
+        {
+            CcspTraceError(("%s: failed to acquire webpa lock: %s, message dropped\n", __FUNCTION__, strerror(lockStatus)));
+            return;
+        }
+    }
+
     wrp_msg_t *wrp_msg ;
     int retry_count = 0, backoffRetryTime = 0, c = 2;
     int sendStatus = -1;
@@ -202,7 +228,12 @@ void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentTy
 
         while(retry_count<=5)
         {
-            backoffRetryTime = (int) pow(2, c) -1;
+            if (isCancelled && isCancelled())
+            {
+                CcspTraceWarning(("%s: cancelled, message dropped after %d retries\n", __FUNCTION__, retry_count));
+                break;
+            }
+	    backoffRetryTime = (int) pow(2, c) -1;
 
             CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, retry_count : %d\n",retry_count));
             sendStatus = libparodus_send(client_instance, wrp_msg);
@@ -217,8 +248,17 @@ void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentTy
             {
                 CcspTraceError(("Failed to send message: '%s', retrying ....\n",libparodus_strerror(sendStatus)));
                 CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, backoffRetryTime %d seconds\n", backoffRetryTime));
-                sleep(backoffRetryTime);
-                c++;
+                if (isCancelled == NULL)
+                {
+                    sleep(backoffRetryTime);
+                }
+                else
+                {
+                    long waitedUsec;
+                    for (waitedUsec = 0; waitedUsec < (long)backoffRetryTime * 1000000L && !isCancelled(); waitedUsec += WEBPA_CANCEL_POLL_USEC)
+                        usleep(WEBPA_CANCEL_POLL_USEC);
+                }
+		c++;
                 retry_count++;
             }
         }

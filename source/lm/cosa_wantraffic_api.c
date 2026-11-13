@@ -930,11 +930,12 @@ static pstDSCPInfo_t PrintDscpTree
         pstDSCPInfo_t  DscpTree
     )
 {
-    if (DscpTree)
+    if (DscpTree && (*offset < *pUlSize))
     {
         ULONG lOffset  = 0;
         ULONG rx_in_KB = 0;
         ULONG tx_in_KB = 0;
+	INT   written  = 0;/*H012*/
 
         PrintDscpTree(pValue, pUlSize, offset, countPerInterval, DscpTree->Left);
 
@@ -960,21 +961,32 @@ static pstDSCPInfo_t PrintDscpTree
 
             if (rx_in_KB || tx_in_KB)
             {
-                lOffset += snprintf(gPrintBuf + lOffset, *pUlSize - lOffset, "|%s,%lu,%lu",
-                                    DscpTree->ClientList[i].Mac,
-                                    tx_in_KB,
-                                    rx_in_KB);
+                written = snprintf(gPrintBuf + lOffset, sizeof(gPrintBuf) - lOffset, "|%s,%lu,%lu",
+                                   DscpTree->ClientList[i].Mac,
+                                   tx_in_KB,
+                                   rx_in_KB);
+		if ((written < 0) || ((ULONG)written >= sizeof(gPrintBuf) - lOffset))
+                {
+                    gPrintBuf[lOffset] = '\0';  /* drop truncated client entry */
+                    break;
+                }
+                lOffset += written;
             }
         }
 
-        if (lOffset)
+        if (lOffset && (*offset < *pUlSize))
         {
-            if (*offset)
+            written = snprintf(pValue + *offset, *pUlSize - *offset, "%s%d%s",
+                               (*offset) ? ";" : "", DscpTree->Dscp, gPrintBuf);
+	    if ((written < 0) || ((ULONG)written >= *pUlSize - *offset))
             {
-                *offset += snprintf(pValue + *offset, *pUlSize - *offset, ";");
+                pValue[*offset] = '\0';     /* drop truncated DSCP node */
+                *offset = *pUlSize;         /* buffer full: stop further output */
             }
-            *offset += snprintf(pValue + *offset, *pUlSize - *offset, "%d", DscpTree->Dscp);
-            *offset += snprintf(pValue + *offset, *pUlSize - *offset, "%s", gPrintBuf);
+            else
+            {
+                *offset += written;
+            }
         }
 
         PrintDscpTree(pValue, pUlSize, offset, countPerInterval, DscpTree->Right);

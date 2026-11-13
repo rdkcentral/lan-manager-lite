@@ -825,7 +825,7 @@ void extender_report_associateddevices(struct associateddevicedata *head, char* 
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, AvroSerializedBufIDW: %s\n", AvroSerializedBufIDW));
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, AvroSerializedSizeIDW: %d\n", (int)AvroSerializedSizeIDW));
   // Send data from LMLite to webpa using CCSP bus interface
-  sendWebpaMsg(serviceName, dest, trans_id, contentType, AvroSerializedBufIDW, AvroSerializedSizeIDW);
+  sendWebpaMsg(serviceName, dest, trans_id, contentType, AvroSerializedBufIDW, AvroSerializedSizeIDW, NULL);
   CcspTraceWarning(("ExtenderDevicesWifi report sent to Webpa, Destination=%s, Transaction-Id=%s  \n",dest,trans_id));
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, After AD WebPA SEND message call\n"));
 
