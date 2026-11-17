@@ -3268,9 +3268,7 @@ static BOOL ValidateHost (char *mac)
             format_neighbour_entry(neighbours, i, arp_entry, sizeof(arp_entry));
             if (arp_entry[0] != '\0') {
 		    found = TRUE;
-                }
             }
-
         }
     }
     else{
