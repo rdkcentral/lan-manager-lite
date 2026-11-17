@@ -198,6 +198,7 @@ bool isvalueinarray(ULONG val, ULONG *arr, int size)
 int SetNDSHarvestingStatus(BOOL status)
 {
     int ret = 0;/*H003*/
+    int sigRet = 0;
 
     pthread_mutex_lock(&ndsLifecycleMutex);
     pthread_mutex_lock(&ndsMutex);
@@ -214,7 +215,7 @@ int SetNDSHarvestingStatus(BOOL status)
     if (!status)
     {
 	NDSReportStatus = FALSE;
-        ret = pthread_cond_signal(&ndsCond);
+        sigRet = pthread_cond_signal(&ndsCond);
     }
 
     pthread_mutex_unlock(&ndsMutex);
@@ -258,7 +259,7 @@ int SetNDSHarvestingStatus(BOOL status)
         pthread_mutex_lock(&ndsMutex);
         ret = pthread_cond_signal(&ndsCond);
         pthread_mutex_unlock(&ndsMutex);
-        if (ret == 0)
+        if (sigRet == 0)
         {
             CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : pthread_cond_signal success\n", __FUNCTION__ ));
         }
