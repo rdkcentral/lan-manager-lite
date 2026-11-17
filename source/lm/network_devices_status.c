@@ -43,6 +43,10 @@
 
 static pthread_mutex_t ndsMutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t ndsCond = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t ndsLifecycleMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t ndsListMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_t ndsThread;
+static bool ndsThreadActive = false;
 
 #ifdef MLT_ENABLED
 #include "rpl_malloc.h"
@@ -149,7 +153,13 @@ static void WaitForPthreadConditionTimeoutNDS()
     memset(&_ts, 0, sizeof(struct timespec));
     memset(&_now, 0, sizeof(struct timespec));
 
-    pthread_mutex_lock(&ndsMutex);
+    pthread_mutex_lock(&ndsMutex);/*H003*/
+
+    if (!NDSReportStatus)
+    {
+        pthread_mutex_unlock(&ndsMutex);
+        return;
+    }
 
     clock_gettime(CLOCK_REALTIME, &_now);
     _ts.tv_sec = _now.tv_sec + GetNDSPollingPeriod();
@@ -187,25 +197,59 @@ bool isvalueinarray(ULONG val, ULONG *arr, int size)
 
 int SetNDSHarvestingStatus(BOOL status)
 {
+    int ret = 0;/*H003*/
+
+    pthread_mutex_lock(&ndsLifecycleMutex);
+    pthread_mutex_lock(&ndsMutex);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s ENTER\n", __FUNCTION__ ));
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : Old[%d] New[%d] \n", __FUNCTION__, NDSReportStatus, status ));
 
-    if (NDSReportStatus != status)
-        NDSReportStatus = status;
-    else
-        return 0;
-
-    if (NDSReportStatus)
+    if (NDSReportStatus == status && (status || !ndsThreadActive))
     {
-        pthread_t tid;
+	pthread_mutex_unlock(&ndsMutex);
+        pthread_mutex_unlock(&ndsLifecycleMutex);
+        return 0;
+    }
 
-        CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : Starting Thread to start DeviceData Harvesting  \n", __FUNCTION__ ));
+    if (!status)
+    {
+	NDSReportStatus = FALSE;
+        ret = pthread_cond_signal(&ndsCond);
+    }
 
-        if (pthread_create(&tid, NULL, StartNetworkDeviceStatusHarvesting, NULL))
+    pthread_mutex_unlock(&ndsMutex);
+
+    if (status)
+    {
+
+	CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : Starting Thread to start DeviceData Harvesting  \n", __FUNCTION__ ));
+
+        if (ndsThreadActive)
         {
-            CcspLMLiteTrace(("RDK_LOG_ERROR, LMLite %s : Failed to Start Thread to start DeviceData Harvesting  \n", __FUNCTION__ ));
-            return ANSC_STATUS_FAILURE;
+	    ret = pthread_join(ndsThread, NULL);
+            if (ret != 0)
+            {
+		CcspLMLiteTrace(("RDK_LOG_ERROR, LMLite %s : Failed to join DeviceData Harvesting thread, ret:[%d] \n", __FUNCTION__, ret));
+                pthread_mutex_unlock(&ndsLifecycleMutex);
+                return ANSC_STATUS_FAILURE;
+            }
+            ndsThreadActive = false;
         }
+	pthread_mutex_lock(&ndsMutex);
+        NDSReportStatus = TRUE;
+        pthread_mutex_unlock(&ndsMutex);
+
+        ret = pthread_create(&ndsThread, NULL, StartNetworkDeviceStatusHarvesting, NULL);
+	if (ret != 0)
+	{
+	    CcspLMLiteTrace(("RDK_LOG_ERROR, LMLite %s : Failed to Start Thread to start DeviceData Harvesting  \n", __FUNCTION__ ));
+            pthread_mutex_lock(&ndsMutex);
+            NDSReportStatus = FALSE;
+            pthread_mutex_unlock(&ndsMutex);
+            pthread_mutex_unlock(&ndsLifecycleMutex);
+            return ANSC_STATUS_FAILURE;
+	}
+	ndsThreadActive = true;
 	CcspTraceWarning(("LMLite: Network Status Report STARTED %s\n",__FUNCTION__));
     }
     else
@@ -222,9 +266,21 @@ int SetNDSHarvestingStatus(BOOL status)
         {
             CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : pthread_cond_signal fail\n", __FUNCTION__ ));
         }
+	if (ndsThreadActive)
+        {
+            ret = pthread_join(ndsThread, NULL);
+            if (ret != 0)
+            {
+                CcspLMLiteTrace(("RDK_LOG_ERROR, LMLite %s : Failed to join DeviceData Harvesting thread, ret:[%d] \n", __FUNCTION__, ret));
+                pthread_mutex_unlock(&ndsLifecycleMutex);
+                return ANSC_STATUS_FAILURE;
+            }
+            ndsThreadActive = false;
+        }
 	CcspTraceWarning(("LMLite: Network Status Report STOPPED %s\n",__FUNCTION__));
     }
 
+    pthread_mutex_unlock(&ndsLifecycleMutex);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : EXIT \n", __FUNCTION__ ));
 
     return 0;
@@ -232,9 +288,14 @@ int SetNDSHarvestingStatus(BOOL status)
 
 BOOL GetNDSHarvestingStatus()
 {
+    BOOL status;/*H003*/
+
+    pthread_mutex_lock(&ndsMutex);
+    status = NDSReportStatus;
+    pthread_mutex_unlock(&ndsMutex);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s ENTER\n", __FUNCTION__ ));
-    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s EXIT RET[%d] \n", __FUNCTION__, NDSReportStatus ));
-    return NDSReportStatus;
+    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s EXIT RET[%d] \n", __FUNCTION__, status ));
+    return status;
 }
 
 int SetNDSReportingPeriod(ULONG period)
@@ -793,7 +854,8 @@ void delete_list(struct networkdevicestatusdata **head)
 void GetLMHostData()
 {
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s ENTER\n", __FUNCTION__ ));
-    int i = 0;
+    int i = 0;/*H003*/
+    pthread_mutex_lock(&ndsListMutex);
     CcspTraceDebug(("%s:%d, Acquiring LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     pthread_mutex_lock(&LmHostObjectMutex);
     CcspTraceDebug(("%s:%d, Acquired LmHostObjectMutex\n",__FUNCTION__,__LINE__));
@@ -855,6 +917,7 @@ void GetLMHostData()
     } 
 
     pthread_mutex_unlock(&LmHostObjectMutex);
+    pthread_mutex_unlock(&ndsListMutex);
     CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s EXIT \n", __FUNCTION__ ));
 }
@@ -894,14 +957,17 @@ void* StartNetworkDeviceStatusHarvesting( void *arg )
 
         if (currentReportingPeriod >= GetNDSReportingPeriod())
         {
-            struct networkdevicestatusdata* ptr = headnode;
+            pthread_mutex_lock(&ndsListMutex);/*H003*/
+	    struct networkdevicestatusdata* ptr = headnode;
             if(ptr)
                 {
                     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, Before Sending to WebPA and AVRO currentPollingPeriod [%ld] NDSReportingPeriod[%ld]  \n", GetNDSPollingPeriod(), GetNDSReportingPeriod()));
                     network_devices_status_report(ptr, FALSE, (char *)getFullDeviceMac());
                     delete_list(&headnode);
                 }
+	    pthread_mutex_unlock(&ndsListMutex);
 
+	    pthread_mutex_lock(&ndsListMutex);
             ptr = headnodeextender;
             if(ptr)
                 {
@@ -927,8 +993,9 @@ void* StartNetworkDeviceStatusHarvesting( void *arg )
                     CcspTraceDebug(("%s:%d, unlocked LmHostObjectMutex\n",__FUNCTION__,__LINE__));
                     delete_list(&headnodeextender);
                 }
-
-            currentReportingPeriod = 0;
+            pthread_mutex_unlock(&ndsListMutex);
+	    
+	    currentReportingPeriod = 0;
         }
 
 

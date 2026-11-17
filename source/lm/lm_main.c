@@ -3211,8 +3211,18 @@ void Hosts_PollHost (void)
 static BOOL ValidateHost (char *mac)
 {
     char buf[200];
+    char leaseMac[18];/*H004,H010,H011*/
     FILE *fp;
-    int ret =0;
+    BOOL found = FALSE;
+#ifndef CORE_NET_LIB
+    int ret = 0;
+#endif
+
+    if (mac == NULL || validate_mac(mac) != 0)
+    {
+        CcspTraceError(("%s: Invalid MAC address\n", __FUNCTION__));
+        return FALSE;
+    }
 
 #ifdef CORE_NET_LIB
     char *mac_filter = NULL;
@@ -3257,11 +3267,10 @@ static BOOL ValidateHost (char *mac)
             char arp_entry[128] = {0};
             format_neighbour_entry(neighbours, i, arp_entry, sizeof(arp_entry));
             if (arp_entry[0] != '\0') {
-                libnet_status fw_st = file_write(ARP_CACHE, arp_entry, strlen(arp_entry));
-                if (fw_st != CNL_STATUS_SUCCESS){
-                    CcspTraceError(("%s %d: File write failed for neighbor list!\n", __FUNCTION__, __LINE__));
+		    found = TRUE;
                 }
             }
+
         }
     }
     else{
@@ -3271,51 +3280,52 @@ static BOOL ValidateHost (char *mac)
     }
     neighbour_free_neigh(neighbours);
 #else
-    ret = v_secure_system("ip nei show | grep -i %s > "ARP_CACHE, mac);
-    if(ret < 0)
+    /* Read neighbour output through a pipe; no fixed /tmp staging file. */
+    fp = v_secure_popen("r", "ip nei show | grep -i %s", mac);
+    if (fp == NULL)
     {
-         CcspTraceError(("Failed in executing the command via v_secure_system ret: %d\n",ret));
+        CcspTraceError(("Failed in executing the command via v_secure_popen\n"));
+    }
+    else
+    {
+        while (fgets(buf, sizeof(buf), fp) != NULL)
+        {
+            if (strcasestr(buf, mac) != NULL)
+            {
+                found = TRUE;
+                break;
+            }
+        }
+        ret = v_secure_pclose(fp);
+        if (ret < 0)
+        {
+            CcspTraceError(("Failed in v_secure_pclose ret: %d\n", ret));
+        }
     }
 #endif /* CORE_NET_LIB */
 
-    if ((fp = fopen(ARP_CACHE, "r")) == NULL)
+    if (found)
     {
-        return FALSE;
-    }
-
-    if (fgets (buf, sizeof(buf), fp) != NULL)
-    {
-        fclose(fp);
-        unlink(ARP_CACHE);
         return TRUE;
     }
 
-    fclose(fp);
-    fp = NULL;
-    unlink(ARP_CACHE);
-
-    ret = v_secure_system("cat "DNSMASQ_FILE" | grep -i %s > "DNSMASQ_CACHE, mac);
-    if(ret < 0)
+    /* Lease format: <expiry> <mac> <ip> <hostname> <clientid>; match the MAC field exactly. */
+    if ((fp = fopen(DNSMASQ_FILE, "r")) == NULL)
     {
-        CcspTraceError(("Failed in executing the command via v_seure_system ret: %d\n",ret));
-    }
-
-    if ((fp = fopen(DNSMASQ_CACHE, "r")) == NULL)
-    {
-        CcspTraceWarning(("%s not able to open dnsmasq cache file\n", __FUNCTION__));
+	CcspTraceWarning(("%s not able to open dnsmasq leases file\n", __FUNCTION__));
         return FALSE;
     }
 
-    if (fgets (buf, sizeof(buf), fp) != NULL)
+    while (fgets(buf, sizeof(buf), fp) != NULL)
     {
-        fclose(fp);
-        unlink(DNSMASQ_CACHE);
-        return TRUE;
+        if ((sscanf(buf, "%*s %17s", leaseMac) == 1) && (strcasecmp(leaseMac, mac) == 0))
+        {
+            found = TRUE;
+            break;
+        }
     }
-
     fclose(fp);
-    unlink(DNSMASQ_CACHE);
-    return FALSE;
+    return found;
 }
 
 static RetryHostList *CreateValidateHostEntry(ValidateHostQData *pValidateHost)
