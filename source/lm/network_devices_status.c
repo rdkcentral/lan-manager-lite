@@ -966,9 +966,6 @@ void* StartNetworkDeviceStatusHarvesting( void *arg )
                     network_devices_status_report(ptr, FALSE, (char *)getFullDeviceMac());
                     delete_list(&headnode);
                 }
-	    pthread_mutex_unlock(&ndsListMutex);
-
-	    pthread_mutex_lock(&ndsListMutex);
             ptr = headnodeextender;
             if(ptr)
                 {

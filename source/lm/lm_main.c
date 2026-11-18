@@ -120,8 +120,10 @@
 #include <ctype.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <mqueue.h>
+#include <unistd.h>
 
 #define EVENT_QUEUE_NAME  "/Event_queue"
 #define DNSMASQ_NOTIFY_QUEUE_NAME  "/dnsmasq_eventqueue"
@@ -152,8 +154,6 @@
 #define MAX_SIZE_VALIDATE_QUEUE         sizeof(ValidateHostQData)
 #define MAX_COUNT_VALIDATE_RETRY        (3)
 #define MAX_WAIT_VALIDATE_RETRY         (15)
-#define ARP_CACHE                       "/tmp/arp.txt"
-#define DNSMASQ_CACHE                   "/tmp/dns.txt"
 #define DNSMASQ_FILE                    "/nvram/dnsmasq.leases"
 #define ACTION_FLAG_ADD                 (1)
 #define ACTION_FLAG_DEL                 (2)
@@ -3210,15 +3210,20 @@ void Hosts_PollHost (void)
 
 static BOOL ValidateHost (char *mac)
 {
-    char buf[200];
+    char buf[512];
     char leaseMac[18];/*H004,H010,H011*/
     FILE *fp;
     BOOL found = FALSE;
+    int macEnd = 0;
+    int nvramFd;
+    int leaseFd;
+    struct stat nvramStat;
+    struct stat leaseStat;
 #ifndef CORE_NET_LIB
-    int ret = 0;
+    int ret;
 #endif
 
-    if (mac == NULL || validate_mac(mac) != 0)
+    if (mac == NULL || strlen(mac) != MACADDR_SZ - 1 || validate_mac(mac) != 0)
     {
         CcspTraceError(("%s: Invalid MAC address\n", __FUNCTION__));
         return FALSE;
@@ -3229,15 +3234,9 @@ static BOOL ValidateHost (char *mac)
     char *if_filter = NULL;
     int af_filter = 0;
 
-    if (mac != NULL) {
-        mac_filter = strdup(mac);
-        if (!mac_filter) {
-            CcspTraceError(("%s: Failed to copy MAC string\n", __FUNCTION__));
-            return FALSE;
-        }
-    }
-    else{
-        CcspTraceError(("%s: Input MAC address is NULL\n", __FUNCTION__));
+    mac_filter = strdup(mac);
+    if (!mac_filter) {
+        CcspTraceError(("%s: Failed to copy MAC string\n", __FUNCTION__));
         return FALSE;
     }
 
@@ -3264,10 +3263,9 @@ static BOOL ValidateHost (char *mac)
                 neighbours->neigh_arr[i].ifname ? neighbours->neigh_arr[i].ifname : "NULL",
                 neighbours->neigh_arr[i].state));
 
-            char arp_entry[128] = {0};
-            format_neighbour_entry(neighbours, i, arp_entry, sizeof(arp_entry));
-            if (arp_entry[0] != '\0') {
-		    found = TRUE;
+            if (neighbours->neigh_arr[i].mac != NULL &&
+                strcasecmp(neighbours->neigh_arr[i].mac, mac) == 0) {
+                found = TRUE;
             }
         }
     }
@@ -3278,27 +3276,32 @@ static BOOL ValidateHost (char *mac)
     }
     neighbour_free_neigh(neighbours);
 #else
-    /* Read neighbour output through a pipe; no fixed /tmp staging file. */
-    fp = v_secure_popen("r", "ip nei show | grep -i %s", mac);
+    fp = popen("ip nei show", "r");
     if (fp == NULL)
     {
-        CcspTraceError(("Failed in executing the command via v_secure_popen\n"));
+        CcspTraceError(("Failed to execute ip nei show\n"));
     }
     else
     {
         while (fgets(buf, sizeof(buf), fp) != NULL)
         {
-            if (strcasestr(buf, mac) != NULL)
+            char *saveptr = NULL;
+            char *token = strtok_r(buf, " \t\r\n", &saveptr);
+            while (token != NULL)
             {
-                found = TRUE;
-                break;
+                if (strcmp(token, "lladdr") == 0)
+                {
+                    token = strtok_r(NULL, " \t\r\n", &saveptr);
+                    if (token != NULL && strcasecmp(token, mac) == 0)
+                        found = TRUE;
+                    break;
+                }
+                token = strtok_r(NULL, " \t\r\n", &saveptr);
             }
         }
-        ret = v_secure_pclose(fp);
+        ret = pclose(fp);
         if (ret < 0)
-        {
-            CcspTraceError(("Failed in v_secure_pclose ret: %d\n", ret));
-        }
+            CcspTraceError(("Failed in pclose ret: %d\n", ret));
     }
 #endif /* CORE_NET_LIB */
 
@@ -3307,21 +3310,52 @@ static BOOL ValidateHost (char *mac)
         return TRUE;
     }
 
-    /* Lease format: <expiry> <mac> <ip> <hostname> <clientid>; match the MAC field exactly. */
-    if ((fp = fopen(DNSMASQ_FILE, "r")) == NULL)
+    nvramFd = open("/nvram", O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+    if (nvramFd < 0 || fstat(nvramFd, &nvramStat) != 0 ||
+        !S_ISDIR(nvramStat.st_mode) || nvramStat.st_uid != 0 ||
+        (nvramStat.st_mode & (S_IWGRP | S_IWOTH)) != 0)
     {
-	CcspTraceWarning(("%s not able to open dnsmasq leases file\n", __FUNCTION__));
+        if (nvramFd >= 0)
+            close(nvramFd);
+        CcspTraceWarning(("%s: /nvram directory is not trusted\n", __FUNCTION__));
+        return FALSE;
+    }
+
+    leaseFd = openat(nvramFd, "dnsmasq.leases", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    close(nvramFd);
+    if (leaseFd < 0 || fstat(leaseFd, &leaseStat) != 0 ||
+        !S_ISREG(leaseStat.st_mode) || leaseStat.st_uid != 0 ||
+        (leaseStat.st_mode & (S_IWGRP | S_IWOTH)) != 0)
+    {
+        if (leaseFd >= 0)
+            close(leaseFd);
+        CcspTraceWarning(("%s: dnsmasq leases file is not trusted\n", __FUNCTION__));
+        return FALSE;
+    }
+
+    fp = fdopen(leaseFd, "r");
+    if (fp == NULL)
+    {
+        close(leaseFd);
+        CcspTraceWarning(("%s: unable to read dnsmasq leases file\n", __FUNCTION__));
         return FALSE;
     }
 
     while (fgets(buf, sizeof(buf), fp) != NULL)
     {
-        if ((sscanf(buf, "%*s %17s", leaseMac) == 1) && (strcasecmp(leaseMac, mac) == 0))
+        macEnd = 0;
+        if ((sscanf(buf, "%*s %17s%n", leaseMac, &macEnd) == 1) &&
+            (macEnd > 0) &&
+            (buf[macEnd] == '\0' || isspace((unsigned char)buf[macEnd])) &&
+            (strlen(leaseMac) == MACADDR_SZ - 1) &&
+            (validate_mac(leaseMac) == 0) &&
+            (strcasecmp(leaseMac, mac) == 0))
         {
             found = TRUE;
             break;
         }
     }
+
     fclose(fp);
     return found;
 }
