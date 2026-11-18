@@ -3215,9 +3215,7 @@ static BOOL ValidateHost (char *mac)
     FILE *fp;
     BOOL found = FALSE;
     int macEnd = 0;
-    int nvramFd;
     int leaseFd;
-    struct stat nvramStat;
     struct stat leaseStat;
 #ifndef CORE_NET_LIB
     int ret;
@@ -3310,19 +3308,7 @@ static BOOL ValidateHost (char *mac)
         return TRUE;
     }
 
-    nvramFd = open("/nvram", O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
-    if (nvramFd < 0 || fstat(nvramFd, &nvramStat) != 0 ||
-        !S_ISDIR(nvramStat.st_mode) || nvramStat.st_uid != 0 ||
-        (nvramStat.st_mode & (S_IWGRP | S_IWOTH)) != 0)
-    {
-        if (nvramFd >= 0)
-            close(nvramFd);
-        CcspTraceWarning(("%s: /nvram directory is not trusted\n", __FUNCTION__));
-        return FALSE;
-    }
-
-    leaseFd = openat(nvramFd, "dnsmasq.leases", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-    close(nvramFd);
+    leaseFd = open(DNSMASQ_FILE, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     if (leaseFd < 0 || fstat(leaseFd, &leaseStat) != 0 ||
         !S_ISREG(leaseStat.st_mode) || leaseStat.st_uid != 0 ||
         (leaseStat.st_mode & (S_IWGRP | S_IWOTH)) != 0)
@@ -3346,7 +3332,7 @@ static BOOL ValidateHost (char *mac)
         macEnd = 0;
         if ((sscanf(buf, "%*s %17s%n", leaseMac, &macEnd) == 1) &&
             (macEnd > 0) &&
-	    (macEnd < (int)sizeof(buf)) &&
+            (macEnd < (int)sizeof(buf)) &&
             (buf[macEnd] == '\0' || isspace((unsigned char)buf[macEnd])) &&
             (strlen(leaseMac) == MACADDR_SZ - 1) &&
             (validate_mac(leaseMac) == 0) &&
