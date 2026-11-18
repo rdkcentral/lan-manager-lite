@@ -3346,6 +3346,7 @@ static BOOL ValidateHost (char *mac)
         macEnd = 0;
         if ((sscanf(buf, "%*s %17s%n", leaseMac, &macEnd) == 1) &&
             (macEnd > 0) &&
+	    (macEnd < (int)sizeof(buf)) &&
             (buf[macEnd] == '\0' || isspace((unsigned char)buf[macEnd])) &&
             (strlen(leaseMac) == MACADDR_SZ - 1) &&
             (validate_mac(leaseMac) == 0) &&
