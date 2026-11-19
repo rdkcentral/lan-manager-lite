@@ -65,6 +65,7 @@
 #ifndef  _LM_MAIN_H_
 #define  _LM_MAIN_H_
 
+#include <stdbool.h>
 #include "lm_api.h"
 #include "network_devices_interface.h"
 
@@ -323,6 +324,10 @@ LmObjectHosts,  *PLmObjectHosts;
 PLmObjectHostIPAddress Host_AddIPAddress (PLmObjectHost pHost, char *ipAddress, int version);
 
 void Hosts_PollHost (void);
+
+#ifdef LPM_MANAGER_SUPPORT
+bool lm_get_active_wifi_clients_present(void);
+#endif
 
 void LM_main (void);
 

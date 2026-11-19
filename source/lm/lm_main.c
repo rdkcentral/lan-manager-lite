@@ -120,8 +120,10 @@
 #include <ctype.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <mqueue.h>
+#include <unistd.h>
 
 #define EVENT_QUEUE_NAME  "/Event_queue"
 #define DNSMASQ_NOTIFY_QUEUE_NAME  "/dnsmasq_eventqueue"
@@ -152,8 +154,6 @@
 #define MAX_SIZE_VALIDATE_QUEUE         sizeof(ValidateHostQData)
 #define MAX_COUNT_VALIDATE_RETRY        (3)
 #define MAX_WAIT_VALIDATE_RETRY         (15)
-#define ARP_CACHE                       "/tmp/arp.txt"
-#define DNSMASQ_CACHE                   "/tmp/dns.txt"
 #define DNSMASQ_FILE                    "/nvram/dnsmasq.leases"
 #define ACTION_FLAG_ADD                 (1)
 #define ACTION_FLAG_DEL                 (2)
@@ -228,6 +228,10 @@ extern char dev_Mode[20] ;
 #endif
 
 int g_Client_Poll_interval;
+#ifdef LPM_MANAGER_SUPPORT
+static int g_ActiveWifiClientCount = 0;
+static pthread_mutex_t ActiveWifiClientCountMutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
 
 /* Presence Notification - Payload */
 typedef struct {
@@ -353,6 +357,12 @@ static void Host_FreeMloLinks (PLmObjectHost pHost);
 static void Hosts_SyncDHCP(void);
 static void Sendmsg_dnsmasq(BOOL enablePresenceFeature);
 static void Send_Eth_Host_Sync_Req(void);
+#ifdef LPM_MANAGER_SUPPORT
+static bool lm_is_lowpower_enabled(void);
+static bool lm_get_active_pods_present(void);
+static void lm_publish_active_wifi_clients_state(bool active);
+static pthread_mutex_t LpmPublishMutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
 
 #if defined (CONFIG_SYSTEM_MOCA)
 static void Send_MoCA_Host_Sync_Req(void);
@@ -587,7 +597,7 @@ static void get_vendor_class_id (char* physAddress, char* vendor_class)
         while((fgets(buffer, sizeof(buffer), fpv)) != NULL)
         {
             memset(client_mac, 0, sizeof(client_mac));
-            sscanf(buffer, "%s", client_mac);
+	    sscanf(buffer, "%31s", client_mac);/*H006*/
             if (strcasecmp(physAddress, client_mac) == 0)
             {
                 tmp_vendor = strstr(buffer, " ");
@@ -601,6 +611,41 @@ static void get_vendor_class_id (char* physAddress, char* vendor_class)
             }
         }
         fclose(fpv);
+    }
+}
+#endif
+
+#ifdef LPM_MANAGER_SUPPORT
+static void lm_update_active_wifi_client_count(PLmObjectHost pHost, BOOL state)
+{
+    if (pHost &&
+        ((pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
+          strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
+         pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId]))
+    {
+        int count;
+
+        CcspTraceWarning(("RDKB_LOWPOWER: Updating the active WIFI Client count\n"));
+        pthread_mutex_lock(&ActiveWifiClientCountMutex);
+        if (state)
+        {
+            g_ActiveWifiClientCount++;
+        }
+        else if (g_ActiveWifiClientCount > 0)
+        {
+            g_ActiveWifiClientCount--;
+        }
+    
+        count = g_ActiveWifiClientCount;
+        pthread_mutex_unlock(&ActiveWifiClientCountMutex);
+
+        CcspTraceInfo(("RDKB_LOWPOWER: ACTIVE_WIFI_CLIENTS_COUNT : %d \n", count));
+        if (count == 0)
+        {
+            lm_publish_active_wifi_clients_state(lm_get_active_pods_present());
+        }else {
+            lm_publish_active_wifi_clients_state(true);
+        }
     }
 }
 #endif
@@ -623,13 +668,6 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
         getIPAddress(pHost->pStringParaValue[LM_HOST_PhysAddressId], IPAddress);
         LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_IPAddressId]) , IPAddress);
     }
-/*
-		getAddressSource(pHost->pStringParaValue[LM_HOST_PhysAddressId], addressSource);
-		if ( (pHost->pStringParaValue[LM_HOST_AddressSource]) && (strlen(addressSource)))	
-		{
-   		       LanManager_CheckCloneCopy(&(pHost->pStringParaValue[LM_HOST_AddressSource]) , addressSource);
-		}
-*/
 	if(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] != NULL)
 	{
 		if((strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId],"WiFi"))) 
@@ -729,8 +767,12 @@ static void LM_SET_ACTIVE_STATE_TIME_(int line, LmObjectHost *pHost,BOOL state){
                 }
             }
         }
+
         pHost->bBoolParaValue[LM_HOST_ActiveId] = state;
         pHost->activityChangeTime = time((time_t*)NULL);
+#ifdef LPM_MANAGER_SUPPORT
+        lm_update_active_wifi_client_count(pHost, state);
+#endif
 		logOnlineDevicesCount();
 
 	}
@@ -2835,6 +2877,165 @@ static void Hosts_SyncDHCP(void)
     lm_wrapper_get_dhcpv4_reserved();
 }
 
+#ifdef LPM_MANAGER_SUPPORT
+/* AccessPoint instances of mesh_backhaul_2g/5g (same as MeshAgent) */
+#ifndef LM_MESH_BHAUL_AP_LIST
+#define LM_MESH_BHAUL_AP_LIST    {13, 14}
+#endif
+
+
+/* Set from partners_defaults.json, so it only changes across a reboot. */
+static bool lm_is_lowpower_enabled(void)
+{
+    static int enabled = -1;
+
+    if (enabled < 0)
+    {
+        char buf[8] = {0};
+        int ret = syscfg_get(NULL, "lpm_enable", buf, sizeof(buf));
+
+        if (ret != 0)
+        {
+            CcspTraceWarning(("RDKB_LOWPOWER: syscfg_get for lpm_enable failed (%d)\n", ret));
+        }
+        else
+        {
+            enabled = (0 == strcmp(buf, "true")) ? 1 : 0;
+        }
+    }
+
+    return (1 == enabled);
+}
+
+/* Pods on mesh backhaul VAPs are not reported to LM Lite by OneWifi, so query OneWifi directly. */
+static bool lm_get_active_pods_present(void)
+{
+    static const int bhaulApList[] = LM_MESH_BHAUL_AP_LIST;
+    rbusHandle_t handle = get_rbus_handle();
+    char param[96];
+
+    if (handle == NULL)
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < sizeof(bhaulApList) / sizeof(bhaulApList[0]); i++)
+    {
+        rbusValue_t value = NULL;
+        uint32_t count = 0;
+
+        snprintf(param, sizeof(param), "Device.WiFi.AccessPoint.%d.AssociatedDeviceNumberOfEntries", bhaulApList[i]);
+        if (rbus_get(handle, param, &value) != RBUS_ERROR_SUCCESS)
+        {
+            CcspTraceWarning(("RDKB_LOWPOWER: %s: rbus_get failed for %s\n", __FUNCTION__, param));
+            continue;
+        }
+        if (rbusValue_GetType(value) == RBUS_UINT32)
+        {
+            count = rbusValue_GetUInt32(value);
+        }
+        rbusValue_Release(value);
+
+        if (count > 0)
+        {
+            CcspTraceInfo(("RDKB_LOWPOWER: %s: %u pod(s) connected on AccessPoint.%d\n",
+                           __FUNCTION__, count, bhaulApList[i]));
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lm_get_active_wifi_clients_present(void)
+{
+    bool current = false;
+
+    pthread_mutex_lock(&LmHostObjectMutex);
+    for (int i = 0; i < lmHosts.numHost; i++) {
+        PLmObjectHost pHost = lmHosts.hostArray[i];
+        if (pHost && pHost->bBoolParaValue[LM_HOST_ActiveId])
+        {
+            if ((pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
+                 strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
+                pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId])
+            {
+                CcspTraceInfo(("RDKB_LOWPOWER: %s: Active Wi-Fi client is present\n", __FUNCTION__));
+                current = true;
+                break;
+            }
+        }
+    }
+    pthread_mutex_unlock(&LmHostObjectMutex);
+    /* Check XHS WiFi clients as well when RESOURCE_OPTIMIZATION disabled.
+     * With RESOURCE_OPTIMIZATION disabled, Wifi_ServerSyncHost() stores 
+     * SSID 3/4 clients in XlmHosts
+    */
+#if !defined (RESOURCE_OPTIMIZATION)
+    if (!current)
+    {
+        pthread_mutex_lock(&XLmHostObjectMutex);
+        for (int i = 0; i < XlmHosts.numHost; i++)
+        {
+            PLmObjectHost pHost = XlmHosts.hostArray[i];
+
+            if (pHost && pHost->bBoolParaValue[LM_HOST_ActiveId] &&
+                ((pHost->pStringParaValue[LM_HOST_Layer1InterfaceId] &&
+                  strstr(pHost->pStringParaValue[LM_HOST_Layer1InterfaceId], "WiFi")) ||
+                 pHost->bBoolParaValue[LM_HOST_X_RDK_MldClientId]))
+            {
+                CcspTraceInfo(("RDKB_LOWPOWER: %s: Active XHS Wi-Fi client is present\n", __FUNCTION__));
+                current = true;
+                break;
+            }
+        }
+        pthread_mutex_unlock(&XLmHostObjectMutex);
+    }
+#endif
+    if (!current)
+    {
+        current = lm_get_active_pods_present();
+    }
+
+    return current;
+}
+
+static void lm_publish_active_wifi_clients_state(bool active)
+{
+    static bool lastPublished = false;
+    static bool hasPublishedValue = false;
+
+    pthread_mutex_lock(&LpmPublishMutex);
+    if (!hasActiveWifiClientsSubscribers())
+    {
+        CcspTraceInfo(("RDKB_LOWPOWER: %s: No active Wi-Fi client subscribers; skipping publish\n", __FUNCTION__));
+        pthread_mutex_unlock(&LpmPublishMutex);
+        return;
+    }
+
+    if (!hasPublishedValue || active != lastPublished)
+    {
+        bool previous = hasPublishedValue ? lastPublished : !active;
+        CcspTraceWarning(("RDKB_LOWPOWER: %s: Publishing active Wi-Fi client state=%s, previous=%s\n",
+                          __FUNCTION__, active ? "true" : "false", previous ? "true" : "false"));
+        rbusError_t publishStatus = publishActiveWifiClientsEvent(active, previous);
+        if (publishStatus == RBUS_ERROR_SUCCESS)
+        {
+            lastPublished = active;
+            hasPublishedValue = true;
+            CcspTraceWarning(("RDKB_LOWPOWER: %s: Active Wi-Fi client state publish succeeded\n", __FUNCTION__));
+        }
+        else
+        {
+            CcspTraceError(("RDKB_LOWPOWER: %s: Failed to publish active Wi-Fi client state, error=%d\n",
+                            __FUNCTION__, publishStatus));
+        }
+    }
+    pthread_mutex_unlock(&LpmPublishMutex);
+}
+
+#endif /* LPM_MANAGER_SUPPORT */
+
 static void *Hosts_LoggingThread(void *args)
 {
     UNREFERENCED_PARAMETER(args);
@@ -2967,6 +3168,11 @@ static void *Hosts_StatSyncThreadFunc(void *args)
             acquirePresencelocks();
             CcspTraceDebug(("%s:%d, Acquired presence locks \n",__FUNCTION__,__LINE__));
             Hosts_RmHosts();
+#ifdef LPM_MANAGER_SUPPORT
+            pthread_mutex_lock(&ActiveWifiClientCountMutex);
+            g_ActiveWifiClientCount = 0;
+            pthread_mutex_unlock(&ActiveWifiClientCountMutex);
+#endif
             releasePresenceLocks();
             CcspTraceDebug(("%s:%d, released presence locks \n",__FUNCTION__,__LINE__));
             sleep(30);
@@ -2991,6 +3197,24 @@ static void *Hosts_StatSyncThreadFunc(void *args)
             Hosts_SyncDHCP();
             Hosts_SyncArp();
             Add_IPv6_from_Dibbler();
+#ifdef LPM_MANAGER_SUPPORT
+            if (lm_is_lowpower_enabled())
+            {
+                CcspTraceWarning(("RDKB_LOWPOWER: %s \n", __FUNCTION__));
+                pthread_mutex_lock(&ActiveWifiClientCountMutex);
+                bool activeWifiClientsPresent = (g_ActiveWifiClientCount > 0);
+                CcspTraceWarning(("RDKB_LOWPOWER: g_ActiveWifiClientCount = %d\n", g_ActiveWifiClientCount));
+                pthread_mutex_unlock(&ActiveWifiClientCountMutex);
+
+                if (!activeWifiClientsPresent)
+                {
+                    activeWifiClientsPresent = lm_get_active_pods_present();
+                    if (activeWifiClientsPresent)
+                        lm_publish_active_wifi_clients_state(true);
+                }
+                
+            }
+#endif
         }
     }
     return NULL;
@@ -3006,24 +3230,31 @@ void Hosts_PollHost (void)
 
 static BOOL ValidateHost (char *mac)
 {
-    char buf[200];
+    char buf[512];
+    char leaseMac[18];/*H004,H010,H011*/
     FILE *fp;
-    int ret =0;
+    BOOL found = FALSE;
+    int macEnd = 0;
+    int leaseFd;
+    struct stat leaseStat;
+#ifndef CORE_NET_LIB
+    int ret;
+#endif
+
+    if (mac == NULL || strlen(mac) != MACADDR_SZ - 1 || validate_mac(mac) != 0)
+    {
+        CcspTraceError(("%s: Invalid MAC address\n", __FUNCTION__));
+        return FALSE;
+    }
 
 #ifdef CORE_NET_LIB
     char *mac_filter = NULL;
     char *if_filter = NULL;
     int af_filter = 0;
 
-    if (mac != NULL) {
-        mac_filter = strdup(mac);
-        if (!mac_filter) {
-            CcspTraceError(("%s: Failed to copy MAC string\n", __FUNCTION__));
-            return FALSE;
-        }
-    }
-    else{
-        CcspTraceError(("%s: Input MAC address is NULL\n", __FUNCTION__));
+    mac_filter = strdup(mac);
+    if (!mac_filter) {
+        CcspTraceError(("%s: Failed to copy MAC string\n", __FUNCTION__));
         return FALSE;
     }
 
@@ -3050,13 +3281,9 @@ static BOOL ValidateHost (char *mac)
                 neighbours->neigh_arr[i].ifname ? neighbours->neigh_arr[i].ifname : "NULL",
                 neighbours->neigh_arr[i].state));
 
-            char arp_entry[128] = {0};
-            format_neighbour_entry(neighbours, i, arp_entry, sizeof(arp_entry));
-            if (arp_entry[0] != '\0') {
-                libnet_status fw_st = file_write(ARP_CACHE, arp_entry, strlen(arp_entry));
-                if (fw_st != CNL_STATUS_SUCCESS){
-                    CcspTraceError(("%s %d: File write failed for neighbor list!\n", __FUNCTION__, __LINE__));
-                }
+            if (neighbours->neigh_arr[i].mac != NULL &&
+                strcasecmp(neighbours->neigh_arr[i].mac, mac) == 0) {
+                found = TRUE;
             }
         }
     }
@@ -3067,51 +3294,77 @@ static BOOL ValidateHost (char *mac)
     }
     neighbour_free_neigh(neighbours);
 #else
-    ret = v_secure_system("ip nei show | grep -i %s > "ARP_CACHE, mac);
-    if(ret < 0)
+    fp = popen("ip nei show", "r");
+    if (fp == NULL)
     {
-         CcspTraceError(("Failed in executing the command via v_secure_system ret: %d\n",ret));
+        CcspTraceError(("Failed to execute ip nei show\n"));
+    }
+    else
+    {
+        while (fgets(buf, sizeof(buf), fp) != NULL)
+        {
+            char *saveptr = NULL;
+            char *token = strtok_r(buf, " \t\r\n", &saveptr);
+            while (token != NULL)
+            {
+                if (strcmp(token, "lladdr") == 0)
+                {
+                    token = strtok_r(NULL, " \t\r\n", &saveptr);
+                    if (token != NULL && strcasecmp(token, mac) == 0)
+                        found = TRUE;
+                    break;
+                }
+                token = strtok_r(NULL, " \t\r\n", &saveptr);
+            }
+        }
+        ret = pclose(fp);
+        if (ret < 0)
+            CcspTraceError(("Failed in pclose ret: %d\n", ret));
     }
 #endif /* CORE_NET_LIB */
 
-    if ((fp = fopen(ARP_CACHE, "r")) == NULL)
+    if (found)
     {
-        return FALSE;
-    }
-
-    if (fgets (buf, sizeof(buf), fp) != NULL)
-    {
-        fclose(fp);
-        unlink(ARP_CACHE);
         return TRUE;
     }
 
-    fclose(fp);
-    fp = NULL;
-    unlink(ARP_CACHE);
-
-    ret = v_secure_system("cat "DNSMASQ_FILE" | grep -i %s > "DNSMASQ_CACHE, mac);
-    if(ret < 0)
+    leaseFd = open(DNSMASQ_FILE, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (leaseFd < 0 || fstat(leaseFd, &leaseStat) != 0 ||
+        !S_ISREG(leaseStat.st_mode) || leaseStat.st_uid != 0 ||
+        (leaseStat.st_mode & (S_IWGRP | S_IWOTH)) != 0)
     {
-        CcspTraceError(("Failed in executing the command via v_seure_system ret: %d\n",ret));
-    }
-
-    if ((fp = fopen(DNSMASQ_CACHE, "r")) == NULL)
-    {
-        CcspTraceWarning(("%s not able to open dnsmasq cache file\n", __FUNCTION__));
+        if (leaseFd >= 0)
+            close(leaseFd);
+        CcspTraceWarning(("%s: dnsmasq leases file is not trusted\n", __FUNCTION__));
         return FALSE;
     }
 
-    if (fgets (buf, sizeof(buf), fp) != NULL)
+    fp = fdopen(leaseFd, "r");
+    if (fp == NULL)
     {
-        fclose(fp);
-        unlink(DNSMASQ_CACHE);
-        return TRUE;
+        close(leaseFd);
+        CcspTraceWarning(("%s: unable to read dnsmasq leases file\n", __FUNCTION__));
+        return FALSE;
+    }
+
+    while (fgets(buf, sizeof(buf), fp) != NULL)
+    {
+        macEnd = 0;
+        if ((sscanf(buf, "%*s %17s%n", leaseMac, &macEnd) == 1) &&
+            (macEnd > 0) &&
+            (macEnd < (int)sizeof(buf)) &&
+            (buf[macEnd] == '\0' || isspace((unsigned char)buf[macEnd])) &&
+            (strlen(leaseMac) == MACADDR_SZ - 1) &&
+            (validate_mac(leaseMac) == 0) &&
+            (strcasecmp(leaseMac, mac) == 0))
+        {
+            found = TRUE;
+            break;
+        }
     }
 
     fclose(fp);
-    unlink(DNSMASQ_CACHE);
-    return FALSE;
+    return found;
 }
 
 static RetryHostList *CreateValidateHostEntry(ValidateHostQData *pValidateHost)
@@ -3418,6 +3671,12 @@ if(checkRbusEnabled()) {
         if(regLMLiteDataModel() == 0)
         {
             CcspTraceInfo((" %s: lmLite Data Model registered successfully\n", __FUNCTION__));
+#ifdef LPM_MANAGER_SUPPORT
+            if (regActiveWifiClientsEvent() != 0)
+            {
+                CcspTraceError((" %s: ActiveWiFiClientsPresent event registration failed\n", __FUNCTION__));
+            }
+#endif
             /* Load initial value from PSM */
             int ret = 0;
             char *tmpchar = NULL;
@@ -3807,6 +4066,9 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
 			Xlm_wrapper_get_info(pHost);
 
 			pthread_mutex_lock(&XLmHostObjectMutex);
+#ifdef LPM_MANAGER_SUPPORT
+            BOOL wasActive = pHost->bBoolParaValue[LM_HOST_ActiveId];
+#endif
             /* reset MLO link table before repopulating */
             Host_FreeMloLinks(pHost);
 
@@ -3918,7 +4180,14 @@ void Wifi_ServerSyncHost (char *phyAddr, char apList[][LM_GEN_STR_SIZE], char ss
 				}
 			}
 
-			pthread_mutex_unlock(&XLmHostObjectMutex);
+#ifdef LPM_MANAGER_SUPPORT
+            CcspTraceWarning(("RDKB_LOWPOWER: %s \n", __FUNCTION__));
+            if (wasActive != pHost->bBoolParaValue[LM_HOST_ActiveId])
+            {
+                lm_update_active_wifi_client_count(pHost, Status);
+            }
+#endif
+        pthread_mutex_unlock(&XLmHostObjectMutex);
 		}
 #endif
 	}

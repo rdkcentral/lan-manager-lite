@@ -38,7 +38,10 @@
 #include "secure_wrapper.h"
 
 static pthread_mutex_t ndtMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t ndtLifecycleMutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t ndtCond = PTHREAD_COND_INITIALIZER;
+static pthread_t ndtThread;
+static bool ndtThreadActive = false;
 
 
 #ifdef MLT_ENABLED
@@ -98,25 +101,29 @@ static void WaitForPthreadConditionTimeoutNDT()
     memset(&_ts, 0, sizeof(struct timespec));
     memset(&_now, 0, sizeof(struct timespec));
 
-    pthread_mutex_lock(&ndtMutex);
+    pthread_mutex_lock(&ndtMutex);/*H015*/
 
-    clock_gettime(CLOCK_REALTIME, &_now);
-    _ts.tv_sec = _now.tv_sec + GetNDTPollingPeriod();
+    if (NDTReportStatus)
+    {
+	    clock_gettime(CLOCK_REALTIME, &_now);
+	    _ts.tv_sec = _now.tv_sec + GetNDTPollingPeriod();
 
-    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : Waiting for %lu sec\n",__FUNCTION__,GetNDTPollingPeriod()));
+	    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : Waiting for %lu sec\n",__FUNCTION__,GetNDTPollingPeriod()));
 
-    n = pthread_cond_timedwait(&ndtCond, &ndtMutex, &_ts);
-    if(n == ETIMEDOUT)
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : pthread_cond_timedwait TIMED OUT!!!\n",__FUNCTION__));
-    }
-    else if (n == 0)
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : pthread_cond_timedwait SIGNALLED OK!!!\n",__FUNCTION__));
-    }
-    else
-    {
-        CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : pthread_cond_timedwait ERROR!!!\n",__FUNCTION__));
+	    n = pthread_cond_timedwait(&ndtCond, &ndtMutex, &_ts);
+	    if(n == ETIMEDOUT)
+	    {
+		    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : pthread_cond_timedwait TIMED OUT!!!\n",__FUNCTION__));
+	    }
+	    else if (n == 0)
+	    {
+		    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : pthread_cond_timedwait SIGNALLED OK!!!\n",__FUNCTION__));
+	    }
+	    else
+	    {
+		    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : pthread_cond_timedwait ERROR!!!\n",__FUNCTION__));
+	    }
+
     }
 
     pthread_mutex_unlock(&ndtMutex);
@@ -159,33 +166,45 @@ int ResetEBTables()
 
 int SetNDTHarvestingStatus(BOOL status)
 {
+    int ret = 0;/*H015*/
+
+    pthread_mutex_lock(&ndtLifecycleMutex);
+    pthread_mutex_lock(&ndtMutex);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s ENTER\n", __FUNCTION__ ));
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : Old[%d] New[%d] \n", __FUNCTION__, NDTReportStatus, status ));
 
     if (NDTReportStatus != status)
         NDTReportStatus = status;
     else
-        return 0;
-
-    if (NDTReportStatus)
     {
-        pthread_t tid;
+        pthread_mutex_unlock(&ndtMutex);
+	pthread_mutex_unlock(&ndtLifecycleMutex);
+	return 0;
+    }
 
+    if (!status)
+	    ret = pthread_cond_signal(&ndtCond);
+    pthread_mutex_unlock(&ndtMutex);
+
+    if (status)
+    {
         CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : Starting Thread to start DeviceData Harvesting  \n", __FUNCTION__ ));
 
-        if (pthread_create(&tid, NULL, StartNetworkDevicesTrafficHarvesting, NULL))
+	ret = pthread_create(&ndtThread, NULL, StartNetworkDevicesTrafficHarvesting, NULL);
+        if (ret)
         {
             CcspLMLiteTrace(("RDK_LOG_ERROR, LMLite %s : Failed to Start Thread to start DeviceData Harvesting  \n", __FUNCTION__ ));
+	    pthread_mutex_lock(&ndtMutex);
+	    NDTReportStatus = FALSE;
+	    pthread_mutex_unlock(&ndtMutex);
+	    pthread_mutex_unlock(&ndtLifecycleMutex);
             return ANSC_STATUS_FAILURE;
         }
+	ndtThreadActive = true;
 	CcspTraceWarning(("LMLite: Network Traffic Report STARTED %s\n",__FUNCTION__));
     }
     else
     {
-        int ret;
-        pthread_mutex_lock(&ndtMutex);
-        ret = pthread_cond_signal(&ndtCond);
-        pthread_mutex_unlock(&ndtMutex);
         if (ret == 0)
         {
             CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : pthread_cond_signal success\n", __FUNCTION__ ));
@@ -194,9 +213,21 @@ int SetNDTHarvestingStatus(BOOL status)
         {
             CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : pthread_cond_signal fail\n", __FUNCTION__ ));
         }
+
+	if (ndtThreadActive)
+        {
+	    ret = pthread_join(ndtThread, NULL);
+	    if (ret != 0)
+	    {
+		    CcspLMLiteTrace(("RDK_LOG_ERROR, LMLite %s : Failed to join DeviceData Harvesting thread, ret:[%d] \n", __FUNCTION__, ret));
+		    pthread_mutex_unlock(&ndtLifecycleMutex);
+		    return ANSC_STATUS_FAILURE;
+	    }
+	    ndtThreadActive = false;
+        }
 	CcspTraceWarning(("LMLite: Network Traffic Report STOPPED %s\n",__FUNCTION__));
     }
-
+    pthread_mutex_unlock(&ndtLifecycleMutex);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s : EXIT \n", __FUNCTION__ ));
 
     return 0;
@@ -204,9 +235,14 @@ int SetNDTHarvestingStatus(BOOL status)
 
 BOOL GetNDTHarvestingStatus()
 {
+    BOOL status;/*H015*/
+    
+    pthread_mutex_lock(&ndtMutex);
+    status = NDTReportStatus;
+    pthread_mutex_unlock(&ndtMutex);
     CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s ENTER\n", __FUNCTION__ ));
-    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s EXIT RET[%d] \n", __FUNCTION__, NDTReportStatus ));
-    return NDTReportStatus;
+    CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, LMLite %s EXIT RET[%d] \n", __FUNCTION__, status ));
+    return status;
 }
 
 int SetNDTReportingPeriod(ULONG period)
