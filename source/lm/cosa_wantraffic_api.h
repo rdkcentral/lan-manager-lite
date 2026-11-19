@@ -103,18 +103,13 @@
 #define CLIENT_ALLOC_SLAB           10
 #define TR181_LANMODE               "Device.X_CISCO_COM_DeviceControl.LanManagementEntry.1.LanMode"
 #define TR181_WANMODE               "Device.X_RDKCENTRAL-COM_EthernetWAN.CurrentOperationalMode"
-
 #define TR181_COUNTENABLE           "Device.X_RDK_WAN.Interface.1.Stats.DscpCountEnable"
 #define TR181_SLEEPINTERVAL         "Device.X_RDK_WAN.Interface.1.Stats.DscpCountInterval"
 #define TR181_COUNTPERINTERVAL      "Device.X_RDK_WAN.Interface.1.Stats.DscpCountPerInterval"
 #define TR181_COUNTTOTAL            "Device.X_RDK_WAN.Interface.1.Stats.DscpCountTotal"
-#ifdef _SR300_PRODUCT_REQ_
 #define TR181_ACTIVE_INTERFACE      "Device.X_RDK_WanManager.InterfaceActiveStatus"
+#define TR181_AVAILABLE_INTERFACE   "Device.X_RDK_WanManager.InterfaceAvailableStatus"
 #define DSL                         DOCSIS
-#endif
-#ifdef _RDKB_GLOBAL_PRODUCT_REQ_
-#define TR181_ACTIVE_INTERFACE      "Device.X_RDK_WanManager.InterfaceActiveStatus"
-#endif
 
 
 #define LMLITE_RBUS_COMPONENT_NAME  "CcspLMLite"
@@ -198,6 +193,7 @@ typedef struct _stWTCInfo_t {
     UCHAR                 WTCConfigFlag[SUPPORTED_WAN_MODES];
     BOOL                  LanMode;
     WAN_INTERFACE         WanMode;
+    UINT                  WanModeWtcIndex;
     UINT                  SubscribeRefCount;
     pthread_t             WanTrafficThreadId;
     pthread_mutex_t       WanTrafficMutexVar;

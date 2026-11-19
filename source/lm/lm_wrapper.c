@@ -46,6 +46,8 @@
 #include "secure_wrapper.h"
 #include <stddef.h>
 #include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
 /*usage of printf -CID:55379, 59688, 61675, 65508*/ 
 #include <stdio.h>
 #include <sys/stat.h>
@@ -138,15 +140,27 @@ static const struct neigh_state_score_map neigh_score_map[] = {
 static libnet_status file_append(const char *file_name ,const char *buf, size_t count)
 {
     FILE *fp = NULL;
-    if (!file_name || !buf || count == 0) {
-        CcspTraceError(("%s Invalid input to file_append %s\n", __FUNCTION__, file_name));
+    struct stat st;
+    int fd_out;
+    /* O_NOFOLLOW rejects a planted symlink at a world-writable path such as /tmp. */
+    /*H008*/
+    fd_out = open(file_name, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, 0600);
+    if (fd_out < 0) {
+        perror("open failed");
+        CcspTraceError(("%s Failed to open file %s\n", __FUNCTION__, file_name));
+        return CNL_STATUS_FAILURE;
+    }
+    if (fstat(fd_out, &st) != 0 || !S_ISREG(st.st_mode) || st.st_uid != geteuid() || st.st_nlink != 1) {
+        CcspTraceError(("%s Refusing to write to untrusted file %s\n", __FUNCTION__, file_name));
+        close(fd_out);
         return CNL_STATUS_FAILURE;
     }
 
-    fp = fopen(file_name, "a");
+    fp = fdopen(fd_out, "a");
     if (NULL == fp) {
         perror("fopen failed");
         CcspTraceError(("%s Failed to open file %s\n", __FUNCTION__, file_name));
+	close(fd_out);
         return CNL_STATUS_FAILURE;
     }
     if (count != fwrite(buf, sizeof(char), count, fp)) {
@@ -1361,7 +1375,7 @@ int lm_wrapper_get_arp_entries (char netName[LM_NETWORK_NAME_SIZE], int *pCount,
                     }
                 }
                 if (arp_entry[0] != '\0') {
-                    libnet_status fw_st = file_write(ARP_CACHE_FILE, arp_entry, strlen(arp_entry));
+                    libnet_status fw_st = file_append(ARP_CACHE_FILE, arp_entry, strlen(arp_entry));/*H008*/
                     if (fw_st != CNL_STATUS_SUCCESS){
                         CcspTraceError(("%s %d: File write failed for neighbor list!\n", __FUNCTION__, __LINE__));
                     }

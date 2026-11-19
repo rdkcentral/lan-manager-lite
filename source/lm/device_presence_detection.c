@@ -26,6 +26,8 @@
 #include <ctype.h>
 #include <pthread.h>
 #include <mqueue.h>
+#include <fcntl.h>
+#include <sys/wait.h>
 #include <netdb.h>            // struct addrinfo
 #include <sys/types.h>        // needed for socket(), uint8_t, uint16_t
 #include <sys/socket.h>       // needed for socket()
@@ -2106,10 +2108,43 @@ void *RecvIPv6clientNotifications(void *args)
     return NULL;
 }
 
+/* Runs ndisc6 without a shell so lan_ifname is never parsed by /bin/sh. */
+static int runNdisc6(const char *pIpv6, const char *pIface)
+{
+    int iStatus = 0;/*H005*/
+    pid_t pid = fork();
+
+    if (pid < 0)
+    {
+        return -1;
+    }
+    if (0 == pid)
+    {
+        char *argv[] = { "/usr/bin/ndisc6", (char *)pIpv6, (char *)pIface, "-r", "1", "-q", NULL };
+        int iNull = open("/dev/null", O_WRONLY);
+        if (iNull >= 0)
+        {
+            dup2(iNull, STDOUT_FILENO);
+            dup2(iNull, STDERR_FILENO);
+            close(iNull);
+        }
+        execv(argv[0], argv);
+        _exit(127);
+    }
+    while (waitpid(pid, &iStatus, 0) < 0)
+    {
+        if (EINTR != errno)
+        {
+            return -1;
+        }
+    }
+    return (WIFEXITED(iStatus) && (0 == WEXITSTATUS(iStatus))) ? 0 : -1;
+}
+
 int Send_ipv6_neighbourdiscovery(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient, BOOL bSendProbe)
 {
     int i = 0;
-    char buf[64];
+    char buf[64] = {0};/*H005*/
     if (pobject)
     {
         for(i = 0; i<pobject->numOfDevice; i++)
@@ -2157,26 +2192,24 @@ int Send_ipv6_neighbourdiscovery(PLmDevicePresenceDetectionInfo pobject,BOOL bac
                     }
                 }
                 syscfg_get( NULL, "lan_ifname", buf, sizeof(buf));
-                CcspTraceDebug(("cmd = ndisc6 %s %s -r 1 -q", pobj->ipv6,buf));
-                char cLine[256] = {0};
-                snprintf (cLine, sizeof(cLine), "ndisc6 %s %s -r 1 -q", pobj->ipv6,buf);
-                FILE *fpPipe = popen(cLine, "r");
-                if(NULL == fpPipe)
-                {
-                    CcspTraceError(("%s:%d, Failed to execute the command\n",__FUNCTION__,__LINE__));
-                }
-                else
-                {
-                    pclose(fpPipe);
-                }
-                if (TRUE == bSendProbe)
-                {
-                    if ( 0 == strlen(buf))
-                    {
-                        snprintf(buf,sizeof(buf),"%s","brlan0");
-                    }
-                    sendProbeRequest (IPV6, pobj->ipv6, buf);
-                }
+		if ( 0 == strlen(buf))
+		{
+			snprintf(buf,sizeof(buf),"%s","brlan0");
+		}
+		CcspTraceDebug(("cmd = ndisc6 %s %s -r 1 -q", pobj->ipv6,buf));
+		if (0 == if_nametoindex(buf))
+		{
+			CcspTraceError(("%s:%d, Invalid lan interface name\n",__FUNCTION__,__LINE__));
+			continue;
+		}
+		if (0 != runNdisc6(pobj->ipv6, buf))
+		{
+			CcspTraceError(("%s:%d, Failed to execute ndisc6\n",__FUNCTION__,__LINE__));
+		}
+		if (TRUE == bSendProbe)
+		{
+			sendProbeRequest (IPV6, pobj->ipv6, buf);
+		}
             }
         }
     }
