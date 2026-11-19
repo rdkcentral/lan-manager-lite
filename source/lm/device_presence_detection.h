@@ -63,13 +63,6 @@ typedef enum {
     STATE_LEAVE_DETECTED
 }DeviceDetectionState;
 
-typedef enum {
-    STATE_DETECTION_TASK_START,
-    STATE_DETECTION_TASK_STARTED,
-    STATE_DETECTION_TASK_STOP,
-    STATE_DETECTION_TASK_STOPPED
-}DetectionTaskState;
-
 typedef struct _DnsmasqEventQData
 {
     char ip[64];
@@ -133,8 +126,6 @@ typedef struct DevicePresenceDetectionInfo
     unsigned int bkgnd_join_detection_interval;
     unsigned int ipv6_num_retries;
     unsigned int ipv4_num_retries;
-    DetectionTaskState taskState;
-    int task_count;
 }LmDevicePresenceDetectionInfo,*PLmDevicePresenceDetectionInfo;
 // Function prototypes
 char *allocate_strmem (int);

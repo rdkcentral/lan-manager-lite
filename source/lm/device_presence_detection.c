@@ -25,6 +25,8 @@
 #include <string.h>
 #include <ctype.h>
 #include <pthread.h>
+#include <time.h>
+#include <sys/time.h>
 #include <mqueue.h>
 #include <fcntl.h>
 #include <sys/wait.h>
@@ -82,7 +84,46 @@ typedef struct NDSNotifyInfo
 #define RD_VALUE _IOR('a','b',NDSNotifyInfo*)
 
 PLmDevicePresenceDetectionInfo pDetectionObject = NULL;
-pthread_mutex_t PresenceDetectionMutex;
+/* Must be recursive: lm_main.c holds it when calling AddDevice/RemoveDevice/resetPresenceDetectionList. Initialised only in the constructor below. */
+pthread_mutex_t PresenceDetectionMutex;/*H007*/
+static BOOL gPresenceMutexRecursive = FALSE;
+
+/* Runs before main() so lm_main.c can lock it at any time; the POSIX attr call avoids the glibc-only static recursive initializer. */
+static void __attribute__((constructor)) PresenceDetection_MutexCtor(void)
+{
+    pthread_mutexattr_t attr;
+    if (0 == pthread_mutexattr_init(&attr))
+    {
+        if ((0 == pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE)) &&
+            (0 == pthread_mutex_init(&PresenceDetectionMutex, &attr)))
+        {
+            gPresenceMutexRecursive = TRUE;
+        }
+        pthread_mutexattr_destroy(&attr);
+    }
+    if (!gPresenceMutexRecursive)
+    {
+        /* Keeps the mutex valid; PresenceDetection_Init() refuses to start without recursion. */
+        pthread_mutex_init(&PresenceDetectionMutex, NULL);
+    }
+}
+
+#define PRESENCE_DETECTION_WORKER_COUNT 6
+#define PRESENCE_IO_TIMEOUT_SECS 1
+#define PRESENCE_MQ_POLL_MS 200
+
+/* Serialises Init/DeInit/Start/Stop and guards the worker handles below. */
+static pthread_mutex_t PresenceDetectionLifecycleMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_t presenceDetectionThreads[PRESENCE_DETECTION_WORKER_COUNT];
+static unsigned int presenceDetectionThreadCount = 0;
+static int presenceDetectionRunning = 0;
+
+static pthread_cond_t PresenceDetectionCond;
+static pthread_once_t PresenceCondOnce = PTHREAD_ONCE_INIT;
+static clockid_t PresenceCondClock = CLOCK_REALTIME;
+static BOOL gPresenceCondReady = FALSE;
+/* Guarded by PresenceDetectionMutex. */
+static BOOL gStopRequested = FALSE;
 
 #if 0
    /*Reading of NA from netlink sockets is commented currently. In feature it may be required to enable it.*/
@@ -141,44 +182,146 @@ int Neighbourdiscovery_Update(BOOL enable)
 }
 #endif
 
-int PresenceDetection_Init()
+static void PresenceCondInit(void)
 {
-    int ret = 0;
-    char cBuf [8] = {0};
-    pDetectionObject =  AnscAllocateMemory(sizeof(LmDevicePresenceDetectionInfo));
-    if (pDetectionObject)
+    pthread_condattr_t attr;
+    int rc = pthread_condattr_init(&attr);
+    if (0 != rc)
     {
-        pDetectionObject->ppdevlist = AnscAllocateMemory(MAX_NUM_OF_DEVICE * sizeof(PLmPresenceDeviceInfo));
-        if (!pDetectionObject->ppdevlist)
-        {   AnscFreeMemory(pDetectionObject);
-            pDetectionObject = NULL;
-            return -1;
+        CcspTraceError(("%s:%d, pthread_condattr_init failed rc:%d, using default clock\n",__FUNCTION__,__LINE__,rc));
+        rc = pthread_cond_init(&PresenceDetectionCond, NULL);
+    }
+    else
+    {
+        /* Monotonic so wall-clock steps (NTP) cannot stretch or shorten the wait. */
+        if (0 == pthread_condattr_setclock(&attr, CLOCK_MONOTONIC))
+        {
+            PresenceCondClock = CLOCK_MONOTONIC;
         }
-        pthread_mutex_init(&PresenceDetectionMutex,0);
+        else
+        {
+            CcspTraceError(("%s:%d, pthread_condattr_setclock failed, using CLOCK_REALTIME\n",__FUNCTION__,__LINE__));
+        }
+        rc = pthread_cond_init(&PresenceDetectionCond, &attr);
+        pthread_condattr_destroy(&attr);
     }
-    else
+    if (0 != rc)
     {
-        return -1;
+        CcspTraceError(("%s:%d, pthread_cond_init failed rc:%d, waits fall back to sleep()\n",__FUNCTION__,__LINE__,rc));
+        return;
     }
-    if(0 == syscfg_get(NULL, "ConfiguredMacListIsSet", cBuf, sizeof(cBuf)))
-    {
-        pDetectionObject->bConfiguredMacListIsSet = (atoi(cBuf) == 1) ? TRUE : FALSE;
-    }
-    else
-    {
-        pDetectionObject->bConfiguredMacListIsSet = FALSE;
-    }
-    CcspTraceWarning(("%s:%d ConfiguredMacListIsSet:%d\n",__FUNCTION__,__LINE__,pDetectionObject->bConfiguredMacListIsSet));
-#if 0
-   /*Reading of NA from netlink sockets is commented currently. In feature it may be required to enable it.*/
-    Neighbourdiscovery_Update(TRUE);
-#endif
-    return ret;
+    gPresenceCondReady = TRUE;
 }
 
-int PresenceDetection_DeInit()
+static BOOL PresenceIsStopRequested(void)
 {
-    int ret = 0;
+    BOOL bStop;
+    pthread_mutex_lock(&PresenceDetectionMutex);
+    bStop = gStopRequested;
+    pthread_mutex_unlock(&PresenceDetectionMutex);
+    return bStop;
+}
+
+/* Replaces sleep(): returns early when Stop broadcasts. Returns TRUE if stop was requested. */
+static BOOL PresenceWaitOrStopMs(unsigned int uiMs)
+{
+    struct timespec ts;
+    BOOL bStop = FALSE;
+    int rc = 0;
+
+    pthread_once(&PresenceCondOnce, PresenceCondInit);
+    if (!gPresenceCondReady || (0 != clock_gettime(PresenceCondClock, &ts)))
+    {
+        CcspTraceError(("%s:%d, cond wait unavailable (ready:%d errno:%d), falling back to sleep\n",__FUNCTION__,__LINE__,gPresenceCondReady,errno));
+        usleep(((uiMs > 1000) ? 1000 : uiMs) * 1000);
+        return PresenceIsStopRequested();
+    }
+    ts.tv_sec += uiMs / 1000;
+    ts.tv_nsec += (long)(uiMs % 1000) * 1000000L;
+    if (ts.tv_nsec >= 1000000000L)
+    {
+        ts.tv_sec += 1;
+        ts.tv_nsec -= 1000000000L;
+    }
+
+    pthread_mutex_lock(&PresenceDetectionMutex);
+    while (!gStopRequested && (0 == rc))
+    {
+        rc = pthread_cond_timedwait(&PresenceDetectionCond, &PresenceDetectionMutex, &ts);
+    }
+    bStop = gStopRequested;
+    pthread_mutex_unlock(&PresenceDetectionMutex);
+
+    if ((0 != rc) && (ETIMEDOUT != rc))
+    {
+        CcspTraceError(("%s:%d, pthread_cond_timedwait failed rc:%d, falling back to sleep\n",__FUNCTION__,__LINE__,rc));
+        if (!bStop)
+        {
+            usleep(((uiMs > 1000) ? 1000 : uiMs) * 1000);
+        }
+    }
+    return bStop;
+}
+
+static BOOL PresenceWaitOrStop(unsigned int uiSecs)
+{
+    return PresenceWaitOrStopMs(uiSecs * 1000);
+}
+
+/* Caller must hold PresenceDetectionLifecycleMutex. Handles stay recorded until their join succeeds. */
+static int PresenceDetection_StopWorkersLocked(void)
+{
+    pthread_once(&PresenceCondOnce, PresenceCondInit);
+    pthread_mutex_lock(&PresenceDetectionMutex);
+    gStopRequested = TRUE;
+    if (gPresenceCondReady)
+    {
+        pthread_cond_broadcast(&PresenceDetectionCond);
+    }
+    pthread_mutex_unlock(&PresenceDetectionMutex);
+
+    while (presenceDetectionThreadCount != 0)
+    {
+        int result = pthread_join(presenceDetectionThreads[0], NULL);
+        if (result != 0)
+        {
+            CcspTraceError(("%s:%d, Failed to join presence detection worker: %d, %u worker(s) still recorded\n",__FUNCTION__,__LINE__,result,presenceDetectionThreadCount));
+            return -1;
+        }
+
+        --presenceDetectionThreadCount;
+        for (unsigned int index = 0; index < presenceDetectionThreadCount; ++index)
+        {
+            presenceDetectionThreads[index] = presenceDetectionThreads[index + 1];
+        }
+    }
+
+    presenceDetectionRunning = 0;
+    return 0;
+}
+
+static int PresenceDetection_CreateThread(void *(*threadFunction)(void *))
+{
+    pthread_t threadId;
+    int result;
+
+    if (presenceDetectionThreadCount >= PRESENCE_DETECTION_WORKER_COUNT)
+    {
+        CcspTraceError(("%s:%d, worker table full\n",__FUNCTION__,__LINE__));
+        return EAGAIN;
+    }
+
+    result = pthread_create(&threadId, NULL, threadFunction, NULL);
+    if (result == 0)
+    {
+        presenceDetectionThreads[presenceDetectionThreadCount++] = threadId;
+        presenceDetectionRunning = 1;
+    }
+    return result;
+}
+
+static void PresenceDetection_FreeObject(void)
+{
     CcspTraceDebug(("%s:%d, Acquiring PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
     pthread_mutex_lock(&PresenceDetectionMutex);
     CcspTraceDebug(("%s:%d, Acquired PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
@@ -203,10 +346,89 @@ int PresenceDetection_DeInit()
     }
     pthread_mutex_unlock(&PresenceDetectionMutex);
     CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
+}
+
+int PresenceDetection_Init()
+{
+    int ret = 0;
+    char cBuf [8] = {0};
+    PLmDevicePresenceDetectionInfo pNewObject = NULL;
+
+    if (!gPresenceMutexRecursive)
+    {
+        CcspTraceError(("%s:%d, recursive PresenceDetectionMutex could not be created, presence detection not started\n",__FUNCTION__,__LINE__));
+        return -1;
+    }
+    pthread_mutex_lock(&PresenceDetectionLifecycleMutex);
+    /* Completes a teardown left pending by a failed join so Enable can recover. */
+    if (presenceDetectionThreadCount != 0 || presenceDetectionRunning)
+    {
+        CcspTraceWarning(("%s:%d, retrying join of workers from a previous run\n",__FUNCTION__,__LINE__));
+        if (0 != PresenceDetection_StopWorkersLocked())
+        {
+            CcspTraceError(("%s:%d, workers from a previous run are still not joined, refusing to initialise\n",__FUNCTION__,__LINE__));
+            pthread_mutex_unlock(&PresenceDetectionLifecycleMutex);
+            return -1;
+        }
+    }
+    if (pDetectionObject)
+    {
+        CcspTraceWarning(("%s:%d, freeing stale detection object\n",__FUNCTION__,__LINE__));
+        PresenceDetection_FreeObject();
+    }
+    pNewObject = AnscAllocateMemory(sizeof(*pNewObject));
+    if (!pNewObject)
+    {
+        CcspTraceError(("%s:%d, failed to allocate detection object\n",__FUNCTION__,__LINE__));
+        pthread_mutex_unlock(&PresenceDetectionLifecycleMutex);
+        return -1;
+    }
+    memset(pNewObject, 0, sizeof(*pNewObject));
+    pNewObject->ppdevlist = AnscAllocateMemory(MAX_NUM_OF_DEVICE * sizeof(*pNewObject->ppdevlist));
+    if (!pNewObject->ppdevlist)
+    {
+        CcspTraceError(("%s:%d, failed to allocate device list\n",__FUNCTION__,__LINE__));
+        AnscFreeMemory(pNewObject);
+        pthread_mutex_unlock(&PresenceDetectionLifecycleMutex);
+        return -1;
+    }
+    memset(pNewObject->ppdevlist, 0, MAX_NUM_OF_DEVICE * sizeof(*pNewObject->ppdevlist));
+    if(0 == syscfg_get(NULL, "ConfiguredMacListIsSet", cBuf, sizeof(cBuf)))
+    {
+        pNewObject->bConfiguredMacListIsSet = (atoi(cBuf) == 1) ? TRUE : FALSE;
+    }
+    else
+    {
+        pNewObject->bConfiguredMacListIsSet = FALSE;
+    }
+    pthread_mutex_lock(&PresenceDetectionMutex);
+    pDetectionObject = pNewObject;
+    pthread_mutex_unlock(&PresenceDetectionMutex);
+    CcspTraceWarning(("%s:%d ConfiguredMacListIsSet:%d\n",__FUNCTION__,__LINE__,pNewObject->bConfiguredMacListIsSet));
+#if 0
+   /*Reading of NA from netlink sockets is commented currently. In feature it may be required to enable it.*/
+    Neighbourdiscovery_Update(TRUE);
+#endif
+    pthread_mutex_unlock(&PresenceDetectionLifecycleMutex);
+    return ret;
+}
+
+int PresenceDetection_DeInit()
+{
+    int ret = 0;
+    pthread_mutex_lock(&PresenceDetectionLifecycleMutex);
+    if (PresenceDetection_StopWorkersLocked() != 0)
+    {
+        CcspTraceError(("%s:%d, workers not joined, refusing to free detection object\n",__FUNCTION__,__LINE__));
+        pthread_mutex_unlock(&PresenceDetectionLifecycleMutex);
+        return -1;
+    }
+    PresenceDetection_FreeObject();
 #if 0
    /*Reading of NA from netlink sockets is commented currently. In feature it may be required to enable it.*/
     Neighbourdiscovery_Update(FALSE);
 #endif
+    pthread_mutex_unlock(&PresenceDetectionLifecycleMutex);
     return ret;
 }
 
@@ -357,7 +579,13 @@ int PresenceDetection_AddDevice(LmPresenceDeviceInfo *pinfo, BOOL bIsMacConfigur
     PLmDevicePresenceDetectionInfo pobject = NULL;
     PLmPresenceDeviceInfo pDev = NULL;
     if (!pinfo)
+    {
+        CcspTraceError(("%s:%d, Invalid input parameter\n",__FUNCTION__,__LINE__));
         return ret_val;
+    }
+    CcspTraceDebug(("%s:%d, Acquiring PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
+    pthread_mutex_lock(&PresenceDetectionMutex);
+    CcspTraceDebug(("%s:%d, Acquired PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
     pDev = FindDeviceByPhysAddress(pinfo->mac);
     if (pDev)
     {
@@ -372,38 +600,52 @@ int PresenceDetection_AddDevice(LmPresenceDeviceInfo *pinfo, BOOL bIsMacConfigur
             pDev->ipv6Active = pinfo->ipv6Active;
             strncpy(pDev->ipv6,pinfo->ipv6,sizeof(pDev->ipv6));
         }
-        return 0;
+        ret_val = 0;
+        goto unlock;
     }
     pobject = GetPresenceDetectionObject();
-    if (pobject)
+    if (!pobject)
     {
-        if (pobject->numOfDevice < MAX_NUM_OF_DEVICE)
+        CcspTraceError(("%s:%d, Presence Detection Object is NULL, cannot add Mac %s\n",__FUNCTION__,__LINE__,pinfo->mac));
+    }
+    else if (pobject->numOfDevice >= MAX_NUM_OF_DEVICE)
+    {
+        CcspTraceError(("%s:%d, detection list full (%d), cannot add Mac %s\n",__FUNCTION__,__LINE__,pobject->numOfDevice,pinfo->mac));
+    }
+    else if (!pobject->ppdevlist)
+    {
+        CcspTraceError(("%s:%d, device list is NULL, cannot add Mac %s\n",__FUNCTION__,__LINE__,pinfo->mac));
+    }
+    else
+    {
+        pDev =  AnscAllocateMemory(sizeof(LmPresenceDeviceInfo));
+        if (pDev)
         {
-            if (pobject->ppdevlist)
+            memcpy (pDev,pinfo,sizeof(LmPresenceDeviceInfo));
+            pDev->ipv4_state = STATE_PRESENCE_DETECTION_NONE;
+            pDev->ipv6_state = STATE_PRESENCE_DETECTION_NONE;
+            pDev->ipv4_retry_count = 0;
+            pDev->ipv6_retry_count = 0;
+            pobject->ppdevlist[pobject->numOfDevice] = pDev;
+            if ((TRUE == bIsMacConfigurationEnabled) && (FALSE == pobject->bConfiguredMacListIsSet))
             {
-                pDev =  AnscAllocateMemory(sizeof(LmPresenceDeviceInfo));
-                if (pDev)
-                {
-                    memcpy (pDev,pinfo,sizeof(LmPresenceDeviceInfo));
-                    pDev->ipv4_state = STATE_PRESENCE_DETECTION_NONE;
-                    pDev->ipv6_state = STATE_PRESENCE_DETECTION_NONE;
-                    pDev->ipv4_retry_count = 0;
-                    pDev->ipv6_retry_count = 0;
-                    pobject->ppdevlist[pobject->numOfDevice] = pDev;
-                    if ((TRUE == bIsMacConfigurationEnabled) && (FALSE == pobject->bConfiguredMacListIsSet))
-                    {
-                        pobject->bConfiguredMacListIsSet = TRUE;
-                        syscfg_set_commit(NULL, "ConfiguredMacListIsSet", "1");
-                        CcspTraceWarning(("%s:%d ConfiguredMacListIsSet is set to TRUE\n",__FUNCTION__,__LINE__));
-                    }
-                    CcspTraceWarning(("RDKB_PRESENCE:  Mac %s Added into detection list \n",pDev->mac));
-                    ++pobject->numOfDevice;
-                    CcspTraceWarning(("RDKB_PRESENCE:  numOfDevice:%d\n",pobject->numOfDevice));
-                    ret_val = 0;
-                }
+                pobject->bConfiguredMacListIsSet = TRUE;
+                syscfg_set_commit(NULL, "ConfiguredMacListIsSet", "1");
+                CcspTraceWarning(("%s:%d ConfiguredMacListIsSet is set to TRUE\n",__FUNCTION__,__LINE__));
             }
+            CcspTraceWarning(("RDKB_PRESENCE:  Mac %s Added into detection list \n",pDev->mac));
+            ++pobject->numOfDevice;
+            CcspTraceWarning(("RDKB_PRESENCE:  numOfDevice:%d\n",pobject->numOfDevice));
+            ret_val = 0;
+        }
+        else
+        {
+            CcspTraceError(("%s:%d, failed to allocate memory for Mac %s\n",__FUNCTION__,__LINE__,pinfo->mac));
         }
     }
+unlock:
+    pthread_mutex_unlock(&PresenceDetectionMutex);
+    CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
     return ret_val;
 }
 
@@ -412,12 +654,22 @@ int PresenceDetection_RemoveDevice(char *mac, BOOL bIsMacConfigurationEnabled)
     int ret_val = -1;
     int index = 0;
     int i = 0;
+    BOOL bResetList = FALSE;
     PLmDevicePresenceDetectionInfo pobject = NULL;
     PLmPresenceDeviceInfo pDev = NULL;
     if (!mac)
+    {
+        CcspTraceError(("%s:%d, Invalid input parameter\n",__FUNCTION__,__LINE__));
         return ret_val;
+    }
+    CcspTraceDebug(("%s:%d, Acquiring PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
+    pthread_mutex_lock(&PresenceDetectionMutex);
+    CcspTraceDebug(("%s:%d, Acquired PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
     pobject = GetPresenceDetectionObject();
     if (!pobject) {
+        CcspTraceError(("%s:%d, Presence Detection Object is NULL, cannot remove Mac %s\n",__FUNCTION__,__LINE__,mac));
+        pthread_mutex_unlock(&PresenceDetectionMutex);
+        CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
         return ret_val;
     }
     for(i = 0; i<pobject->numOfDevice; i++)
@@ -436,13 +688,15 @@ int PresenceDetection_RemoveDevice(char *mac, BOOL bIsMacConfigurationEnabled)
     if (!pDev)
     {
         CcspTraceWarning(("RDKB_PRESENCE:  Mac %s Not exist in detection list \n",mac));
+        pthread_mutex_unlock(&PresenceDetectionMutex);
+        CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
         return 0;
     }
 
     AnscFreeMemory(pDev);
     pDev = NULL;
     CcspTraceWarning(("RDKB_PRESENCE:  Mac %s Removed from monitor \n",mac));
-    if (pobject && (pobject->numOfDevice > 0))
+    if (pobject->numOfDevice > 0)
     {
         // reshuffle the list
         for(i = index; i<pobject->numOfDevice - 1; i++)
@@ -466,6 +720,12 @@ int PresenceDetection_RemoveDevice(char *mac, BOOL bIsMacConfigurationEnabled)
     }
     if ((TRUE == bIsMacConfigurationEnabled) && ( 0 == pobject->numOfDevice))
     {
+        bResetList = TRUE;
+    }
+    pthread_mutex_unlock(&PresenceDetectionMutex);
+    CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
+    if (bResetList)
+    {
         CcspTraceWarning(("%s:%d Configured Mac list is empty, so resetting the presence detection list\n",__FUNCTION__,__LINE__));
         addHostsToPresenceTable();
     }
@@ -480,14 +740,17 @@ void getConfiguredMaclistStatus(BOOL *pVar)
         CcspTraceWarning(("%s:%d Invalid input parameter\n",__FUNCTION__,__LINE__));
         return;
     }
+    pthread_mutex_lock(&PresenceDetectionMutex);
     pobject = GetPresenceDetectionObject();
     if (NULL != pobject)
     {
         *pVar = pobject->bConfiguredMacListIsSet;
+	pthread_mutex_unlock(&PresenceDetectionMutex);
     }
     else
     {
-        CcspTraceWarning(("%s:%d Presence Detection Object is NULL,Reading from Syscfg\n",__FUNCTION__,__LINE__));
+        pthread_mutex_unlock(&PresenceDetectionMutex);
+	CcspTraceWarning(("%s:%d Presence Detection Object is NULL,Reading from Syscfg\n",__FUNCTION__,__LINE__));
         char cBuf [8] = {0};
         if(0 == syscfg_get(NULL, "ConfiguredMacListIsSet", cBuf, sizeof(cBuf)))
         {
@@ -514,6 +777,9 @@ void resetPresenceDetectionList(char * pMac)
         return;
     }
 
+    CcspTraceDebug(("%s:%d, Acquiring PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
+    pthread_mutex_lock(&PresenceDetectionMutex);
+    CcspTraceDebug(("%s:%d, Acquired PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
     pDevicePresenceDetectInfo = GetPresenceDetectionObject();
     if (NULL != pDevicePresenceDetectInfo)
     {
@@ -583,6 +849,12 @@ void resetPresenceDetectionList(char * pMac)
             CcspTraceWarning(("%s:%d, Mac:%s is present at index %d\n",__FUNCTION__,__LINE__,pMac, iIndex));
         }
     }
+    else
+    {
+        CcspTraceError(("%s:%d, Presence Detection Object is NULL, cannot reset list for Mac:%s\n",__FUNCTION__,__LINE__,pMac));
+    }
+    pthread_mutex_unlock(&PresenceDetectionMutex);
+    CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
 }
 
 static int addAttribute(struct nlmsghdr *pNlMsgHdr, unsigned int uiMaxLen, int iType, const void * pVoidData, int iDataLen)
@@ -993,11 +1265,12 @@ void *Send_arp_ipv4_thread (void *args)
     /*CID: 68372 Dereference after null check*/
     /*CID: 65919 Dereference before null check*/
     if (!pobject)
+    {
+        CcspTraceError(("%s:%d, Presence Detection Object is NULL, worker exiting\n",__FUNCTION__,__LINE__));
         return NULL;
-    ++pobject->task_count;
-    pthread_detach(pthread_self());
+    }
     BOOL bSendProbe = FALSE;
-    while (pobject->taskState != STATE_DETECTION_TASK_STOP)
+    while (!PresenceIsStopRequested())
     {
         CcspTraceDebug(("%s:%d, Acquiring PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
         pthread_mutex_lock(&PresenceDetectionMutex);
@@ -1041,13 +1314,11 @@ void *Send_arp_ipv4_thread (void *args)
         pthread_mutex_unlock(&PresenceDetectionMutex);
         CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
 
-        sleep(1);
+        PresenceWaitOrStop(1);
         ++ActiveClientsecs;
         ++uiNumberOfSecs;
         ++InActiveClientsecs;
     }
-    if (pobject->task_count > 0)
-        --pobject->task_count;
     return args;
 }
 
@@ -1056,10 +1327,12 @@ void *ReceiveArp_Thread(void *args)
     UNREFERENCED_PARAMETER(args);
     PLmDevicePresenceDetectionInfo pobject = NULL;
     pobject = GetPresenceDetectionObject();
-    if (pobject)
-    ++pobject->task_count;
-    pthread_detach(pthread_self());
-    while(pobject && (pobject->taskState != STATE_DETECTION_TASK_STOP))
+    if (!pobject)
+    {
+        CcspTraceError(("%s:%d, Presence Detection Object is NULL, worker exiting\n",__FUNCTION__,__LINE__));
+        return NULL;
+    }
+    while(!PresenceIsStopRequested())
     {
         char output[ARP_BUFFER_LEN];
         char buf[64];
@@ -1071,7 +1344,7 @@ void *ReceiveArp_Thread(void *args)
         if(NULL == fpArpTable)
         {
             CcspTraceError(("%s:%d, Failed to execute the command %s\n",__FUNCTION__,__LINE__,cLine));
-            sleep(10);
+            PresenceWaitOrStop(10);
             continue;
         }
         else
@@ -1082,10 +1355,8 @@ void *ReceiveArp_Thread(void *args)
             }
             pclose(fpArpTable);
         }
-        sleep(10);
+        PresenceWaitOrStop(10);
     }
-    if (pobject && (pobject->task_count > 0))
-    --pobject->task_count;
     return args;
 }
 
@@ -1197,6 +1468,9 @@ int Handle_RecieveArpCache(char *line)
     {
         snprintf(cIfaceName,sizeof(cIfaceName),"brlan0");
     }
+    CcspTraceDebug(("%s:%d, Acquiring PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
+    pthread_mutex_lock(&PresenceDetectionMutex);
+    CcspTraceDebug(("%s:%d, Acquired PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
     pobject = GetPresenceDetectionObject();
     if (pobject)
     {
@@ -1204,13 +1478,9 @@ int Handle_RecieveArpCache(char *line)
         {
             if (pobject->ppdevlist && pobject->ppdevlist[i])
             {
-                CcspTraceDebug(("%s:%d, Acquiring PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
-                pthread_mutex_lock(&PresenceDetectionMutex);
-                CcspTraceDebug(("%s:%d, Acquired PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
                 PLmPresenceDeviceInfo pobj = pobject->ppdevlist[i];
                 if(strcasestr(line, pobj->mac))
                 {
-                    PLmPresenceDeviceInfo pobj = pobject->ppdevlist[i];
                     int retval = 0;
                     char buf[IPV4_SIZE];
                     if ((STATE_PRESENCE_DETECTION_NONE == pobj->ipv4_state || STATE_LEAVE_DETECTED == pobj->ipv4_state) &&
@@ -1241,12 +1511,13 @@ int Handle_RecieveArpCache(char *line)
                     CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
                     if (TRUE == bJoinDetected)
                     {
-                        CcspTraceInfo(("%s:%d, Mac:%s, join detected from Arp\n",__FUNCTION__,__LINE__,pobj->mac));
+                        CcspTraceInfo(("%s:%d, Mac:%s, join detected from Arp\n",__FUNCTION__,__LINE__,lmPresenceObj.mac));
                         presenceDetected(&lmPresenceObj);
                         bJoinDetected = FALSE;
                     }
-                    break;                  
+                    return 0;                  
                 }
+                /* Predates the whole-scan lock: rework its unlock/lock pairs before enabling. */
                 #if 0
                 else
                 {
@@ -1316,11 +1587,11 @@ int Handle_RecieveArpCache(char *line)
                     }
                 }
                 #endif
-                pthread_mutex_unlock(&PresenceDetectionMutex);
-                CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
             }
         }
     }
+    pthread_mutex_unlock(&PresenceDetectionMutex);
+    CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
     return 0;
 }
 
@@ -1332,6 +1603,9 @@ int CheckandupdatePresence(char *mac, int version, char *ipaddress,DeviceDetecti
     if (!mac)
         return -1;
     CcspTraceDebug(("%s received mac= %s version %d state %d\n",__FUNCTION__,mac,version,state));
+    CcspTraceDebug(("%s:%d, Acquiring PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
+    pthread_mutex_lock(&PresenceDetectionMutex);
+    CcspTraceDebug(("%s:%d, Acquired PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
     pobject = GetPresenceDetectionObject();
     if (pobject)
     {
@@ -1339,9 +1613,6 @@ int CheckandupdatePresence(char *mac, int version, char *ipaddress,DeviceDetecti
         {
             if (pobject->ppdevlist && pobject->ppdevlist[i])
             {
-                CcspTraceDebug(("%s:%d, Acquiring PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
-                pthread_mutex_lock(&PresenceDetectionMutex);
-                CcspTraceDebug(("%s:%d, Acquired PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
                 PLmPresenceDeviceInfo pobj = pobject->ppdevlist[i];
                 if (strcasecmp(pobj->mac, mac) == 0)
                 {
@@ -1421,17 +1692,16 @@ int CheckandupdatePresence(char *mac, int version, char *ipaddress,DeviceDetecti
                     // trigger join callback            
                     if (TRUE == bJoinDetected)
                     {
-                        CcspTraceInfo(("%s:%d, Mac:%s, join detected\n",__FUNCTION__,__LINE__,pobj->mac));
+                        CcspTraceInfo(("%s:%d, Mac:%s, join detected\n",__FUNCTION__,__LINE__,lmPresenceObj.mac));
                         presenceDetected(&lmPresenceObj);
                     }
-                    break;                  
+                    return 0;                  
                 }
-                pthread_mutex_unlock(&PresenceDetectionMutex);
-                CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
             }
-            bJoinDetected = FALSE;
         }
     }
+    pthread_mutex_unlock(&PresenceDetectionMutex);
+    CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
     return 0;
 }
 
@@ -1443,10 +1713,11 @@ void *ReceiveIpv4ClientStatus(void *args)
     PLmDevicePresenceDetectionInfo pobject = NULL;
 
     pobject = GetPresenceDetectionObject();
-    pthread_detach(pthread_self());
-    
-    if (pobject)
-    ++pobject->task_count;
+    if (!pobject)
+    {
+        CcspTraceError(("%s:%d, Presence Detection Object is NULL, worker exiting\n",__FUNCTION__,__LINE__));
+        return NULL;
+    }
 
     mq = mq_open(DNSMASQ_PRESENCE_QUEUE_NAME, O_RDONLY | O_NONBLOCK);
 
@@ -1487,22 +1758,18 @@ void *ReceiveIpv4ClientStatus(void *args)
                 }
             }
         }
-        sleep(3);
-    }while(pobject && (STATE_DETECTION_TASK_STOP != pobject->taskState));
+    }while(!PresenceWaitOrStop(3));
 
-     if (pobject && (pobject->task_count > 0))
-    --pobject->task_count;
     if (mq != (mqd_t)-1)
     {
         int ret = mq_close(mq);
         if (ret == 0)
             mq_unlink(DNSMASQ_PRESENCE_QUEUE_NAME);
 	else
-	    printf("mq close failed");
+	    CcspTraceError(("%s:%d, mq_close failed errno:%d\n",__FUNCTION__,__LINE__,errno));
     }
     return args;
 }
-
 
 void *processPresenceNotification(void *pArgs)
 {
@@ -1514,10 +1781,11 @@ void *processPresenceNotification(void *pArgs)
     PLmDevicePresenceDetectionInfo pobject = NULL;
 
     pobject = GetPresenceDetectionObject();
-    pthread_detach(pthread_self());
-
-    if (pobject)
-    ++pobject->task_count;
+    if (!pobject)
+    {
+        CcspTraceError(("%s:%d, Presence Detection Object is NULL, worker exiting\n",__FUNCTION__,__LINE__));
+        return NULL;
+    }
 
     // Unlink the existing message queue
     mq_unlink(PROCESS_PRESENCE_NOTIFY_QUEUE);
@@ -1528,7 +1796,7 @@ void *processPresenceNotification(void *pArgs)
     msgQueuAttr.mq_msgsize = PRESENCE_MAX_SIZE;
     msgQueuAttr.mq_curmsgs = 0;
 
-    messageQueue = mq_open(PROCESS_PRESENCE_NOTIFY_QUEUE, O_CREAT | O_RDONLY, 0644, &msgQueuAttr);
+    messageQueue = mq_open(PROCESS_PRESENCE_NOTIFY_QUEUE, O_CREAT | O_RDONLY | O_NONBLOCK, 0644, &msgQueuAttr);
 
     if (messageQueue == (mqd_t)-1)
     {
@@ -1544,13 +1812,24 @@ void *processPresenceNotification(void *pArgs)
         ssize_t bytesRead;
         PresenceQData sEventMsg;
 
-        /* receive the message */
+        /* Non-blocking plus a monotonic cond wait: re-checks the stop flag without depending on the wall clock. */
         bytesRead = mq_receive(messageQueue, cBuffer, PRESENCE_MAX_SIZE, NULL);
 
         if (bytesRead < 0)
         {
-            CcspTraceError(("%s:%d: failed to read from mq ", __FUNCTION__, __LINE__));
-            perror("bytes_read < 0");
+            if (EAGAIN == errno)
+            {
+                if (PresenceWaitOrStopMs(PRESENCE_MQ_POLL_MS))
+                {
+                    break;
+                }
+                continue;
+            }
+            if (EINTR == errno)
+            {
+                continue;
+            }
+            CcspTraceError(("%s:%d: failed to read from mq errno:%d, errorMsg:%s\n", __FUNCTION__, __LINE__, errno, strerror(errno)));
             break;
         }
 
@@ -1595,10 +1874,7 @@ void *processPresenceNotification(void *pArgs)
             CcspTraceInfo(("%s:%d, Received stop message\n", __FUNCTION__, __LINE__));
             break;
         }
-    }while(pobject && (STATE_DETECTION_TASK_STOP != pobject->taskState));
-
-    if (pobject && (pobject->task_count > 0))
-        --pobject->task_count;
+    }while(!PresenceIsStopRequested());
 
     if (messageQueue != (mqd_t)-1)
     {
@@ -1616,6 +1892,8 @@ void *processPresenceNotification(void *pArgs)
     return pArgs;
 }
 
+/* Never started by PresenceDetection_Start(); kept out of the build. */
+#if 0
 void RecvHCPv4ClientConnects()
 {
     int sd, new_socket, valread;
@@ -1705,6 +1983,8 @@ void RecvHCPv4ClientConnects()
 	    --pobject->task_count;
 
 }
+
+#endif
 
 // Allocate memory for an array of chars.
 char *
@@ -2031,13 +2311,15 @@ void *RecvIPv6clientNotifications(void *args)
     UNREFERENCED_PARAMETER(args);
     PLmDevicePresenceDetectionInfo pobject = NULL;
     pobject = GetPresenceDetectionObject();
-    pthread_detach(pthread_self());
     char cIfaceName [32]  = {0};
     char cBuffer [BUFF_SIZE] = {0};
     int iIfaceIndex;
 
-    if (pobject)
-    ++pobject->task_count;
+    if (!pobject)
+    {
+        CcspTraceError(("%s:%d, Presence Detection Object is NULL, worker exiting\n",__FUNCTION__,__LINE__));
+        return NULL;
+    }
 
     syscfg_get(NULL, "lan_ifname", cIfaceName, sizeof(cIfaceName));
     if (strlen(cIfaceName) == 0)
@@ -2072,12 +2354,28 @@ void *RecvIPv6clientNotifications(void *args)
         close(iSocketFd);
         return NULL;
     }
-    while (pobject && (pobject->taskState != STATE_DETECTION_TASK_STOP))
+
+    /* A blocking recv() would keep this thread from ever being joined when no neighbour events arrive. */
+    struct timeval sRcvTimeout;
+    sRcvTimeout.tv_sec = PRESENCE_IO_TIMEOUT_SECS;
+    sRcvTimeout.tv_usec = 0;
+    if (setsockopt(iSocketFd, SOL_SOCKET, SO_RCVTIMEO, &sRcvTimeout, sizeof(sRcvTimeout)) < 0)
     {
-        int iLen = recv(iSocketFd, cBuffer, sizeof(cBuffer), 0);
+        CcspTraceError(("%s:%d, Failed to set receive timeout errno:%d, errorMsg:%s\n",__FUNCTION__,__LINE__,errno,strerror(errno)));
+        close(iSocketFd);
+        return NULL;
+    }
+    while (!PresenceIsStopRequested())
+    {
+        int iLen = recv(iSocketFd, cBuffer, sizeof(cBuffer) - 1, 0);
         if (iLen < 0)
         {
-            CcspTraceError(("%s:%d, Failed to read from socket\n",__FUNCTION__,__LINE__));
+            if ((EAGAIN == errno) || (EWOULDBLOCK == errno) || (EINTR == errno))
+            {
+                continue;
+            }
+            CcspTraceError(("%s:%d, Failed to read from socket errno:%d, errorMsg:%s\n",__FUNCTION__,__LINE__,errno,strerror(errno)));
+            PresenceWaitOrStop(1);
             continue;
         }
         cBuffer[iLen] = '\0';
@@ -2102,16 +2400,18 @@ void *RecvIPv6clientNotifications(void *args)
         memset(cBuffer, 0, sizeof(cBuffer));
     }
     close(iSocketFd);
-    if (pobject && (pobject->task_count > 0))
-    --pobject->task_count;
-
     return NULL;
 }
+typedef struct PresenceProbeTarget
+{
+    char ipv6[IPV6_SIZE];
+    BOOL bSendProbe;
+} PresenceProbeTarget;
 
 /* Runs ndisc6 without a shell so lan_ifname is never parsed by /bin/sh. */
 static int runNdisc6(const char *pIpv6, const char *pIface)
 {
-    int iStatus = 0;/*H005*/
+    int iStatus = 0;
     pid_t pid = fork();
 
     if (pid < 0)
@@ -2122,6 +2422,7 @@ static int runNdisc6(const char *pIpv6, const char *pIface)
     {
         char *argv[] = { "/usr/bin/ndisc6", (char *)pIpv6, (char *)pIface, "-r", "1", "-q", NULL };
         int iNull = open("/dev/null", O_WRONLY);
+
         if (iNull >= 0)
         {
             dup2(iNull, STDOUT_FILENO);
@@ -2133,6 +2434,11 @@ static int runNdisc6(const char *pIpv6, const char *pIface)
     }
     while (waitpid(pid, &iStatus, 0) < 0)
     {
+        if (ECHILD == errno)
+        {
+            /* SIGCHLD is ignored, so the child was reaped by the kernel and its status is unavailable. */
+            return 0;
+        }
         if (EINTR != errno)
         {
             return -1;
@@ -2141,10 +2447,75 @@ static int runNdisc6(const char *pIpv6, const char *pIface)
     return (WIFEXITED(iStatus) && (0 == WEXITSTATUS(iStatus))) ? 0 : -1;
 }
 
-int Send_ipv6_neighbourdiscovery(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient, BOOL bSendProbe)
+/* Allow-list [A-Za-z0-9._-]{1,15}, not starting with '-', so the name can never be read as an option. */
+static BOOL isSafeIfaceName(const char *pIface)
 {
-    int i = 0;
-    char buf[64] = {0};/*H005*/
+    size_t len = 0;
+
+    if (NULL == pIface)
+    {
+        return FALSE;
+    }
+    len = strlen(pIface);
+    if ((0 == len) || (len > 15) || ('-' == pIface[0]))
+    {
+        return FALSE;
+    }
+    for (size_t i = 0; i < len; i++)
+    {
+        if (!isalnum((unsigned char)pIface[i]) && ('.' != pIface[i]) && ('_' != pIface[i]) && ('-' != pIface[i]))
+        {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
+/* Runs the slow ndisc6 exec without PresenceDetectionMutex so it cannot stall list users or Stop. */
+static void PresenceProbeIpv6Targets(PresenceProbeTarget *pTargets, unsigned int uiCount)
+{
+    char buf[64] = {0};
+    unsigned int uiIndex = 0;
+
+    syscfg_get( NULL, "lan_ifname", buf, sizeof(buf));
+    if ( 0 == strlen(buf))
+    {
+        snprintf(buf,sizeof(buf),"%s","brlan0");
+    }
+    if (!isSafeIfaceName(buf) || (0 == if_nametoindex(buf)))
+    {
+        CcspTraceError(("%s:%d, Invalid lan interface name\n",__FUNCTION__,__LINE__));
+        return;
+    }
+    for (uiIndex = 0; uiIndex < uiCount; uiIndex++)
+    {
+        struct in6_addr sIpv6;
+
+        if (PresenceIsStopRequested())
+        {
+            break;
+        }
+        if (1 != inet_pton(AF_INET6, pTargets[uiIndex].ipv6, &sIpv6))
+        {
+            CcspTraceError(("%s:%d, Invalid IPv6 address, skipping ndisc6\n",__FUNCTION__,__LINE__));
+            continue;
+        }
+        CcspTraceDebug(("cmd = ndisc6 %s %s -r 1 -q", pTargets[uiIndex].ipv6,buf));
+        if (0 != runNdisc6(pTargets[uiIndex].ipv6, buf))
+        {
+            CcspTraceError(("%s:%d, Failed to execute ndisc6\n",__FUNCTION__,__LINE__));
+        }
+        if (TRUE == pTargets[uiIndex].bSendProbe)
+        {
+            sendProbeRequest (IPV6, pTargets[uiIndex].ipv6, buf);
+        }
+    }
+}
+
+/* Caller holds PresenceDetectionMutex; probe targets are collected and run later by PresenceProbeIpv6Targets(). */
+int Send_ipv6_neighbourdiscovery(PLmDevicePresenceDetectionInfo pobject,BOOL bactiveclient, BOOL bSendProbe, PresenceProbeTarget *pTargets, unsigned int *puiCount)
+{
+    int i = 0;/*H007,H005*/
     if (pobject)
     {
         for(i = 0; i<pobject->numOfDevice; i++)
@@ -2191,32 +2562,22 @@ int Send_ipv6_neighbourdiscovery(PLmDevicePresenceDetectionInfo pobject,BOOL bac
                         continue;
                     }
                 }
-                syscfg_get( NULL, "lan_ifname", buf, sizeof(buf));
-		if ( 0 == strlen(buf))
-		{
-			snprintf(buf,sizeof(buf),"%s","brlan0");
-		}
-		CcspTraceDebug(("cmd = ndisc6 %s %s -r 1 -q", pobj->ipv6,buf));
-		if (0 == if_nametoindex(buf))
-		{
-			CcspTraceError(("%s:%d, Invalid lan interface name\n",__FUNCTION__,__LINE__));
-			continue;
-		}
-		if (0 != runNdisc6(pobj->ipv6, buf))
-		{
-			CcspTraceError(("%s:%d, Failed to execute ndisc6\n",__FUNCTION__,__LINE__));
-		}
-		if (TRUE == bSendProbe)
-		{
-			sendProbeRequest (IPV6, pobj->ipv6, buf);
-		}
+                if (*puiCount < MAX_NUM_OF_DEVICE)
+                {
+                    snprintf(pTargets[*puiCount].ipv6, sizeof(pTargets[*puiCount].ipv6), "%s", pobj->ipv6);
+                    pTargets[*puiCount].bSendProbe = bSendProbe;
+                    ++(*puiCount);
+                }
+                else
+                {
+                    CcspTraceError(("%s:%d, probe list full, skipping Mac:%s\n",__FUNCTION__,__LINE__,pobj->mac));
+                }
             }
         }
     }
     return 0;
 
 }
-
 void *SendNS_Thread(void *args)
 {
     UNREFERENCED_PARAMETER(args);
@@ -2228,12 +2589,20 @@ void *SendNS_Thread(void *args)
     /*CID: 71755 Dereference after null check*/
     /*CID: 57809 Dereference before null check*/
     if (!pobject)
-        return NULL;
-    ++pobject->task_count;
-    pthread_detach(pthread_self());
-    BOOL bSendProbe = FALSE;
-    while(pobject->taskState != STATE_DETECTION_TASK_STOP)
     {
+        CcspTraceError(("%s:%d, Presence Detection Object is NULL, worker exiting\n",__FUNCTION__,__LINE__));
+        return NULL;
+    }
+    BOOL bSendProbe = FALSE;
+    PresenceProbeTarget *pTargets = malloc(MAX_NUM_OF_DEVICE * sizeof(*pTargets));
+    if (!pTargets)
+    {
+        CcspTraceError(("%s:%d, failed to allocate probe list, worker exiting\n",__FUNCTION__,__LINE__));
+        return NULL;
+    }
+    while(!PresenceIsStopRequested())
+    {
+        unsigned int uiProbeCount = 0;
         if (pobject)
         {
             CcspTraceDebug(("%s:%d, Acquiring PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
@@ -2251,7 +2620,7 @@ void *SendNS_Thread(void *args)
             {
                 if (ActiveClientsecs && (0 == (ActiveClientsecs % pobject->ipv6_leave_detection_interval)))
                 {
-                    Send_ipv6_neighbourdiscovery(pobject, TRUE,bSendProbe);
+                    Send_ipv6_neighbourdiscovery(pobject, TRUE, bSendProbe, pTargets, &uiProbeCount);
                     ActiveClientsecs = 0;
                     bSendProbe = FALSE;
                 }
@@ -2264,7 +2633,7 @@ void *SendNS_Thread(void *args)
             {
                 if (InActiveClientsecs && (0 == (InActiveClientsecs % pobject->bkgnd_join_detection_interval)))
                 {
-                    Send_ipv6_neighbourdiscovery(pobject, FALSE, FALSE);
+                    Send_ipv6_neighbourdiscovery(pobject, FALSE, FALSE, pTargets, &uiProbeCount);
                     InActiveClientsecs = 0;
                 }
             }
@@ -2274,109 +2643,80 @@ void *SendNS_Thread(void *args)
             }
             pthread_mutex_unlock(&PresenceDetectionMutex);
             CcspTraceDebug(("%s:%d, unlocked PresenceDetectionMutex\n",__FUNCTION__,__LINE__));
+            PresenceProbeIpv6Targets(pTargets, uiProbeCount);
         }
 
-        sleep(1);
+        PresenceWaitOrStop(1);
         ++ActiveClientsecs;
         ++InActiveClientsecs;
         ++uiNumberOfSecs;
     }
-    if (pobject && (pobject->task_count > 0))
-    --pobject->task_count;
+    free(pTargets);
     return args;
 }
 
 void PresenceDetection_Stop()
 {
-    PLmDevicePresenceDetectionInfo pobject = NULL;
-    pobject = GetPresenceDetectionObject();
+    pthread_mutex_lock(&PresenceDetectionLifecycleMutex);
     CcspTraceError(("\n %s enter \n",__FUNCTION__));
-    if (pobject)
+    if (PresenceDetection_StopWorkersLocked() != 0)
     {
-        CcspTraceError(("\n before stop thread count %d \n",pobject->task_count));
-        pobject->taskState = STATE_DETECTION_TASK_STOP;
-
-        mqd_t msgQ = mq_open(PROCESS_PRESENCE_NOTIFY_QUEUE, O_WRONLY | O_NONBLOCK);
-        if (msgQ != (mqd_t)-1)
-        {
-            PresenceQData sStopMsg;
-            sStopMsg.MsgType = MSG_TYPE_PRESENCE_STOP;
-            snprintf(sStopMsg.Msg, sizeof(sStopMsg.Msg), "Stop the thread");
-            int iRet = mq_send(msgQ, (char *)&sStopMsg, sizeof(sStopMsg), 0);
-            if (-1 == iRet)
-            {
-                CcspTraceError(("%s: mq_send failed\n", __FUNCTION__));
-                CcspTraceError(("%s:%d: errorno:%d, errorMsg:%s\n",__FUNCTION__,__LINE__,errno, strerror(errno)));
-                perror("mq_send");
-            }
-            mq_close(msgQ);
-        }
-        else
-        {
-            CcspTraceError(("%s:%d, Failed to open PROCESS_PRESENCE_NOTIFY_QUEUE\n",__FUNCTION__,__LINE__));
-        }
-
-        while (0 != pobject->task_count)
-        {
-            sleep(1);
-        }
-        CcspTraceError(("\n after stop thread count %d \n",pobject->task_count));
+        CcspTraceError(("%s:%d, Presence detection workers were not all joined\n",__FUNCTION__,__LINE__));
     }
     CcspTraceError(("\n %s exit \n",__FUNCTION__));
+    pthread_mutex_unlock(&PresenceDetectionLifecycleMutex);
 }
 
 void PresenceDetection_Start()
 {
     int res = 0;
-    pthread_t RecvHCPv4ClientConnects_ThreadID;
-    pthread_t processPresenceNotificationThreadId;
     PLmDevicePresenceDetectionInfo pobject = NULL;
+
+    pthread_mutex_lock(&PresenceDetectionLifecycleMutex);
     pobject = GetPresenceDetectionObject();
-    if (pobject)
+    if (!pobject || presenceDetectionRunning || presenceDetectionThreadCount != 0)
     {
-        pobject->taskState = STATE_DETECTION_TASK_START;
+        CcspTraceError(("%s:%d, not starting: object:%p running:%d workers:%u\n",__FUNCTION__,__LINE__,(void *)pobject,presenceDetectionRunning,presenceDetectionThreadCount));
+        pthread_mutex_unlock(&PresenceDetectionLifecycleMutex);
+        return;
     }
+    pthread_mutex_lock(&PresenceDetectionMutex);
+    gStopRequested = FALSE;
+    pthread_mutex_unlock(&PresenceDetectionMutex);
 
     printf("\n %s enter \n",__FUNCTION__);
-    res = pthread_create(&processPresenceNotificationThreadId, NULL, processPresenceNotification, "processPresenceNotification");
+    res = PresenceDetection_CreateThread(processPresenceNotification);
     if(res != 0)
     {
         CcspTraceError(("Create processPresenceNotification error %d\n", res));
     }
     // Add sleep of 0.5 seconds
     usleep(500000);
-    res = pthread_create(&RecvHCPv4ClientConnects_ThreadID, NULL, ReceiveIpv4ClientStatus, "ReceiveIpv4Client");
+    res = PresenceDetection_CreateThread(ReceiveIpv4ClientStatus);
     if(res != 0) {
-        printf("Create RecvHCPv4ClientConnects error %d\n", res);
+        CcspTraceError(("Create ReceiveIpv4ClientStatus error %d\n", res));
     }
 
-    pthread_t SendArp_ThreadID;
-    res = pthread_create(&SendArp_ThreadID, NULL, Send_arp_ipv4_thread, "SendArp_Thread");
+    res = PresenceDetection_CreateThread(Send_arp_ipv4_thread);
     if(res != 0) {
-        printf("Create SendArp_Thread error %d\n", res);
+        CcspTraceError(("Create SendArp_Thread error %d\n", res));
     }
 
-    pthread_t ReceiveArp_ThreadID;
-    res = pthread_create(&ReceiveArp_ThreadID, NULL, ReceiveArp_Thread, "ReceiveArp_Thread");
+    res = PresenceDetection_CreateThread(ReceiveArp_Thread);
     if(res != 0) {
-        printf("Create ReceiveArp_Thread error %d\n", res);
-	}
-    pthread_t RecvIPv6clientNotifications_ThreadID;
-    res = pthread_create(&RecvIPv6clientNotifications_ThreadID, NULL, RecvIPv6clientNotifications, "RecvIPv6clientNotifications_Thread");
+        CcspTraceError(("Create ReceiveArp_Thread error %d\n", res));
+    }
+    res = PresenceDetection_CreateThread(RecvIPv6clientNotifications);
     if(res != 0) {
-        printf("Create RecvIPv6clientNotifications error %d\n", res);
+        CcspTraceError(("Create RecvIPv6clientNotifications error %d\n", res));
     }
 
-    pthread_t SendNS_ThreadID;
-    res = pthread_create(&SendNS_ThreadID, NULL, SendNS_Thread, "SendNS_Thread");
+    res = PresenceDetection_CreateThread(SendNS_Thread);
     if(res != 0) {
-        printf("Create SendNS_Thread error %d\n", res);
-    }
-    if (pobject)
-    {
-        pobject->taskState = STATE_DETECTION_TASK_STARTED;
+        CcspTraceError(("Create SendNS_Thread error %d\n", res));
     }
     printf("\n %s exit \n",__FUNCTION__);
+    pthread_mutex_unlock(&PresenceDetectionLifecycleMutex);
 }
 
 BOOL Presencedetection_DmlNotifyMac(char *mac,BOOL isNeedToAdd)
