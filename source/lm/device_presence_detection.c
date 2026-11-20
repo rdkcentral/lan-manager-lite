@@ -29,6 +29,7 @@
 #include <sys/time.h>
 #include <mqueue.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/wait.h>
 #include <netdb.h>            // struct addrinfo
 #include <sys/types.h>        // needed for socket(), uint8_t, uint16_t
@@ -1809,16 +1810,21 @@ void *processPresenceNotification(void *pArgs)
         ssize_t bytesRead;
         PresenceQData sEventMsg;
 
-        /* Non-blocking plus a monotonic cond wait: re-checks the stop flag without depending on the wall clock. */
         bytesRead = mq_receive(messageQueue, cBuffer, PRESENCE_MAX_SIZE, NULL);
 
         if (bytesRead < 0)
         {
             if (EAGAIN == errno)
             {
-                if (PresenceWaitOrStopMs(PRESENCE_MQ_POLL_MS))
+                /* On Linux mqd_t is a descriptor: wake as soon as a message arrives, time out to re-check stop. */
+                struct pollfd sPollFd = { .fd = (int)messageQueue, .events = POLLIN, .revents = 0 };
+                if ((poll(&sPollFd, 1, PRESENCE_MQ_POLL_MS) < 0) && (EINTR != errno))
                 {
-                    break;
+                    CcspTraceError(("%s:%d: poll on mq failed errno:%d, errorMsg:%s\n", __FUNCTION__, __LINE__, errno, strerror(errno)));
+                    if (PresenceWaitOrStopMs(PRESENCE_MQ_POLL_MS))
+                    {
+                        break;
+                    }
                 }
                 continue;
             }
