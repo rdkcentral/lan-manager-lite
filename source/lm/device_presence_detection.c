@@ -280,9 +280,10 @@ static int PresenceDetection_StopWorkersLocked(void)
     }
     pthread_mutex_unlock(&PresenceDetectionMutex);
 
-    while (presenceDetectionThreadCount != 0)
+    /* Join from the tail so un-joined handles stay contiguous in [0, count) without shifting. */
+    while (presenceDetectionThreadCount > 0)
     {
-        int result = pthread_join(presenceDetectionThreads[0], NULL);
+        int result = pthread_join(presenceDetectionThreads[presenceDetectionThreadCount - 1], NULL);
         if (result != 0)
         {
             CcspTraceError(("%s:%d, Failed to join presence detection worker: %d, %u worker(s) still recorded\n",__FUNCTION__,__LINE__,result,presenceDetectionThreadCount));
@@ -290,10 +291,6 @@ static int PresenceDetection_StopWorkersLocked(void)
         }
 
         --presenceDetectionThreadCount;
-        for (unsigned int index = 0; index < presenceDetectionThreadCount; ++index)
-        {
-            presenceDetectionThreads[index] = presenceDetectionThreads[index + 1];
-        }
     }
 
     presenceDetectionRunning = 0;
