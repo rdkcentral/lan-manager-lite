@@ -2729,12 +2729,6 @@ BOOL Presencedetection_DmlNotifyMac(char *mac,BOOL isNeedToAdd)
     struct mq_attr attr;
     char buffer[PRESENCE_MAX_SIZE];
     errno_t rc = -1;
-    mq = mq_open(PROCESS_PRESENCE_NOTIFY_QUEUE, O_WRONLY | O_NONBLOCK);
-    if ((mqd_t)-1 == mq) {
-        CcspTraceError(("%s:%d: ", __FUNCTION__, __LINE__));
-        perror("mq_open");
-        return FALSE;
-    }
 
     memset(buffer, 0, PRESENCE_MAX_SIZE);
 
@@ -2775,11 +2769,25 @@ BOOL Presencedetection_DmlNotifyMac(char *mac,BOOL isNeedToAdd)
     {
         return FALSE;
     }
+
+    mq = mq_open(PROCESS_PRESENCE_NOTIFY_QUEUE, O_WRONLY | O_NONBLOCK);
+    if ((mqd_t)-1 == mq) {
+        CcspTraceError(("%s:%d: ", __FUNCTION__, __LINE__));
+        perror("mq_open");
+        return FALSE;
+    }
+
     // Get the attributes of the message queue
     if (mq_getattr(mq, &attr) == -1)
     {
         CcspTraceError(("%s:%d: ", __FUNCTION__, __LINE__));
         perror("mq_getattr");
+        if (-1 == mq_close(mq))
+        {
+            CcspTraceError(("%s:%d: ", __FUNCTION__, __LINE__));
+            perror("mq_close");
+        }
+        return FALSE;
     }
 
         // Ensure the message size does not exceed the maximum allowed size
@@ -2797,17 +2805,16 @@ BOOL Presencedetection_DmlNotifyMac(char *mac,BOOL isNeedToAdd)
         CcspTraceError(("%s: mq_send failed\n", __FUNCTION__));
         CcspTraceError(("%s:%d: errorno:%d, errorMsg:%s\n",__FUNCTION__,__LINE__,errno, strerror(errno)));
         perror("mq_send");
-        mq_close(mq);
-        return FALSE;
     }
-    if (-1 == mq_close(mq))
+
+    int iCloseRet = mq_close(mq);
+    if (-1 == iCloseRet)
     {
         CcspTraceError(("%s:%d: ", __FUNCTION__, __LINE__));
         perror("mq_close");
-        return FALSE;
     }
 
-    return TRUE;
+    return (-1 != iRet && -1 != iCloseRet) ? TRUE : FALSE;
 }
 
 void Hosts_PresenceNotify(PLmPresenceNotifyInfo pinfo)
@@ -2831,8 +2838,8 @@ void Hosts_PresenceNotify(PLmPresenceNotifyInfo pinfo)
         CcspTraceError(("%s: mq_send failed\n", __FUNCTION__));
         CcspTraceError(("%s:%d: errorno:%d, errorMsg:%s\n",__FUNCTION__,__LINE__,errno, strerror(errno)));
         perror("mq_send");
-        mq_close(mq);
     }
+    mq_close(mq);
 }
 
 static void presenceDetected(void *arg)
