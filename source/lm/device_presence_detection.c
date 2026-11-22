@@ -71,6 +71,8 @@
 #define BUFF_SIZE 8192
 
 static void presenceDetected(void *arg);
+static BOOL isSafeIfaceName(const char *pIface);
+static int ReadArpTable(const char *pIface);
 extern pthread_mutex_t LmHostObjectMutex;
 extern LmObjectHosts lmHosts;
 
@@ -916,7 +918,8 @@ void sendProbeRequest (int iIpVersion, char * pIpAddress, char * pIface)
         return;
     }
 
-    int iSocketFd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+    /* SOCK_CLOEXEC: the ndisc6/arp children forked by other workers must not inherit this descriptor. */
+    int iSocketFd = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
     if (iSocketFd < 0)
     {
         CcspTraceError(("%s:%d Failed to create socket\n",__FUNCTION__,__LINE__));
@@ -1320,6 +1323,94 @@ void *Send_arp_ipv4_thread (void *args)
     return args;
 }
 
+/*
+ * Runs "arp -i <iface> -an" with an argv vector (no /bin/sh), so the interface name is never parsed as shell syntax.
+ * Every descriptor (pipe read end, FILE) is closed and the child is reaped on every path.
+ */
+static int ReadArpTable(const char *pIface)
+{
+    char output[ARP_BUFFER_LEN];
+    int aPipe[2] = {-1, -1};
+    int iStatus = 0;
+    int iRet = -1;
+    pid_t pid = -1;
+    FILE *fpArpTable = NULL;
+
+    if (!isSafeIfaceName(pIface))
+    {
+        CcspTraceError(("%s:%d, Rejected invalid lan interface name\n",__FUNCTION__,__LINE__));
+        return -1;
+    }
+
+    if (0 != pipe2(aPipe, O_CLOEXEC))
+    {
+        CcspTraceError(("%s:%d, pipe2() failed\n",__FUNCTION__,__LINE__));
+        return -1;
+    }
+
+    pid = fork();
+    if (pid < 0)
+    {
+        CcspTraceError(("%s:%d, fork() failed\n",__FUNCTION__,__LINE__));
+        close(aPipe[0]);
+        close(aPipe[1]);
+        return -1;
+    }
+
+    if (0 == pid)
+    {
+        /* Child: dup2() clears O_CLOEXEC on the new descriptors, so only stdout/stderr survive exec. */
+        char *argv[] = { "/sbin/arp", "-i", (char *)pIface, "-an", NULL };
+	int iNull = open("/dev/null", O_WRONLY);
+
+        dup2(aPipe[1], STDOUT_FILENO);
+        if (iNull >= 0)
+        {
+            dup2(iNull, STDERR_FILENO);
+            close(iNull);
+        }
+        execvp(argv[0], argv);
+        _exit(127);
+    }
+
+    close(aPipe[1]);
+    fpArpTable = fdopen(aPipe[0], "r");
+    if (NULL == fpArpTable)
+    {
+        CcspTraceError(("%s:%d, fdopen() failed\n",__FUNCTION__,__LINE__));
+        close(aPipe[0]);
+    }
+    else
+    {
+        while (fgets(output, sizeof(output), fpArpTable) != NULL)
+        {
+            Handle_RecieveArpCache(output);
+        }
+        fclose(fpArpTable);   /* closes aPipe[0] */
+        iRet = 0;
+    }
+
+    pid_t iWaited;
+    do
+    {
+        iWaited = waitpid(pid, &iStatus, 0);
+    } while (iWaited < 0 && EINTR == errno);
+
+    if (iWaited < 0)
+    {
+        CcspTraceError(("%s:%d, waitpid() failed, errno:%d\n",__FUNCTION__,__LINE__,errno));
+        return -1;
+    }
+
+    if (!WIFEXITED(iStatus) || 0 != WEXITSTATUS(iStatus))
+    {
+        CcspTraceError(("%s:%d, arp did not exit cleanly, status:%d\n",__FUNCTION__,__LINE__,iStatus));
+        return -1;
+    }
+
+    return iRet;
+}
+
 void *ReceiveArp_Thread(void *args)
 {
     UNREFERENCED_PARAMETER(args);
@@ -1332,26 +1423,16 @@ void *ReceiveArp_Thread(void *args)
     }
     while(!PresenceIsStopRequested())
     {
-        char output[ARP_BUFFER_LEN];
-        char buf[64];
-        char cLine [256] = {0};
+        char buf[64] = {0};
 
         syscfg_get(NULL, "lan_ifname", buf, sizeof(buf));
-        snprintf(cLine,sizeof(cLine),"arp -i %s -an",buf);
-        FILE *fpArpTable = popen(cLine,"r");
-        if(NULL == fpArpTable)
+        if (0 == buf[0])
         {
-            CcspTraceError(("%s:%d, Failed to execute the command %s\n",__FUNCTION__,__LINE__,cLine));
-            PresenceWaitOrStop(10);
-            continue;
+            snprintf(buf, sizeof(buf), "%s", "brlan0");
         }
-        else
+        if (0 != ReadArpTable(buf))
         {
-            while(fgets(output, sizeof(output), fpArpTable)!=NULL)
-            {
-                Handle_RecieveArpCache(output);
-            }
-            pclose(fpArpTable);
+            CcspTraceError(("%s:%d, Failed to read ARP table\n",__FUNCTION__,__LINE__));
         }
         PresenceWaitOrStop(10);
     }
@@ -1546,8 +1627,16 @@ int Handle_RecieveArpCache(char *line)
                     if ((0 == strcmp (cIPv4, pobj->ipv4) && 0 == strcmp(cStatus,"<incomplete>")) && (0 == strcmp(cIfaceName,cInterface)))
                     {
                         char cLine[256] = {0};
-                        snprintf (cLine, sizeof(cLine), "ip -4 neigh show | grep -i %s",cIfaceName);
-                        FILE *fpToNeighTable = popen(cLine, "r");
+                        FILE *fpToNeighTable = NULL;
+                        if (isSafeIfaceName(cIfaceName))
+                        {
+                            snprintf (cLine, sizeof(cLine), "ip -4 neigh show | grep -i %s",cIfaceName);
+                            fpToNeighTable = popen(cLine, "r");
+                        }
+                        else
+                        {
+                            CcspTraceError(("%s:%d, Rejected invalid lan interface name, skipping neighbour check\n",__FUNCTION__,__LINE__));
+                        }
                         if (NULL != fpToNeighTable)
                         {
                             pthread_mutex_unlock(&PresenceDetectionMutex);
@@ -2330,7 +2419,8 @@ void *RecvIPv6clientNotifications(void *args)
         snprintf(cIfaceName,sizeof(cIfaceName),"brlan0");
     }
 
-    int iSocketFd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+    /* SOCK_CLOEXEC: ndisc6/arp children forked by other workers must not inherit this descriptor. */
+    int iSocketFd = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
     if (iSocketFd < 0)
     {
         CcspTraceError(("%s:%d, Failed to open socket descriptor\n",__FUNCTION__,__LINE__));
@@ -2405,6 +2495,7 @@ void *RecvIPv6clientNotifications(void *args)
     close(iSocketFd);
     return NULL;
 }
+
 typedef struct PresenceProbeTarget
 {
     char ipv6[IPV6_SIZE];
@@ -2451,6 +2542,7 @@ static int runNdisc6(const char *pIpv6, const char *pIface)
 }
 
 /* Allow-list [A-Za-z0-9._-]{1,15}, not starting with '-', so the name can never be read as an option. */
+/* Whitelist: [A-Za-z0-9_.:-]+ ; at most 15 chars; a leading '-' is refused so it cannot be read as an option. */
 static BOOL isSafeIfaceName(const char *pIface)
 {
     size_t len = 0;
@@ -2466,7 +2558,8 @@ static BOOL isSafeIfaceName(const char *pIface)
     }
     for (size_t i = 0; i < len; i++)
     {
-        if (!isalnum((unsigned char)pIface[i]) && ('.' != pIface[i]) && ('_' != pIface[i]) && ('-' != pIface[i]))
+        if (!isalnum((unsigned char)pIface[i]) && ('.' != pIface[i]) && ('_' != pIface[i])
+            && ('-' != pIface[i]) && (':' != pIface[i]))
         {
             return FALSE;
         }
