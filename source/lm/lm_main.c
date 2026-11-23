@@ -4606,6 +4606,11 @@ int Hosts_EnablePresenceDetectionTask()
         Sendmsg_dnsmasq(TRUE);
         CcspTraceWarning(("RDKB_PRESENCE: Presence Detection enabled Successfully\n"));
     }
+    else
+    {
+        lmHosts.enablePresence = FALSE;
+        CcspTraceError(("RDKB_PRESENCE: %s:%d, Presence Detection could not be initialised, ret:%d\n",__FUNCTION__,__LINE__,ret_val));
+    }
     return ret_val;
 }
 
@@ -4665,7 +4670,11 @@ int Hosts_DisablePresenceDetectionTask()
     memset(&param,0,sizeof(LmHostPresenceDetectionParam));
     Hosts_UpdatePresenceDetectionParam(&param,HOST_PRESENCE_PARAM_ALL);
     Hosts_StopPresenceDetection();
-    Hosts_DeInitPresenceDetection();
+    if (0 != Hosts_DeInitPresenceDetection())
+    {
+        CcspTraceError(("RDKB_PRESENCE: %s:%d, workers not joined, detection object kept\n",__FUNCTION__,__LINE__));
+        return -1;
+    }
     CcspTraceWarning(("RDKB_PRESENCE: Presence Detection disabled Successfully\n"));
     return 0;
 }
