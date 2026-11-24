@@ -28,6 +28,7 @@
 #include <trower-base64/base64.h>
 #include "webpa_interface.h"
 #include "network_devices_status_avropack.h"
+#include "network_devices_status.h"
 #include "ccsp_lmliteLog_wrapper.h"
 #include "lm_main.h"
 #if SIMULATION
@@ -80,6 +81,11 @@ extern int getTimeOffsetFromUtc();
 #endif
 
 static bool MLORfcEnable = false;
+
+static bool NDSReportIsCancelled(void)
+{
+  return GetNDSHarvestingStatus() == FALSE;
+}
 
 // local data, load it with real data if necessary
 char ReportSource[] = "LMLite";
@@ -750,7 +756,7 @@ void network_devices_status_report(struct networkdevicestatusdata *head, BOOL ex
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, AvroSerializedBuf: %s\n", AvroSerializedBuf));
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, AvroSerializedSize: %d\n", (int)AvroSerializedSize));
   // Send data from LMLite to webpa using CCSP bus interface
-  sendWebpaMsg(serviceName, dest, trans_id, contentType, AvroSerializedBuf, AvroSerializedSize);
+  sendWebpaMsg(serviceName, dest, trans_id, contentType, AvroSerializedBuf, AvroSerializedSize, NDSReportIsCancelled);
 
   CcspTraceWarning(("NetworkDevicesStatus report sent to Webpa, Destination=%s, Transaction-Id=%s  \n",dest,trans_id));
   CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, After ND WebPA SEND message call\n"));

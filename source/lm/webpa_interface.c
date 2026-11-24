@@ -17,6 +17,8 @@
  * limitations under the License.
 */
 #define _GNU_SOURCE
+#include <errno.h>
+#include <unistd.h>
 #include "ssp_global.h"
 #include "stdlib.h"
 #include "ccsp_dm_api.h"
@@ -42,6 +44,7 @@
 #include "safec_lib_common.h"
 
 #define MAX_PARAMETERNAME_LEN   512
+#define WEBPA_CANCEL_POLL_USEC  100000
 
 #if defined(_SKY_HUB_COMMON_PRODUCT_REQ_) && !defined(_SCER11BEL_PRODUCT_REQ_)
 #include <utctx/utctx.h>
@@ -50,8 +53,9 @@
 #include <utapi/utapi_util.h>
 #endif
 
-#if defined(_SR300_PRODUCT_REQ_) || defined(_RDKB_GLOBAL_PRODUCT_REQ_)
+#ifdef WAN_TRAFFIC_COUNT_SUPPORT
 #include <cosa_wantraffic_api.h>
+#include <cosa_wantraffic_utils.h>
 extern pstWTCInfo_t WTCinfo;
 #endif
 
@@ -143,9 +147,32 @@ static int WebpaInterface_DiscoverComponent(char** pcomponentName, char** pcompo
 }
 #endif
 
-void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentType, char *payload, unsigned int payload_len)
+void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentType, char *payload, unsigned int payload_len, bool (*isCancelled)(void))
 {
-    pthread_mutex_lock(&webpa_mutex);
+    if (isCancelled == NULL)
+    {
+        pthread_mutex_lock(&webpa_mutex);
+    }
+    else
+    {
+        // Another reporter may hold the lock through its own long retry backoff.
+        int lockStatus;
+        while ((lockStatus = pthread_mutex_trylock(&webpa_mutex)) == EBUSY)
+        {
+            if (isCancelled())
+            {
+                CcspTraceWarning(("%s: cancelled while waiting for webpa lock, message dropped\n", __FUNCTION__));
+                return;
+            }
+            usleep(WEBPA_CANCEL_POLL_USEC);
+        }
+        if (lockStatus != 0)
+        {
+            CcspTraceError(("%s: failed to acquire webpa lock: %s, message dropped\n", __FUNCTION__, strerror(lockStatus)));
+            return;
+        }
+    }
+
     wrp_msg_t *wrp_msg ;
     int retry_count = 0, backoffRetryTime = 0, c = 2;
     int sendStatus = -1;
@@ -201,7 +228,12 @@ void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentTy
 
         while(retry_count<=5)
         {
-            backoffRetryTime = (int) pow(2, c) -1;
+            if (isCancelled && isCancelled())
+            {
+                CcspTraceWarning(("%s: cancelled, message dropped after %d retries\n", __FUNCTION__, retry_count));
+                break;
+            }
+	    backoffRetryTime = (int) pow(2, c) -1;
 
             CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, retry_count : %d\n",retry_count));
             sendStatus = libparodus_send(client_instance, wrp_msg);
@@ -216,8 +248,17 @@ void sendWebpaMsg(char *serviceName, char *dest, char *trans_id, char *contentTy
             {
                 CcspTraceError(("Failed to send message: '%s', retrying ....\n",libparodus_strerror(sendStatus)));
                 CcspLMLiteConsoleTrace(("RDK_LOG_DEBUG, backoffRetryTime %d seconds\n", backoffRetryTime));
-                sleep(backoffRetryTime);
-                c++;
+                if (isCancelled == NULL)
+                {
+                    sleep(backoffRetryTime);
+                }
+                else
+                {
+                    long waitedUsec;
+                    for (waitedUsec = 0; waitedUsec < (long)backoffRetryTime * 1000000L && !isCancelled(); waitedUsec += WEBPA_CANCEL_POLL_USEC)
+                        usleep(WEBPA_CANCEL_POLL_USEC);
+                }
+		c++;
                 retry_count++;
             }
         }
@@ -514,18 +555,34 @@ char* get_ActiveInterface(char *interface) {
     char buffer[256] = { '\0' };
     int i;
     int len = 0;
+    size_t token_len;
+    size_t interface_len;
 
     token = strtok(interface, "|"); // spliting with delimiter "|"
     while (token != NULL) {
-	    CcspTraceDebug(("token : %s\n", token));
-	    c = token[strlen(token)-1]; // last char in token
-	    if(c == '1') { // checking last char in token is '1', means it is active interface
-		    n++;
-		    strncpy(interfaceUp[n], token, strlen(token)-2); // adding the active interfaces in InterfaceUp
-		    CcspTraceDebug(("InterfaceUp : %s\n", interfaceUp[n]));
+        CcspTraceDebug(("token : %s\n", token));
+        token_len = strlen(token);/*C001 & H002*/
+        c = token[token_len - 1]; // last char in token
+        if(c == '1') { // checking last char in token is '1', means it is active interface
+            if (token_len < 3 || token[token_len - 2] != ',') {
+                snprintf(newSource, sizeof(newSource), "LMLite");
+                return newSource;
             }
-	    token = strtok(NULL, "|");
-    } 	    
+
+            interface_len = token_len - 2;
+            if ((interface_len >= sizeof(interfaceUp[0])) ||
+                (n + 1 >= (int)(sizeof(interfaceUp) / sizeof(interfaceUp[0])))) {
+                snprintf(newSource, sizeof(newSource), "LMLite");
+                return newSource;
+            }
+
+            n++;
+            memcpy(interfaceUp[n], token, interface_len);
+            interfaceUp[n][interface_len] = '\0';
+            CcspTraceDebug(("InterfaceUp : %s\n", interfaceUp[n]));
+            }
+        token = strtok(NULL, "|");
+    }       
     
     for(i=0; i<=n; i++)
     {
@@ -593,32 +650,31 @@ static void eventReceiveHandler(
 		       			CcspTraceError(("ReportSourceNDT value is NULL\n"));
 				}
 
-                    #ifdef _SR300_PRODUCT_REQ_
-                    if((strstr(newActiveInterface, "WANOE") != NULL) || 
-                        (strstr(newActiveInterface, "DSL") != NULL ) ||
-                         (strstr(newActiveInterface, "ADSL") != NULL )) 
+                    #ifdef WAN_TRAFFIC_COUNT_SUPPORT
+                    CcspTraceInfo(("newActiveInterface is : %s\n", newActiveInterface));
+                    if(WTCinfo)
                     {
-                        CcspTraceInfo(("newActiveInterface is : %s\n", newActiveInterface));
-                        if(WTCinfo)
+                        WAN_INTERFACE candidateMode;
+                        UINT candidateIndex;
+
+                        pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);
+                        candidateMode = GetWanModeAndWtcIndex(&candidateIndex);
+                        if (candidateMode == INVALID_MODE)
                         {
-                            pthread_mutex_lock(&WTCinfo->WanTrafficMutexVar);    
-                            if((strstr(newActiveInterface, "WANOE")))
-#if  defined (_SCER11BEL_PRODUCT_REQ_) || defined (_SCXF11BFL_PRODUCT_REQ_)
-                                WTCinfo->WanMode = EWAN - 1;
-#else
-                                WTCinfo->WanMode = EWAN;
-#endif
-                            else
-                                WTCinfo->WanMode = DSL;
-                            WTCinfo->WTCConfigFlag[WTCinfo->WanMode-1] |= WTC_WANMODE_CHANGE;
+                            CcspTraceError(("Unable to resolve WAN mode and WTC index\n"));
                             pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
-                            WTC_ApplyStateChange();
-                            CcspTraceInfo(("Setting WAN mode change!!!\n"));
+                            return;
                         }
-                        else
-                        {
-                            CcspTraceInfo(("WTCinfo is NULL!!!\n"));
-                        }
+                        WTCinfo->WanMode = candidateMode;
+                        WTCinfo->WanModeWtcIndex = candidateIndex;
+                        WTCinfo->WTCConfigFlag[WTCinfo->WanModeWtcIndex] |= WTC_WANMODE_CHANGE;
+                        pthread_mutex_unlock(&WTCinfo->WanTrafficMutexVar);
+                        WTC_ApplyStateChange();
+                        CcspTraceInfo(("Setting WAN mode change!!!\n"));
+                    }
+                    else
+                    {
+                        CcspTraceInfo(("WTCinfo is NULL!!!\n"));
                     }
                     #endif
 		}

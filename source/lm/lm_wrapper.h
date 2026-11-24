@@ -54,7 +54,7 @@
 #define DNSMASQ_RESERVED_FILE "/etc/dhcp_static_hosts"
 
 #define HOST_NAME_RETRY 3
-#define HOST_NAME_RETRY_INTERVAL 3
+#define HOST_NAME_RETRY_INTERVAL 1 /* max wait = (HOST_NAME_RETRY + 1) * HOST_NAME_RETRY_INTERVAL = 4s */
 //#define DEBUG
 #ifdef DEBUG
 #define PRINTD(fmt, args...) fprintf(stderr, fmt, ## args)

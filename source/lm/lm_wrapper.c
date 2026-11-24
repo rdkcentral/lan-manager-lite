@@ -46,6 +46,8 @@
 #include "secure_wrapper.h"
 #include <stddef.h>
 #include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
 /*usage of printf -CID:55379, 59688, 61675, 65508*/ 
 #include <stdio.h>
 #include <sys/stat.h>
@@ -138,15 +140,27 @@ static const struct neigh_state_score_map neigh_score_map[] = {
 static libnet_status file_append(const char *file_name ,const char *buf, size_t count)
 {
     FILE *fp = NULL;
-    if (!file_name || !buf || count == 0) {
-        CcspTraceError(("%s Invalid input to file_append %s\n", __FUNCTION__, file_name));
+    struct stat st;
+    int fd_out;
+    /* O_NOFOLLOW rejects a planted symlink at a world-writable path such as /tmp. */
+    /*H008*/
+    fd_out = open(file_name, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, 0600);
+    if (fd_out < 0) {
+        perror("open failed");
+        CcspTraceError(("%s Failed to open file %s\n", __FUNCTION__, file_name));
+        return CNL_STATUS_FAILURE;
+    }
+    if (fstat(fd_out, &st) != 0 || !S_ISREG(st.st_mode) || st.st_uid != geteuid() || st.st_nlink != 1) {
+        CcspTraceError(("%s Refusing to write to untrusted file %s\n", __FUNCTION__, file_name));
+        close(fd_out);
         return CNL_STATUS_FAILURE;
     }
 
-    fp = fopen(file_name, "a");
+    fp = fdopen(fd_out, "a");
     if (NULL == fp) {
         perror("fopen failed");
         CcspTraceError(("%s Failed to open file %s\n", __FUNCTION__, file_name));
+	close(fd_out);
         return CNL_STATUS_FAILURE;
     }
     if (count != fwrite(buf, sizeof(char), count, fp)) {
@@ -293,6 +307,7 @@ void remove_Mac_to_band_mapping(char *macstring)
 	if(curr && !strcmp(curr->macAddress,macstring))
 	{       tmp=curr;
                 curr=curr->next;
+		Mac_to_band_mapping[hashindex] = curr;/*H013*/
 		free(tmp);
 		tmp=NULL;
 		//CcspTraceWarning(("Wifi band %d \n",curr->band));
@@ -1360,7 +1375,7 @@ int lm_wrapper_get_arp_entries (char netName[LM_NETWORK_NAME_SIZE], int *pCount,
                     }
                 }
                 if (arp_entry[0] != '\0') {
-                    libnet_status fw_st = file_write(ARP_CACHE_FILE, arp_entry, strlen(arp_entry));
+                    libnet_status fw_st = file_append(ARP_CACHE_FILE, arp_entry, strlen(arp_entry));/*H008*/
                     if (fw_st != CNL_STATUS_SUCCESS){
                         CcspTraceError(("%s %d: File write failed for neighbor list!\n", __FUNCTION__, __LINE__));
                     }
@@ -1581,13 +1596,24 @@ memset(buf,0,sizeof(buf));
 int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
 {
     int count = 0;
+    char cHostFmt[32];
+
+    if (HostName == NULL || HostNameLen < 2)
+    {
+        CcspTraceWarning(("%s:%d,HostName length is invalid\n", __FILE__, __LINE__));
+        return 0;
+    }
 
     CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Wait for dnsmasq to update hostname\n"));
 
+    snprintf(cHostFmt, sizeof(cHostFmt), "%%*s %%17s %%63s %%%zus", HostNameLen - 1);
+
     while (1)
     {
-        struct stat st;
         FILE *fp = NULL;
+        char cBuf[256];
+        char cMac[18];
+        char cIp[64];
         size_t len;
 
         sleep(HOST_NAME_RETRY_INTERVAL);
@@ -1596,16 +1622,23 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
 
         pthread_mutex_lock(&HostNameMutex);
 
-        if ((stat(DNSMASQ_LEASES_FILE, &st) == 0) &&
-            (st.st_size != 0) &&
-            ((fp = v_secure_popen("r", "grep -i %s " DNSMASQ_LEASES_FILE " | awk '{print $4}'", physAddress)) != NULL))
+        fp = fopen(DNSMASQ_LEASES_FILE, "r");
+        if (fp != NULL)
         {
-            while (fgets(HostName, HostNameLen, fp) != NULL)
+            while (fgets(cBuf, sizeof(cBuf), fp) != NULL)
             {
-                /* Read all lines */
+                cMac[0] = '\0';
+                cIp[0] = '\0';
+
+                if (sscanf(cBuf, cHostFmt, cMac, cIp, HostName) >= 3 &&
+                    strcasecmp(cMac, physAddress) == 0)
+                {
+                    break;
+                }
+                HostName[0] = '\0';
             }
 
-            v_secure_pclose(fp);
+            fclose(fp);
         }
 
         pthread_mutex_unlock(&HostNameMutex);
@@ -1618,7 +1651,13 @@ int get_HostName(char *physAddress, char *HostName, size_t HostNameLen)
             len--;
         }
 
-        if ((len == 0) || ((len == 1) && (HostName[0] == '*')))
+        if ((len == 1) && (HostName[0] == '*'))
+        {
+            CcspTraceWarning(("RDKB_CONNECTED_CLIENTS: Hostname unavailable ('*'), skipping retry\n"));
+            return 0;
+        }
+
+        if (len == 0)
         {
             if (++count > HOST_NAME_RETRY)
             {
