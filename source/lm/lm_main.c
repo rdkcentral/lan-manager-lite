@@ -1668,8 +1668,8 @@ static PLmObjectHostIPAddress Add_Update_IPv4Address (PLmObjectHost pHost, char 
 	ppHeader = &(pHost->ipv4AddrArray);
 	pHost->ipv4Active = TRUE;
 	pPre = NULL;
-    pReusable = NULL;
-    pReusablePre = NULL;
+    PLmObjectHostIPAddress pReusable = NULL;
+    PLmObjectHostIPAddress pReusablePre = NULL;
 
    for(pCur = pIpAddrList; pCur != NULL; pPre = pCur, pCur = pCur->pNext){
         char *address = pCur->pStringParaValue[LM_HOST_IPAddress_IPAddressId];
