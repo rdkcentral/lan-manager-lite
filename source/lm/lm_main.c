@@ -3009,6 +3009,7 @@ static void lm_publish_active_wifi_clients_state(bool active)
     if (!hasActiveWifiClientsSubscribers())
     {
         CcspTraceInfo(("RDKB_LOWPOWER: %s: No active Wi-Fi client subscribers; skipping publish\n", __FUNCTION__));
+        hasPublishedValue = false;
         pthread_mutex_unlock(&LpmPublishMutex);
         return;
     }
